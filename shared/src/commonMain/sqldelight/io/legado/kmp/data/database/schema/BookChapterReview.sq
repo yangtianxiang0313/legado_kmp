@@ -1,0 +1,24 @@
+CREATE TABLE book_chapter_reviews (
+    book_id INTEGER NOT NULL,
+    chapter_id INTEGER NOT NULL,
+    summary_url TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (book_id, chapter_id)
+);
+
+selectAll:
+SELECT * FROM book_chapter_reviews ORDER BY book_id, chapter_id;
+
+selectByBookId:
+SELECT * FROM book_chapter_reviews WHERE book_id = ? ORDER BY chapter_id;
+
+selectByIds:
+SELECT * FROM book_chapter_reviews WHERE book_id = ? AND chapter_id = ?;
+
+insert:
+INSERT OR REPLACE INTO book_chapter_reviews (book_id, chapter_id, summary_url) VALUES (?, ?, ?);
+
+deleteByIds:
+DELETE FROM book_chapter_reviews WHERE book_id = ? AND chapter_id = ?;
+
+deleteByBookId:
+DELETE FROM book_chapter_reviews WHERE book_id = ?;

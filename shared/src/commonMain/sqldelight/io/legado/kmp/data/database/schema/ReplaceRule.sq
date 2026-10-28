@@ -1,0 +1,84 @@
+-- ReplaceRule.sq
+-- Represents a text replacement rule (regex or literal)
+
+CREATE TABLE replace_rules (
+    -- Primary key: auto-generated ID
+    id INTEGER NOT NULL PRIMARY KEY,
+    -- Rule name
+    name TEXT NOT NULL DEFAULT '',
+    -- Rule group
+    rule_group TEXT,
+    -- Pattern to match (regex or literal)
+    pattern TEXT NOT NULL DEFAULT '',
+    -- Replacement string
+    replacement TEXT NOT NULL DEFAULT '',
+    -- Scope (book sources this applies to)
+    scope TEXT,
+    -- Apply to title
+    scope_title INTEGER NOT NULL DEFAULT 0,
+    -- Apply to content
+    scope_content INTEGER NOT NULL DEFAULT 1,
+    -- Exclude scope
+    exclude_scope TEXT,
+    -- Whether the rule is enabled
+    is_enabled INTEGER NOT NULL DEFAULT 1,
+    -- Whether pattern is regex
+    is_regex INTEGER NOT NULL DEFAULT 1,
+    -- Timeout for regex matching in milliseconds
+    timeout_millisecond INTEGER NOT NULL DEFAULT 3000,
+    -- Sort order
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+-- Index for ID
+CREATE INDEX idx_replace_rules_id ON replace_rules(id);
+
+-- Index for enabled rules
+CREATE INDEX idx_replace_rules_enabled ON replace_rules(is_enabled, sort_order);
+
+selectAll:
+SELECT * FROM replace_rules ORDER BY sort_order ASC, id DESC;
+
+selectEnabled:
+SELECT * FROM replace_rules
+WHERE is_enabled = 1
+ORDER BY sort_order ASC, id DESC;
+
+selectById:
+SELECT * FROM replace_rules WHERE id = ?;
+
+selectByGroup:
+SELECT * FROM replace_rules
+WHERE rule_group = ?
+ORDER BY sort_order ASC, id DESC;
+
+searchByName:
+SELECT * FROM replace_rules
+WHERE name LIKE ?
+ORDER BY sort_order ASC, id DESC;
+
+insert:
+INSERT OR REPLACE INTO replace_rules (
+    id, name, rule_group, pattern, replacement, scope,
+    scope_title, scope_content, exclude_scope, is_enabled,
+    is_regex, timeout_millisecond, sort_order
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+update:
+UPDATE replace_rules
+SET name = ?, rule_group = ?, pattern = ?, replacement = ?, scope = ?,
+    scope_title = ?, scope_content = ?, exclude_scope = ?, is_enabled = ?,
+    is_regex = ?, timeout_millisecond = ?, sort_order = ?
+WHERE id = ?;
+
+updateEnabled:
+UPDATE replace_rules SET is_enabled = ? WHERE id = ?;
+
+updateOrder:
+UPDATE replace_rules SET sort_order = ? WHERE id = ?;
+
+deleteById:
+DELETE FROM replace_rules WHERE id = ?;
+
+deleteAll:
+DELETE FROM replace_rules;

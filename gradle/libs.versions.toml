@@ -1,0 +1,109 @@
+[versions]
+# Kotlin
+kotlin = "2.1.0"
+# Kotlin Multiplatform - Compose
+compose-multiplatform = "1.7.0"
+# KSP
+ksp = "2.1.0-1.0.29"
+
+# Core Libraries
+kotlinx-coroutines = "1.9.0"
+kotlinx-serialization = "1.8.0"
+kotlinx-datetime = "0.6.1"
+
+# SQLDelight
+sqldelight = "2.0.2"
+
+# Ktor
+ktor = "3.0.1"
+
+# Koin
+koin = "4.0.0"
+
+# UI
+coil = "3.0.4"
+
+# XML/HTML Parsing (ksoup - cross-platform)
+ksoup = "0.2.4"
+jsoup = "1.21.1"
+jsoupxpath = "2.5.3"
+
+# JS Engine (quickjs-kt for cross-platform JavaScript execution)
+quickjs = "1.0.0-alpha13"
+jsonpath4k = "3.0.1"
+okio = "3.10.2"
+libarchive = "1.1.6"
+
+[libraries]
+# Kotlin
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
+
+# SQLDelight
+sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+sqldelight-coroutines-extensions = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+sqldelight-primitive-adapters = { module = "app.cash.sqldelight:primitive-adapters", version.ref = "sqldelight" }
+
+# Ktor
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+
+# Koin
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+
+# Compose Multiplatform
+compose-multiplatform = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-multiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
+compose-ui-tooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "compose-multiplatform" }
+compose-ui-tooling-preview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "compose-multiplatform" }
+
+# Coil
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+
+# HTML/XML Parsing
+ksoup = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoup" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+jsoupxpath = { module = "cn.wanghaomiao:JsoupXpath", version.ref = "jsoupxpath" }
+
+# QuickJS (JavaScript engine)
+quickjs-kt = { module = "io.github.dokar3:quickjs-kt", version.ref = "quickjs" }
+quickjs-kt-jvm = { module = "io.github.dokar3:quickjs-kt-jvm", version.ref = "quickjs" }
+jsonpath4k = { module = "at.asitplus:jsonpath4k", version.ref = "jsonpath4k" }
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+libarchive = { module = "me.zhanghai.android.libarchive:library", version.ref = "libarchive" }
+
+# Testing
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+
+[bundles]
+ktor-common = ["ktor-client-core", "ktor-client-content-negotiation", "ktor-serialization-kotlinx-json", "ktor-client-logging"]
+compose-common = ["compose-multiplatform", "compose-material3", "compose-foundation", "compose-runtime"]
+
+[plugins]
+# Kotlin Multiplatform
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-cocoapods = { id = "org.jetbrains.kotlin.native.cocoapods", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+
+# Compose Multiplatform
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+
+# SQLDelight
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+
+# KSP
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

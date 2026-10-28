@@ -1,0 +1,37 @@
+PODS:
+  - Kingfisher (8.8.0)
+  - LookinServer/Core (1.2.8)
+  - LookinServer/Swift (1.2.8):
+    - LookinServer/Core
+  - shared (0.1.0)
+  - SnapKit (5.7.1)
+  - Then (3.0.0)
+
+DEPENDENCIES:
+  - Kingfisher
+  - LookinServer/Swift
+  - shared (from `../shared`)
+  - SnapKit
+  - Then
+
+SPEC REPOS:
+  trunk:
+    - Kingfisher
+    - LookinServer
+    - SnapKit
+    - Then
+
+EXTERNAL SOURCES:
+  shared:
+    :path: "../shared"
+
+SPEC CHECKSUMS:
+  Kingfisher: beeaf65ed57dfa710d416aea4093277e8a9b1968
+  LookinServer: 1b2b61c6402ae29fa22182d48f5cd067b4e99e80
+  shared: 0b5c71cf04362ef397eba14fb10ef3afa6d713d6
+  SnapKit: d612e99e678a2d3b95bf60b0705ed0a35c03484a
+  Then: 844265ae87834bbe1147d91d5d41a404da2ec27d
+
+PODFILE CHECKSUM: db584ec20ade8488adca06987115d96227d2b74c
+
+COCOAPODS: 1.16.2

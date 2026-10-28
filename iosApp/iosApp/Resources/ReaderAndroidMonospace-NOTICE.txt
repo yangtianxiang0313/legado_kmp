@@ -1,0 +1,21 @@
+ReaderAndroidMonospace.ttf
+
+Unmodified Droid Sans Mono copied from /system/fonts/DroidSansMono.ttf on the
+Android API 36.1 reference emulator. Its monospace family selects this file.
+SHA-256: db19a1fdaba41cc4a2fec0330e5c15e71c6dd68a3ef074f4f28268828b45c862
+Embedded version: Version 1.00.
+Embedded copyright: Digitized data copyright 2007, Google Corporation.
+Embedded license: Licensed under the Apache License, Version 2.0.
+
+AOSP data/fonts notice: Copyright (c) 2005-2008, The Android Open Source Project.
+
+The file is byte-identical to AOSP android-8.0.0_r1:
+https://android.googlesource.com/platform/frameworks/base/+/android-8.0.0_r1/data/fonts/DroidSansMono.ttf
+Upstream notice and license:
+https://android.googlesource.com/platform/frameworks/base/+/android-8.0.0_r1/data/fonts/NOTICE
+The Apache License 2.0 is reproduced in ReaderAndroidMonospace-LICENSE.txt.
+
+Used privately for colorpicker 1.1.0's cpv_dialog_color_picker monospace hash
+and hex EditText, as used by Legado commit 5f5d31404af9957684703747ecee2b91e7161f1d.
+CoreText opens the bundled descriptor without process-global registration.
+This asset does not replace imported reader fonts or the default sans-serif.

@@ -1,0 +1,22 @@
+CREATE TABLE keyboard_assists (
+    type INTEGER NOT NULL DEFAULT 0,
+    key TEXT NOT NULL DEFAULT '',
+    value TEXT NOT NULL DEFAULT '',
+    serial_no INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (type, key)
+);
+
+selectAll:
+SELECT * FROM keyboard_assists ORDER BY serial_no, key;
+
+selectByType:
+SELECT * FROM keyboard_assists WHERE type = ? ORDER BY serial_no, key;
+
+insert:
+INSERT OR REPLACE INTO keyboard_assists (type, key, value, serial_no) VALUES (?, ?, ?, ?);
+
+deleteByTypeAndKey:
+DELETE FROM keyboard_assists WHERE type = ? AND key = ?;
+
+deleteAll:
+DELETE FROM keyboard_assists;

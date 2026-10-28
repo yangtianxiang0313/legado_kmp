@@ -1,0 +1,70 @@
+-- BookGroup.sq
+-- Represents a book group for organizing the bookshelf
+
+CREATE TABLE book_groups (
+    -- Primary key: Group ID (uses powers of 2 for custom groups)
+    group_id INTEGER NOT NULL PRIMARY KEY,
+    -- Group name
+    group_name TEXT NOT NULL DEFAULT '',
+    -- Cover image URL
+    cover TEXT,
+    -- Display order
+    `order` INTEGER NOT NULL DEFAULT 0,
+    -- Enable auto-refresh for books in this group
+    enable_refresh INTEGER NOT NULL DEFAULT 1,
+    -- Show this group in the bookshelf
+    show INTEGER NOT NULL DEFAULT 1,
+    -- Sort order for books in this group (-1 means use default)
+    book_sort INTEGER NOT NULL DEFAULT -1
+);
+
+-- Create index for ordering
+CREATE INDEX idx_book_groups_order ON book_groups(`order`);
+
+selectAll:
+SELECT * FROM book_groups ORDER BY `order` ASC;
+
+selectById:
+SELECT * FROM book_groups WHERE group_id = ?;
+
+selectByName:
+SELECT * FROM book_groups WHERE group_name = ?;
+
+selectVisible:
+SELECT * FROM book_groups WHERE show = 1 ORDER BY `order` ASC;
+
+selectCustomGroups:
+SELECT * FROM book_groups WHERE group_id >= 0 ORDER BY `order` ASC;
+
+insert:
+INSERT INTO book_groups (
+    group_id, group_name, cover, `order`, enable_refresh, show, book_sort
+) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+update:
+UPDATE book_groups SET
+    group_name = ?,
+    cover = ?,
+    `order` = ?,
+    enable_refresh = ?,
+    show = ?,
+    book_sort = ?
+WHERE group_id = ?;
+
+updateShow:
+UPDATE book_groups SET show = 1 WHERE group_id = ?;
+
+delete:
+DELETE FROM book_groups WHERE group_id = ?;
+
+countAll:
+SELECT COUNT(*) FROM book_groups;
+
+sumIds:
+SELECT SUM(group_id) FROM book_groups WHERE group_id >= 0;
+
+maxOrder:
+SELECT MAX(`order`) FROM book_groups WHERE group_id >= 0;
+
+canAddGroup:
+SELECT COUNT(*) < 64 FROM book_groups WHERE group_id >= 0 OR group_id = -9223372036854775808; -- Long.MIN_VALUE

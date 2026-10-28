@@ -1,0 +1,34 @@
+CREATE TABLE search_keywords (
+    word TEXT NOT NULL PRIMARY KEY,
+    usage INTEGER NOT NULL DEFAULT 1,
+    last_use_time INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX idx_search_keywords_word ON search_keywords(word);
+
+selectAll:
+SELECT * FROM search_keywords;
+
+selectByUsage:
+SELECT * FROM search_keywords ORDER BY usage DESC;
+
+selectByTime:
+SELECT * FROM search_keywords ORDER BY last_use_time DESC;
+
+search:
+SELECT * FROM search_keywords WHERE word LIKE '%' || ? || '%' ORDER BY usage DESC;
+
+selectByWord:
+SELECT * FROM search_keywords WHERE word = ?;
+
+insert:
+INSERT OR REPLACE INTO search_keywords (word, usage, last_use_time) VALUES (?, ?, ?);
+
+update:
+UPDATE search_keywords SET usage = ?, last_use_time = ? WHERE word = ?;
+
+deleteByWord:
+DELETE FROM search_keywords WHERE word = ?;
+
+deleteAll:
+DELETE FROM search_keywords;

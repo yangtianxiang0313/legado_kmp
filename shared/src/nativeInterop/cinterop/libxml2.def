@@ -1,0 +1,6 @@
+headers = libxml2_wrapper.h
+headerFilter = libxml2_wrapper.h libxml/*
+package = io.legado.kmp.shared.libxml2
+language = C
+compilerOpts = -I/usr/include/libxml2
+linkerOpts = -lxml2

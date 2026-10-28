@@ -1,0 +1,66 @@
+-- Bookmark.sq
+-- Represents a bookmark in a book
+-- Stores user bookmarks with position information and notes
+
+CREATE TABLE bookmarks (
+    -- Primary key: timestamp of bookmark creation
+    time INTEGER NOT NULL PRIMARY KEY,
+    -- Book name (for reference)
+    book_name TEXT NOT NULL DEFAULT '',
+    -- Book author (for reference)
+    book_author TEXT NOT NULL DEFAULT '',
+    -- Chapter index
+    chapter_index INTEGER NOT NULL DEFAULT 0,
+    -- Character position in chapter
+    chapter_pos INTEGER NOT NULL DEFAULT 0,
+    -- Chapter name
+    chapter_name TEXT NOT NULL DEFAULT '',
+    -- Text snippet around bookmark position
+    book_text TEXT NOT NULL DEFAULT '',
+    -- User note content
+    content TEXT NOT NULL DEFAULT ''
+);
+
+-- Index for book filtering and sorting
+CREATE INDEX idx_bookmarks_book ON bookmarks(book_name, book_author);
+
+selectAll:
+SELECT * FROM bookmarks ORDER BY time DESC;
+
+selectByBook:
+SELECT * FROM bookmarks
+WHERE book_name = ? AND book_author = ?
+ORDER BY time DESC;
+
+selectByTime:
+SELECT * FROM bookmarks WHERE time = ?;
+
+searchInBook:
+SELECT * FROM bookmarks
+WHERE book_name = ? AND book_author = ?
+AND (chapter_name LIKE ? OR book_text LIKE ? OR content LIKE ?)
+ORDER BY time DESC;
+
+insert:
+INSERT OR REPLACE INTO bookmarks (
+    time, book_name, book_author, chapter_index, chapter_pos,
+    chapter_name, book_text, content
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+update:
+UPDATE bookmarks
+SET book_name = ?, book_author = ?, chapter_index = ?, chapter_pos = ?,
+    chapter_name = ?, book_text = ?, content = ?
+WHERE time = ?;
+
+updateContent:
+UPDATE bookmarks SET content = ? WHERE time = ?;
+
+deleteByTime:
+DELETE FROM bookmarks WHERE time = ?;
+
+deleteByBook:
+DELETE FROM bookmarks WHERE book_name = ? AND book_author = ?;
+
+deleteAll:
+DELETE FROM bookmarks;

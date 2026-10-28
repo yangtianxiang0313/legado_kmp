@@ -1,0 +1,193 @@
+-- Book.sq
+-- Represents a book in the library
+
+CREATE TABLE books (
+    -- Primary key: Detail page URL (for local books, stores full file path)
+    book_url TEXT NOT NULL PRIMARY KEY,
+    -- Table of contents URL
+    toc_url TEXT NOT NULL DEFAULT '',
+    -- Book source URL (default: local book type)
+    origin TEXT NOT NULL DEFAULT 'local',
+    -- Book source name or local book file name
+    origin_name TEXT NOT NULL DEFAULT '',
+    -- Book name (from book source)
+    name TEXT NOT NULL DEFAULT '',
+    -- Author name (from book source)
+    author TEXT NOT NULL DEFAULT '',
+    -- Category info (from book source)
+    kind TEXT,
+    -- Category info (user modified)
+    custom_tag TEXT,
+    -- Cover URL (from book source)
+    cover_url TEXT,
+    -- Cover URL (user modified)
+    custom_cover_url TEXT,
+    -- Introduction (from book source)
+    intro TEXT,
+    -- Introduction (user modified)
+    custom_intro TEXT,
+    -- Custom character set name (for local books only)
+    charset TEXT,
+    -- Book type (see BookType constants)
+    type INTEGER NOT NULL DEFAULT 0,
+    -- Custom group index
+    `group` INTEGER NOT NULL DEFAULT 0,
+    -- Latest chapter title
+    latest_chapter_title TEXT,
+    -- Latest chapter title update time
+    latest_chapter_time INTEGER NOT NULL DEFAULT 0,
+    -- Last book info update time
+    last_check_time INTEGER NOT NULL DEFAULT 0,
+    -- Number of new chapters found last time
+    last_check_count INTEGER NOT NULL DEFAULT 0,
+    -- Total chapter count
+    total_chapter_num INTEGER NOT NULL DEFAULT 0,
+    -- Current chapter title
+    dur_chapter_title TEXT,
+    -- Current chapter index
+    dur_chapter_index INTEGER NOT NULL DEFAULT 0,
+    -- Current reading progress (first line character index position)
+    dur_chapter_pos INTEGER NOT NULL DEFAULT 0,
+    -- Last read time (time opening content)
+    dur_chapter_time INTEGER NOT NULL DEFAULT 0,
+    -- Word count
+    word_count TEXT,
+    -- Whether to update book info when refreshing bookshelf
+    can_update INTEGER NOT NULL DEFAULT 1,
+    -- Manual sort order
+    `order` INTEGER NOT NULL DEFAULT 0,
+    -- Book source sort order
+    origin_order INTEGER NOT NULL DEFAULT 0,
+    -- Custom book variable info (for book source rule search)
+    variable TEXT,
+    -- Reading settings (JSON serialized ReadConfig)
+    read_config TEXT,
+    -- Sync time
+    sync_time INTEGER NOT NULL DEFAULT 0
+);
+
+-- Create index on name and author for unique constraint and faster search
+CREATE INDEX idx_books_name_author ON books(name, author);
+
+selectAll:
+SELECT * FROM books;
+
+selectByBookUrl:
+SELECT * FROM books WHERE book_url = ?;
+
+selectByExactName:
+SELECT * FROM books WHERE name = ?;
+
+selectByOrigin:
+SELECT * FROM books WHERE origin = ? ORDER BY `order` ASC, latest_chapter_time DESC;
+
+selectByGroup:
+SELECT * FROM books WHERE `group` = ? ORDER BY `order` ASC, latest_chapter_time DESC;
+
+selectAllOrdered:
+SELECT * FROM books ORDER BY `order` ASC, latest_chapter_time DESC;
+
+searchByName:
+SELECT * FROM books WHERE name LIKE '%' || ? || '%' OR author LIKE '%' || ? || '%';
+
+insert:
+INSERT INTO books (
+    book_url, toc_url, origin, origin_name, name, author, kind, custom_tag,
+    cover_url, custom_cover_url, intro, custom_intro, charset, type, `group`,
+    latest_chapter_title, latest_chapter_time, last_check_time, last_check_count,
+    total_chapter_num, dur_chapter_title, dur_chapter_index, dur_chapter_pos,
+    dur_chapter_time, word_count, can_update, `order`, origin_order, variable,
+    read_config, sync_time
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+);
+
+update:
+UPDATE books SET
+    toc_url = ?,
+    origin = ?,
+    origin_name = ?,
+    name = ?,
+    author = ?,
+    kind = ?,
+    custom_tag = ?,
+    cover_url = ?,
+    custom_cover_url = ?,
+    intro = ?,
+    custom_intro = ?,
+    charset = ?,
+    type = ?,
+    `group` = ?,
+    latest_chapter_title = ?,
+    latest_chapter_time = ?,
+    last_check_time = ?,
+    last_check_count = ?,
+    total_chapter_num = ?,
+    dur_chapter_title = ?,
+    dur_chapter_index = ?,
+    dur_chapter_pos = ?,
+    dur_chapter_time = ?,
+    word_count = ?,
+    can_update = ?,
+    `order` = ?,
+    origin_order = ?,
+    variable = ?,
+    read_config = ?,
+    sync_time = ?
+WHERE book_url = ?;
+
+updateVariable:
+UPDATE books SET variable = ? WHERE book_url = ?;
+
+updateShelfType:
+UPDATE books SET type = ? WHERE book_url = ?;
+
+updateReadConfigIfSourceUnchanged:
+UPDATE books SET read_config = :read_config
+WHERE book_url = :book_url AND origin = :expected_origin;
+
+updateCharsetIfSourceUnchanged:
+UPDATE books SET charset = :charset
+WHERE book_url = :book_url AND origin = :expected_origin;
+
+updateReadingProgress:
+UPDATE books SET
+    last_check_count = 0,
+    dur_chapter_title = ?,
+    dur_chapter_index = ?,
+    dur_chapter_pos = ?,
+    dur_chapter_time = ?
+WHERE book_url = ?;
+
+updateAudioReadingProgress:
+UPDATE books SET
+    last_check_count = 0,
+    dur_chapter_title = ?,
+    dur_chapter_index = ?,
+    dur_chapter_pos = ?,
+    dur_chapter_time = ?
+WHERE book_url = ?;
+
+updateLatestChapter:
+UPDATE books SET
+    latest_chapter_title = ?,
+    latest_chapter_time = ?
+WHERE book_url = ?;
+
+delete:
+DELETE FROM books WHERE book_url = ?;
+
+deleteByGroup:
+DELETE FROM books WHERE `group` = ?;
+
+countAll:
+SELECT COUNT(*) FROM books;
+
+countByGroup:
+SELECT COUNT(*) FROM books WHERE `group` = ?;
+
+reverseBookmarkChapterIndices:
+UPDATE bookmarks
+SET chapter_index = :last_index - chapter_index
+WHERE book_name = :book_name AND book_author = :book_author
+AND chapter_index >= 0 AND chapter_index <= :last_index;

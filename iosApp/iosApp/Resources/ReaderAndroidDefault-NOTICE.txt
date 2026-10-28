@@ -1,0 +1,26 @@
+ReaderAndroidDefault.ttf
+
+Unmodified Roboto variable font copied from /system/fonts/Roboto-Regular.ttf
+on the Android API 36.1 reference emulator used for this alignment batch.
+SHA-256: 9e157d5ff70ae52cc8c527b36e89d9b3c69c6c814da79fa6237a0bf0895abc7c
+Embedded version: Version 3.011; 2025.
+Embedded copyright: Copyright 2011 The Roboto Project Authors
+(https://github.com/googlefonts/roboto-classic).
+
+Upstream release: https://github.com/googlefonts/roboto-3-classic/releases/tag/v3.011
+Upstream license: https://github.com/googlefonts/roboto-3-classic/blob/v3.011/OFL.txt
+License: SIL Open Font License, Version 1.1.
+The unchanged license is reproduced in ReaderAndroidDefault-LICENSE.txt.
+This font is not the older Apache-licensed Roboto digit subset packaged as
+ReaderAndroidNumber.ttf; the two assets and their licenses remain separate.
+
+Android Legado reference: gedoor/legado commit
+5f5d31404af9957684703747ecee2b91e7161f1d, ChapterProvider.getTypeface/getPaints.
+The default sans-serif uses weight 400, width 100, upright. Reader text weight
+selects 300/400/700/900 on the same bundled variable font.
+
+CoreText loads the file privately from its descriptor, without process-global
+font registration. Only the reader's default body/title and ordinary tip font
+use it. Explicit imported fonts retain precedence; missing CJK and other glyphs
+use the platform fallback cascade. Battery digits retain their original asset.
+No system UI font, preference, book data, or imported font file is replaced.

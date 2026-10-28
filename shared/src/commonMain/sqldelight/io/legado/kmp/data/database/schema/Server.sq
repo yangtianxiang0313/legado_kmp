@@ -1,0 +1,22 @@
+CREATE TABLE servers (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT 'WEBDAV',
+    config TEXT,
+    sort_number INTEGER NOT NULL DEFAULT 0
+);
+
+selectAll:
+SELECT * FROM servers ORDER BY sort_number, id;
+
+selectById:
+SELECT * FROM servers WHERE id = ?;
+
+insert:
+INSERT OR REPLACE INTO servers (id, name, type, config, sort_number) VALUES (?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM servers WHERE id = ?;
+
+deleteAll:
+DELETE FROM servers;

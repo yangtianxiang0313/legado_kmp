@@ -1,0 +1,10 @@
+Reader color controls
+
+Portions of the color picker geometry, drawing, palette, shades, and dialog
+behavior are adapted from com.jaredrummler:colorpicker:1.1.0.
+Copyright (C) 2017 Jared Rummler.
+https://github.com/jaredrummler/ColorPicker
+
+Licensed under the Apache License, Version 2.0. See ColorPicker-LICENSE.txt.
+The UIKit implementation is modified for iOS input, accessibility, layout,
+and presentation lifecycle. It is not the Android binary library.

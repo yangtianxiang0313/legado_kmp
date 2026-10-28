@@ -1,0 +1,201 @@
+-- BookSource.sq
+-- Represents a book source (website/app that provides books)
+
+CREATE TABLE book_sources (
+    -- Primary key: Book source URL
+    book_source_url TEXT NOT NULL PRIMARY KEY,
+    -- Book source name
+    book_source_name TEXT NOT NULL DEFAULT '',
+    -- Group (comma-separated)
+    book_source_group TEXT,
+    -- Type: 0=text, 1=audio, 2=image, 3=file
+    book_source_type INTEGER NOT NULL DEFAULT 0,
+    -- Detail page URL pattern
+    book_url_pattern TEXT,
+    -- Manual sort order
+    custom_order INTEGER NOT NULL DEFAULT 0,
+    -- Whether enabled
+    enabled INTEGER NOT NULL DEFAULT 1,
+    -- Enable discovery/explore
+    enabled_explore INTEGER NOT NULL DEFAULT 1,
+    -- JS library
+    js_lib TEXT,
+    -- Enable CookieJar auto-save
+    enabled_cookie_jar INTEGER NOT NULL DEFAULT 1,
+    -- Concurrent rate limit
+    concurrent_rate TEXT,
+    -- HTTP headers (JSON)
+    header_json TEXT,
+    -- Login URL or JS
+    login_url TEXT,
+    -- Login UI (JSON)
+    login_ui TEXT,
+    -- Login check JS
+    login_check_js TEXT,
+    -- Cover decode JS
+    cover_decode_js TEXT,
+    -- Comment
+    book_source_comment TEXT,
+    -- Variable comment
+    variable_comment TEXT,
+    -- Last update time (for sorting)
+    last_update_time INTEGER NOT NULL DEFAULT 0,
+    -- Response time (for sorting)
+    respond_time INTEGER NOT NULL DEFAULT 180000,
+    -- Smart sort weight
+    weight INTEGER NOT NULL DEFAULT 0,
+    -- Explore/Discovery URL
+    explore_url TEXT,
+    -- Explore filter rule
+    explore_screen TEXT,
+    -- Explore rule (JSON)
+    rule_explore TEXT,
+    -- Search URL
+    search_url TEXT,
+    -- Search rule (JSON)
+    rule_search TEXT,
+    -- Book info rule (JSON)
+    rule_book_info TEXT,
+    -- Table of contents rule (JSON)
+    rule_toc TEXT,
+    -- Content rule (JSON)
+    rule_content TEXT,
+    -- Review rule (JSON)
+    rule_review TEXT
+);
+
+-- Create index for sorting
+CREATE INDEX idx_book_sources_order ON book_sources(custom_order);
+
+selectAll:
+SELECT * FROM book_sources ORDER BY custom_order ASC;
+
+selectByUrl:
+SELECT * FROM book_sources WHERE book_source_url = ?;
+
+selectEnabled:
+SELECT * FROM book_sources WHERE enabled = 1 ORDER BY custom_order ASC;
+
+selectDisabled:
+SELECT * FROM book_sources WHERE enabled = 0 ORDER BY custom_order ASC;
+
+selectExplore:
+SELECT * FROM book_sources WHERE enabled_explore = 1 AND explore_url IS NOT NULL AND explore_url != '' ORDER BY custom_order ASC;
+
+selectByType:
+SELECT * FROM book_sources WHERE enabled = 1 AND book_url_pattern IS NOT NULL AND book_url_pattern != '' AND book_source_type = ? ORDER BY custom_order ASC;
+
+searchByName:
+SELECT * FROM book_sources WHERE book_source_name LIKE '%' || ? || '%'
+    OR book_source_group LIKE '%' || ? || '%'
+    OR book_source_url LIKE '%' || ? || '%'
+    OR book_source_comment LIKE '%' || ? || '%'
+ORDER BY custom_order ASC;
+
+searchEnabledByName:
+SELECT * FROM book_sources WHERE enabled = 1 AND (
+    book_source_name LIKE '%' || ? || '%'
+    OR book_source_group LIKE '%' || ? || '%'
+    OR book_source_url LIKE '%' || ? || '%'
+    OR book_source_comment LIKE '%' || ? || '%'
+) ORDER BY custom_order ASC;
+
+selectByGroup:
+SELECT * FROM book_sources WHERE book_source_group = ?
+    OR book_source_group LIKE ? || ',%'
+    OR book_source_group LIKE '%,' || ?
+    OR book_source_group LIKE '%,' || ? || ',%'
+ORDER BY custom_order ASC;
+
+selectEnabledByGroup:
+SELECT * FROM book_sources WHERE enabled = 1 AND (
+    book_source_group = ?
+    OR book_source_group LIKE ? || ',%'
+    OR book_source_group LIKE '%,' || ?
+    OR book_source_group LIKE '%,' || ? || ',%'
+) ORDER BY custom_order ASC;
+
+selectNoGroup:
+SELECT * FROM book_sources WHERE book_source_group IS NULL OR book_source_group = '' OR book_source_group LIKE '%未分组%' ORDER BY custom_order ASC;
+
+selectLogin:
+SELECT * FROM book_sources WHERE login_url IS NOT NULL AND login_url != '' ORDER BY custom_order ASC;
+
+selectGroups:
+SELECT DISTINCT book_source_group FROM book_sources WHERE trim(book_source_group) <> '';
+
+selectEnabledGroups:
+SELECT DISTINCT book_source_group FROM book_sources WHERE enabled = 1 AND trim(book_source_group) <> '';
+
+selectExploreGroups:
+SELECT DISTINCT book_source_group FROM book_sources WHERE enabled_explore = 1 AND explore_url IS NOT NULL AND trim(explore_url) <> '' AND trim(book_source_group) <> '';
+
+insert:
+INSERT INTO book_sources (
+    book_source_url, book_source_name, book_source_group, book_source_type,
+    book_url_pattern, custom_order, enabled, enabled_explore, js_lib,
+    enabled_cookie_jar, concurrent_rate, header_json, login_url, login_ui,
+    login_check_js, cover_decode_js, book_source_comment, variable_comment,
+    last_update_time, respond_time, weight, explore_url, explore_screen,
+    rule_explore, search_url, rule_search, rule_book_info, rule_toc,
+    rule_content, rule_review
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+);
+
+update:
+UPDATE book_sources SET
+    book_source_name = ?,
+    book_source_group = ?,
+    book_source_type = ?,
+    book_url_pattern = ?,
+    custom_order = ?,
+    enabled = ?,
+    enabled_explore = ?,
+    js_lib = ?,
+    enabled_cookie_jar = ?,
+    concurrent_rate = ?,
+    header_json = ?,
+    login_url = ?,
+    login_ui = ?,
+    login_check_js = ?,
+    cover_decode_js = ?,
+    book_source_comment = ?,
+    variable_comment = ?,
+    last_update_time = ?,
+    respond_time = ?,
+    weight = ?,
+    explore_url = ?,
+    explore_screen = ?,
+    rule_explore = ?,
+    search_url = ?,
+    rule_search = ?,
+    rule_book_info = ?,
+    rule_toc = ?,
+    rule_content = ?,
+    rule_review = ?
+WHERE book_source_url = ?;
+
+updateEnabled:
+UPDATE book_sources SET enabled = ? WHERE book_source_url = ?;
+
+updateEnabledExplore:
+UPDATE book_sources SET enabled_explore = ? WHERE book_source_url = ?;
+
+updateOrder:
+UPDATE book_sources SET custom_order = ? WHERE book_source_url = ?;
+
+updateGroup:
+UPDATE book_sources SET book_source_group = ? WHERE book_source_url = ?;
+
+delete:
+DELETE FROM book_sources WHERE book_source_url = ?;
+
+countAll:
+SELECT COUNT(*) FROM book_sources;
+
+minOrder:
+SELECT MIN(custom_order) FROM book_sources;
+
+maxOrder:
+SELECT MAX(custom_order) FROM book_sources;

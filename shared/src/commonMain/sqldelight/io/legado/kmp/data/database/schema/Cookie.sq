@@ -1,0 +1,27 @@
+CREATE TABLE cookies (
+    url TEXT NOT NULL PRIMARY KEY,
+    cookie TEXT NOT NULL DEFAULT ''
+);
+
+CREATE UNIQUE INDEX idx_cookies_url ON cookies(url);
+
+selectAll:
+SELECT * FROM cookies ORDER BY url;
+
+selectByUrl:
+SELECT * FROM cookies WHERE url = ?;
+
+selectOkHttpCookies:
+SELECT * FROM cookies WHERE url LIKE '%|%';
+
+insert:
+INSERT OR REPLACE INTO cookies (url, cookie) VALUES (?, ?);
+
+update:
+UPDATE cookies SET cookie = ? WHERE url = ?;
+
+deleteByUrl:
+DELETE FROM cookies WHERE url = ?;
+
+deleteOkHttpCookies:
+DELETE FROM cookies WHERE url LIKE '%|%';

@@ -1,0 +1,77 @@
+Reader background images from Legado
+
+Project: https://github.com/gedoor/legado
+Revision: 5f5d31404af9957684703747ecee2b91e7161f1d
+Local source: /Users/ytx/Documents/legado-work/legado
+Original directory: app/src/main/assets/bg/
+
+The following fourteen JPG files are byte-for-byte copies of the original
+assets at the revision above. Filenames, image data, orientation and colors
+are unchanged. No new textures, recompression or replacement artwork is used.
+The order below is the original filename order used by the iOS catalog.
+
+Original filename     Stable catalog ID
+午后沙滩.jpg          afternoon-beach
+宁静夜色.jpg          quiet-night
+山水墨影.jpg          ink-landscape
+山水画.jpg            landscape
+护眼漫绿.jpg          eye-care-green
+新羊皮纸.jpg          new-parchment
+明媚倾城.jpg          bright-city
+深宫魅影.jpg          palace-shadows
+清新时光.jpg          fresh-moments
+羊皮纸1.jpg           parchment-1
+羊皮纸2.jpg           parchment-2
+羊皮纸3.jpg           parchment-3
+羊皮纸4.jpg           parchment-4
+边彩画布.jpg          bordered-canvas
+
+Upstream supplies GNU General Public License version 3 in LICENSE and
+app/src/main/assets/LICENSE.md. The existing copy of the GPL-3.0 text is
+../LegadoMenuIcons-LICENSE.txt. Original artwork remains attributable to
+its respective upstream authors; this import claims no new artwork rights.
+
+The UIKit strip follows these files at the same fixed revision:
+- app/src/main/java/io/legado/app/ui/book/read/config/BgAdapter.kt
+- app/src/main/java/io/legado/app/ui/book/read/config/BgTextConfigDialog.kt
+- app/src/main/res/layout/item_bg_image.xml
+- app/src/main/res/layout/dialog_read_bg_text.xml
+
+Original restore-layout templates:
+- readConfig.json is an unchanged copy of
+  app/src/main/assets/defaultData/readConfig.json at the revision above.
+- It contains the six original templates, in order: 微信读书, 预设1, 预设2,
+  预设3, 预设4, 预设5. These are explicit restore-layout choices, not values
+  to write automatically on application launch or catalog initialization.
+- No replacement or locally invented three-template list is supplied.
+- Preserve this resource's bytes, including paragraphIndent. The host may
+  parse JSON structurally and normalize paragraphIndent in memory before
+  passing it to its read-only shared decoding API for the real templates.
+  This resource import neither adds that API nor writes reader preferences.
+- The same ReaderBackgrounds folder reference packages readConfig.json
+  together with the original JPGs; no separate resource registration is needed.
+
+BgAdapter uses centerCrop and the filename before its final dot as the name.
+The gallery is one horizontal row, 100pt high, with 6pt outer padding and
+66 x 88pt items including 2pt inner padding. Its first item selects an image.
+Runtime thumbnails decode these original JPGs at display size, keep their
+original colors and use aspect-fill cropping. No thumbnail files are written.
+Captions have a fixed separate band, may visually truncate at large text
+sizes, and expose the full original name to accessibility and tooltips.
+
+Integration and persistence:
+- Add this directory as a folder reference so the bundle contains
+  ReaderBackgrounds/<original filename>. Do not flatten it into the bundle.
+- Built-in selection persists only legado-background:<stable catalog ID>.
+  The loader matches a known ID exactly before resolving Bundle.main with
+  subdirectory ReaderBackgrounds. Never persist a bundle GUID or bundle URL.
+- Imported selection may persist legado-background-file:<UUID>.<extension>.
+  The loader accepts one canonical UUID basename (either letter case) and
+  one nonempty ASCII alphanumeric extension, rejects slashes, backslashes,
+  traversal and additional dots, then reads the unchanged filename under
+  Application Support/ReaderBackgrounds/. It never creates or writes files.
+- Legacy absolute paths still load through UIImage(contentsOfFile:).
+- Unknown identifiers and missing or unreadable images return nil. The strip
+  leaves unavailable thumbnails empty and disabled rather than using fake art.
+- The strip only emits onImport/onSelect callbacks. Persistence, importing,
+  ReaderRenderView integration and project registration belong to the host.

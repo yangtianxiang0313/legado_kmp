@@ -1,0 +1,151 @@
+CREATE TABLE rss_sources (
+    source_url TEXT NOT NULL PRIMARY KEY,
+    source_name TEXT NOT NULL DEFAULT '',
+    source_icon TEXT NOT NULL DEFAULT '',
+    source_group TEXT,
+    source_comment TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    variable_comment TEXT,
+    js_lib TEXT,
+    enabled_cookie_jar INTEGER NOT NULL DEFAULT 1,
+    concurrent_rate TEXT,
+    header TEXT,
+    login_url TEXT,
+    login_ui TEXT,
+    login_check_js TEXT,
+    cover_decode_js TEXT,
+    sort_url TEXT,
+    single_url INTEGER NOT NULL DEFAULT 0,
+    article_style INTEGER NOT NULL DEFAULT 0,
+    rule_articles TEXT,
+    rule_next_page TEXT,
+    rule_title TEXT,
+    rule_pub_date TEXT,
+    rule_description TEXT,
+    rule_image TEXT,
+    rule_link TEXT,
+    rule_content TEXT,
+    content_whitelist TEXT,
+    content_blacklist TEXT,
+    should_override_url_loading TEXT,
+    style TEXT,
+    enable_js INTEGER NOT NULL DEFAULT 1,
+    load_with_base_url INTEGER NOT NULL DEFAULT 1,
+    inject_js TEXT,
+    last_update_time INTEGER NOT NULL DEFAULT 0,
+    custom_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idx_rss_sources_url ON rss_sources(source_url);
+
+selectRssSourceByKey:
+SELECT * FROM rss_sources WHERE source_url = ?;
+
+selectRssSourcesByUrls:
+SELECT * FROM rss_sources WHERE source_url IN ?;
+
+selectAllRssSources:
+SELECT * FROM rss_sources ORDER BY custom_order;
+
+countAllRssSources:
+SELECT COUNT(source_url) FROM rss_sources;
+
+selectSearchRssSources:
+SELECT * FROM rss_sources
+WHERE source_name LIKE '%' || ? || '%'
+   OR source_url LIKE '%' || ? || '%'
+   OR source_group LIKE '%' || ? || '%'
+   OR source_comment LIKE '%' || ? || '%'
+ORDER BY custom_order;
+
+selectGroupSearchRssSources:
+SELECT * FROM rss_sources
+WHERE source_group = ?
+   OR source_group LIKE ? || ',%'
+   OR source_group LIKE '%,' || ?
+   OR source_group LIKE '%,' || ? || ',%'
+ORDER BY custom_order;
+
+selectEnabledRssSources:
+SELECT * FROM rss_sources WHERE enabled = 1 ORDER BY custom_order;
+
+selectDisabledRssSources:
+SELECT * FROM rss_sources WHERE enabled = 0 ORDER BY custom_order;
+
+selectLoginRssSources:
+SELECT * FROM rss_sources WHERE login_url IS NOT NULL AND login_url != '';
+
+selectNoGroupRssSources:
+SELECT * FROM rss_sources
+WHERE source_group IS NULL OR source_group = '' OR source_group LIKE '%未分组%';
+
+selectEnabledSearchRssSources:
+SELECT * FROM rss_sources
+WHERE enabled = 1
+  AND (
+    source_name LIKE '%' || ? || '%'
+    OR source_group LIKE '%' || ? || '%'
+    OR source_url LIKE '%' || ? || '%'
+    OR source_comment LIKE '%' || ? || '%'
+  )
+ORDER BY custom_order;
+
+selectEnabledRssSourcesByGroup:
+SELECT * FROM rss_sources
+WHERE enabled = 1
+  AND (
+    source_group = ?
+    OR source_group LIKE ? || ',%'
+    OR source_group LIKE '%,' || ?
+    OR source_group LIKE '%,' || ? || ',%'
+  )
+ORDER BY custom_order;
+
+selectRssGroupsRaw:
+SELECT DISTINCT source_group FROM rss_sources WHERE TRIM(source_group) <> '';
+
+selectEnabledRssGroupsRaw:
+SELECT DISTINCT source_group FROM rss_sources WHERE TRIM(source_group) <> '' AND enabled = 1;
+
+selectMinRssOrder:
+SELECT MIN(custom_order) FROM rss_sources;
+
+selectMaxRssOrder:
+SELECT MAX(custom_order) FROM rss_sources;
+
+selectRssSourcesByGroup:
+SELECT * FROM rss_sources WHERE source_group LIKE '%' || ? || '%';
+
+hasRssSourceByKey:
+SELECT EXISTS(SELECT 1 FROM rss_sources WHERE source_url = ?);
+
+insertRssSource:
+INSERT OR REPLACE INTO rss_sources (
+    source_url, source_name, source_icon, source_group, source_comment,
+    enabled, variable_comment, js_lib, enabled_cookie_jar, concurrent_rate,
+    header, login_url, login_ui, login_check_js, cover_decode_js,
+    sort_url, single_url, article_style, rule_articles, rule_next_page,
+    rule_title, rule_pub_date, rule_description, rule_image, rule_link,
+    rule_content, content_whitelist, content_blacklist, should_override_url_loading,
+    style, enable_js, load_with_base_url, inject_js, last_update_time, custom_order
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateRssSource:
+UPDATE rss_sources
+SET source_name = ?, source_icon = ?, source_group = ?, source_comment = ?,
+    enabled = ?, variable_comment = ?, js_lib = ?, enabled_cookie_jar = ?, concurrent_rate = ?,
+    header = ?, login_url = ?, login_ui = ?, login_check_js = ?, cover_decode_js = ?,
+    sort_url = ?, single_url = ?, article_style = ?, rule_articles = ?, rule_next_page = ?,
+    rule_title = ?, rule_pub_date = ?, rule_description = ?, rule_image = ?, rule_link = ?,
+    rule_content = ?, content_whitelist = ?, content_blacklist = ?, should_override_url_loading = ?,
+    style = ?, enable_js = ?, load_with_base_url = ?, inject_js = ?, last_update_time = ?, custom_order = ?
+WHERE source_url = ?;
+
+deleteRssSourceByUrl:
+DELETE FROM rss_sources WHERE source_url = ?;
+
+deleteDefaultRssSources:
+DELETE FROM rss_sources WHERE source_group LIKE 'legado';
+
+enableRssSource:
+UPDATE rss_sources SET enabled = ? WHERE source_url = ?;

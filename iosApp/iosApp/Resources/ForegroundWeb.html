@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Legado</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:15px system-ui;color:#202329;background:#f5f6f7}header{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:12px 20px;background:#fff;border-bottom:1px solid #d5d8dc}h1{font-size:20px;margin:0 8px 0 0}h2{font-size:17px;margin:0}button,input,textarea,select{font:inherit}button{min-height:38px;padding:8px 12px;border:1px solid #bbb;background:#fff;border-radius:4px;cursor:pointer}button[aria-selected=true],button[aria-pressed=true]{background:#d7ece6}button:disabled{opacity:.5;cursor:default}button.danger{color:#a62934}main{max-width:1100px;margin:auto;padding:16px}#auth,.toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px}#auth input{flex:1;min-width:160px}input,textarea,select{border:1px solid #bbc0c8;border-radius:4px;padding:8px;width:100%;max-width:100%;background:#fff}input[type=checkbox]{width:20px;height:20px;margin:0;flex:none}textarea{min-height:76px;resize:vertical}textarea.code{font:14px ui-monospace,monospace;line-height:1.5;min-height:240px;tab-size:2}label{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}.check{display:flex;align-items:center;gap:8px;min-height:38px}.layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px}.layout>*,#fields>*{min-width:0}#list{display:flex;flex-direction:column;gap:4px;margin-top:8px}.row{display:flex;align-items:center;gap:6px}.row button{flex:1;min-width:0;text-align:left;overflow-wrap:anywhere}.row button span{display:block}.muted,small{font-size:13px;color:#62676f;overflow-wrap:anywhere}#status{min-height:24px;color:#a62934;margin-bottom:8px;white-space:pre-wrap;overflow-wrap:anywhere}#fields{border:0;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.wide{grid-column:1/-1}#editor,#import-panel,#test-panel{display:grid;gap:12px}#import-panel{border-block:1px solid #d5d8dc;padding-block:12px;margin-bottom:16px}#import-preview,#test-result{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#test-panel{border-top:1px solid #d5d8dc;padding-top:12px;margin-top:16px}#content{white-space:pre-wrap;line-height:1.8;overflow-wrap:anywhere}#chapters{margin-bottom:12px}#cover{width:84px;height:112px;object-fit:contain;float:right;margin:0 0 12px 16px}#editor-title{overflow-wrap:anywhere}#list-count{margin:8px 0}#delete-selected{width:100%;margin-top:8px}[hidden]{display:none!important}:focus-visible{outline:2px solid #167b63;outline-offset:2px}@media(max-width:650px){.layout{grid-template-columns:1fr}#list{max-height:240px;overflow:auto}header{padding:12px}main{padding:12px}#fields{grid-template-columns:1fr}}
+</style>
+<style>
+.advanced-panel{border-block:1px solid #d5d8dc;padding-block:16px;margin-block:16px}.advanced-panel:first-child{margin-top:0}#search-form{display:grid;grid-template-columns:minmax(120px,1fr) auto auto;gap:8px}#search-form>label{grid-column:1/-1}#search-results{display:grid;gap:0;max-height:440px;overflow:auto;border-block:1px solid #d5d8dc;margin-block:8px}.search-result{padding-block:8px;border-bottom:1px solid #e0e3e7}.search-result:last-child{border-bottom:0}.search-preview{display:grid;gap:5px;text-align:left;width:100%;border:0;background:transparent;overflow-wrap:anywhere}.search-preview strong{font-size:16px}#debug-panel{display:grid;gap:10px}#debug-output{max-height:460px;min-height:100px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f0f2f4;padding:12px;margin:0;font:13px/1.6 ui-monospace,monospace}.stream-status{min-height:20px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}#reading-panel{clear:both;margin-top:20px;border-top:1px solid #d5d8dc;padding-top:16px}#reading-heading{min-height:124px}#reader-title{font-size:21px;line-height:1.4;overflow-wrap:anywhere}#reader-intro{white-space:pre-wrap;max-height:180px;overflow:auto;line-height:1.6}#reader-note{min-height:24px;color:#a62934;overflow-wrap:anywhere}#reader-config{margin-block:16px;border-block:1px solid #d5d8dc;padding-block:12px}summary{cursor:pointer;min-height:32px}#config-fields{border:0;padding:8px 0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}#config-fields input[type=number]{max-width:200px}.theme-swatches{display:flex;gap:10px;flex-wrap:wrap}.theme-swatch{width:34px;height:34px;min-height:34px;padding:0;border-radius:50%;border:1px solid #9a9fa5}.theme-swatch[aria-pressed=true]{outline:2px solid #167b63;outline-offset:2px}#content{clear:both;margin-inline:auto;padding:20px;white-space:normal;min-width:0;width:100%;border-radius:0;line-height:var(--reader-line,1.8)}.reader-chapter{border:0;padding:0;scroll-margin-top:16px}.reader-chapter+.reader-chapter{border-top:1px solid currentColor;padding-top:32px;margin-top:32px}.reader-chapter h2{font-size:24px;line-height:1.5;margin:0 0 28px;overflow-wrap:anywhere}.reader-chapter p{font-size:inherit;white-space:pre-wrap;margin:var(--reader-paragraph,1em) 0;line-height:var(--reader-line,1.8);letter-spacing:var(--reader-letter,0);overflow-wrap:anywhere}.reader-chapter figure{margin:12px 0;min-height:60px;display:grid;gap:8px;overflow-wrap:anywhere}.reader-chapter img{display:block;max-width:100%;height:auto;margin:auto}.reader-chapter figure button{justify-self:start}#pdf-frame{display:block;width:100%;height:75vh;min-height:420px;border:1px solid #bbc0c8;background:#fff}#reader-more{margin:16px auto;display:block}#reader-more-status{text-align:center}.reading-toolbar{margin-top:12px}#service-state{font-size:13px;color:#62676f}body[data-mode=search] .layout{grid-template-columns:minmax(0,1fr)}body[data-mode=search] #item-sidebar{display:none}@media(max-width:650px){#config-fields{grid-template-columns:1fr}#content{padding:16px 12px}#search-form{grid-template-columns:minmax(100px,1fr) auto}#search-stop{grid-column:1/-1}#reader-title{font-size:20px}}
+</style>
+<style>
+#pdf-navigation{align-items:center}#pdf-page-number{width:82px;flex:none}#pdf-page-count{min-width:64px}#pdf-page{position:relative;width:100%;margin-inline:auto;background:#fff;overflow:hidden;isolation:isolate}#pdf-page-image{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none;pointer-events:none}#pdf-text-layer{position:absolute;inset:0;overflow:hidden;user-select:text;-webkit-user-select:text;color:transparent;-webkit-text-fill-color:transparent;cursor:text}.pdf-text-line{position:absolute;margin:0;padding:0;border:0;white-space:pre;line-height:1;font-family:serif;letter-spacing:0;transform-origin:0 0}.pdf-text-line>span{display:inline-block;white-space:pre;transform-origin:0 0}.pdf-text-line::selection,.pdf-text-line>span::selection{color:transparent;-webkit-text-fill-color:transparent;background:rgba(50,120,220,.3)}#pdf-download-status{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+  <h1>Legado</h1>
+  <nav class="toolbar" aria-label="功能" style="margin:0">
+    <button id="books" aria-selected="true">书架</button>
+    <button id="search" aria-selected="false">搜索</button>
+    <button id="sources" aria-selected="false">书源</button>
+    <button id="rss" aria-selected="false">RSS 源</button>
+    <button id="rules" aria-selected="false">替换规则</button>
+  </nav>
+  <button id="refresh">刷新</button><button id="reconnect">更换密钥</button>
+</header>
+<main>
+  <form id="auth"><input id="secret" type="password" autocomplete="off" aria-label="访问密钥" placeholder="访问密钥"><button id="connect">连接</button></form>
+  <div id="status" role="status" aria-live="polite"></div>
+  <p id="service-state" role="status"></p>
+  <div class="layout">
+    <aside id="item-sidebar" aria-label="项目列表">
+      <input id="filter" type="search" aria-label="筛选列表" placeholder="筛选名称、分组或地址">
+      <p id="list-count" class="muted"></p>
+      <label id="selection-tools" class="check" hidden><input id="select-all" type="checkbox">选择筛选结果</label>
+      <nav id="list" aria-label="列表"></nav>
+      <button id="delete-selected" class="danger" hidden disabled>删除所选</button>
+    </aside>
+    <section aria-label="详情">
+      <section id="search-panel" hidden aria-label="搜索书籍">
+        <form id="search-form">
+          <input id="search-key" type="search" maxlength="2048" aria-label="搜索书名或作者" placeholder="书名或作者" required>
+          <button id="search-start" type="submit">搜索</button><button id="search-stop" type="button" disabled>停止</button>
+          <label>书源范围<input id="search-scope" maxlength="8192" placeholder="全部已启用书源"></label>
+        </form>
+        <p id="search-status" class="stream-status" role="status" aria-live="polite"></p>
+        <div class="toolbar"><input id="search-filter" type="search" aria-label="筛选搜索结果" placeholder="筛选书名、作者或书源"><span id="search-count" class="muted">0 本</span></div>
+        <div id="search-results" aria-label="搜索结果"></div>
+      </section>
+      <div id="tools" class="toolbar" hidden>
+        <button id="new">新建</button><button id="save" disabled>保存</button><button id="delete" class="danger" disabled>删除</button><button id="import">导入 JSON</button>
+      </div>
+      <section id="import-panel" hidden aria-label="导入源">
+        <h2 id="import-title">导入</h2>
+        <div class="toolbar" style="margin:0"><button id="choose-file">选择文件</button><span id="file-name" class="muted"></span><input type="file" accept=".json,.txt,application/json,text/plain" id="file" hidden></div>
+        <label>源 JSON<textarea id="import-json" class="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea></label>
+        <div class="toolbar" style="margin:0"><button id="preview-import">预览</button><button id="confirm-import">确认导入</button><button id="close-import">收起</button></div>
+        <pre id="import-preview" role="status"></pre>
+      </section>
+      <form id="editor" hidden>
+        <div><h2 id="editor-title"></h2><span id="draft-state" class="muted"></span></div>
+        <div class="toolbar" aria-label="编辑方式" style="margin:0"><button type="button" id="field-mode" aria-pressed="true">字段</button><button type="button" id="json-mode" aria-pressed="false">JSON</button></div>
+        <fieldset id="fields"></fieldset>
+        <label id="json-label" hidden>JSON<textarea id="json" class="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea></label>
+      </form>
+      <section id="test-panel" hidden aria-label="测试替换规则">
+        <h2>替换测试</h2>
+        <label>原文<textarea id="test-text" spellcheck="false"></textarea></label>
+        <div><button id="test-rule">测试当前草稿</button></div>
+        <div><span>结果</span><pre id="test-result" aria-live="polite"></pre></div>
+      </section>
+      <section id="debug-panel" class="advanced-panel" hidden aria-label="源调试">
+        <h2 id="debug-heading">书源调试</h2>
+        <label id="debug-key-label">关键词或地址<input id="debug-key" maxlength="8192" autocomplete="off"></label>
+        <div class="toolbar" style="margin:0"><button id="debug-start">调试已保存的源</button><button id="debug-stop" disabled>停止</button><button id="debug-clear">清空日志</button></div>
+        <p id="debug-target" class="muted" hidden></p><div id="debug-status" class="stream-status" role="status" aria-live="polite"></div>
+        <pre id="debug-output" tabindex="0" aria-label="源调试日志"></pre>
+      </section>
+      <section id="reading-panel" hidden aria-label="阅读">
+        <div id="reading-heading">
+          <img id="cover" alt="" hidden><h2 id="reader-title"></h2>
+          <p id="reader-meta" class="muted"></p><p id="reader-intro" hidden></p>
+        </div>
+        <div class="toolbar reading-toolbar"><button id="reader-add" hidden>加入书架</button><button id="reader-progress">保存当前进度</button><button id="reader-retry">重新读取</button><button id="reader-close">关闭阅读</button></div>
+        <details id="reader-config">
+          <summary>Web 阅读设置</summary>
+          <fieldset id="config-fields" disabled>
+            <div class="wide"><div id="config-themes" class="theme-swatches" role="group" aria-label="阅读主题"></div></div>
+            <label>字体<select id="config-font"><option value="0">系统黑体</option><option value="1">宋体</option><option value="2">楷体</option><option value="-1">本机自定义字体</option></select></label>
+            <label id="config-custom-font" hidden>本机字体名称<input id="config-customFontName" maxlength="200" autocomplete="off"></label>
+            <label>字号<input id="config-fontSize" type="number" min="12" max="48" step="1"></label>
+            <label>阅读宽度<input id="config-readWidth" type="number" min="320" max="1600" step="40"></label>
+            <label>行距<input id="config-line" type="number" min="0" max="3" step="0.1"></label>
+            <label>段距<input id="config-paragraph" type="number" min="0" max="4" step="0.1"></label>
+            <label>字距<input id="config-letter" type="number" min="0" max="0.3" step="0.01"></label>
+            <label>跳转时间（毫秒）<input id="config-jumpDuration" type="number" min="0" max="5000" step="100"></label>
+            <label class="check"><input id="config-infiniteLoading" type="checkbox">连续加载章节</label>
+          </fieldset>
+          <div class="toolbar"><button id="config-save" disabled>保存 Web 配置</button><button id="config-reload">重新读取</button><span id="config-status" class="muted" role="status"></span></div>
+        </details>
+        <select id="chapters" aria-label="章节" hidden></select>
+        <div id="chapter-tools" class="toolbar" hidden><button id="chapter-previous" title="上一章" aria-label="上一章">←</button><button id="chapter-next" title="下一章" aria-label="下一章">→</button></div>
+        <p id="reader-note" role="status" aria-live="polite"></p>
+        <section id="pdf-panel" hidden aria-label="PDF 阅读">
+          <div id="pdf-navigation" class="toolbar">
+            <button id="pdf-previous" title="上一页" aria-label="PDF 上一页" disabled>←</button>
+            <input id="pdf-page-number" type="number" min="1" step="1" value="1" aria-label="PDF 当前页" disabled><span id="pdf-page-count" aria-live="polite">/ 0 页</span>
+            <button id="pdf-next" title="下一页" aria-label="PDF 下一页" disabled>→</button><button id="pdf-retry">重新读取此页</button>
+          </div>
+          <div class="toolbar"><button id="pdf-fetch-download">获取原文件</button><a id="pdf-download" hidden>下载原文件</a><span id="pdf-download-status" class="muted" role="status"></span></div>
+          <div id="pdf-page" hidden aria-label="PDF 正文">
+            <img id="pdf-page-image" alt="" draggable="false"><div id="pdf-text-layer" role="document" aria-label="PDF 文字"></div>
+          </div>
+        </section>
+        <article id="content"></article>
+        <button id="reader-more" hidden>加载下一章</button><p id="reader-more-status" class="muted" role="status"></p>
+      </section>
+    </section>
+  </div>
+</main>
+<script src="/ForegroundWebStream.js"></script>
+<script src="/ForegroundWebReading.js"></script>
+<script src="/ForegroundWebWorkbench.js"></script>
+<script>
+'use strict';
+const el=id=>document.getElementById(id),clone=value=>structuredClone(value);
+const sourceModes=['sources','rss'],modes=['books','search','sources','rss','rules'];
+const bookFields=[
+  ['bookSourceName','名称'],['bookSourceUrl','地址'],['bookSourceGroup','分组'],['enabled','启用','checkbox'],
+  ['searchUrl','搜索地址','textarea'],['ruleSearch.bookList','搜索列表','textarea'],['ruleSearch.name','书名','textarea'],
+  ['ruleSearch.bookUrl','详情链接','textarea'],['ruleBookInfo.name','详情书名','textarea'],['ruleBookInfo.author','作者','textarea'],
+  ['ruleBookInfo.tocUrl','目录链接','textarea'],['ruleToc.chapterList','章节列表','textarea'],['ruleToc.chapterName','章节名','textarea'],
+  ['ruleToc.chapterUrl','章节链接','textarea'],['ruleContent.content','正文','textarea']
+];
+const rssFields=[
+  ['sourceName','名称'],['sourceUrl','地址'],['sourceGroup','分组'],['sourceIcon','图标地址'],
+  ['enabled','启用','checkbox'],['singleUrl','单 URL 源','checkbox'],['sourceComment','备注','textarea'],
+  ['sortUrl','分类地址','textarea'],['articleStyle','列表样式','select'],['customOrder','排序','number'],
+  ['ruleArticles','文章列表','textarea'],['ruleNextPage','下一页','textarea'],['ruleTitle','标题','textarea'],
+  ['rulePubDate','发布日期','textarea'],['ruleDescription','描述','textarea'],['ruleImage','图片','textarea'],
+  ['ruleLink','文章链接','textarea'],['ruleContent','正文','textarea'],['header','请求头','textarea'],
+  ['concurrentRate','并发率'],['enabledCookieJar','启用 Cookie Jar','checkbox'],['variableComment','变量说明','textarea'],
+  ['jsLib','JS 库','textarea'],['loginUrl','登录地址','textarea'],['loginUi','登录 UI','textarea'],
+  ['loginCheckJs','登录检测 JS','textarea'],['coverDecodeJs','封面解密 JS','textarea'],
+  ['contentWhitelist','正文 URL 白名单','textarea'],['contentBlacklist','正文 URL 黑名单','textarea'],
+  ['shouldOverrideUrlLoading','URL 跳转拦截 JS','textarea'],['style','网页样式','textarea'],
+  ['enableJs','启用网页 JS','checkbox'],['loadWithBaseUrl','使用基础 URL 加载','checkbox'],['injectJs','注入 JS','textarea']
+];
+const ruleFields=[
+  ['name','名称'],['group','分组'],['pattern','匹配内容','textarea'],['replacement','替换为','textarea'],
+  ['scope','作用范围','textarea'],['excludeScope','排除范围','textarea'],['isEnabled','启用','checkbox'],
+  ['isRegex','正则表达式','checkbox'],['scopeTitle','作用于标题','checkbox'],['scopeContent','作用于正文','checkbox'],
+  ['timeoutMillisecond','超时（毫秒）','number'],['order','排序','number']
+];
+const configs={
+  books:{name:'书籍',list:'/getBookshelf',key:'bookUrl',title:'name'},
+  search:{name:'搜索',key:'bookUrl',title:'name'},
+  sources:{name:'书源',list:'/getBookSources',save:'/saveBookSource',batch:'/saveBookSources',remove:'/deleteBookSources',key:'bookSourceUrl',title:'bookSourceName',group:'bookSourceGroup',fields:bookFields},
+  rss:{name:'RSS 源',list:'/getRssSources',save:'/saveRssSource',batch:'/saveRssSources',remove:'/deleteRssSources',key:'sourceUrl',title:'sourceName',group:'sourceGroup',fields:rssFields},
+  rules:{name:'替换规则',list:'/getReplaceRules',save:'/saveReplaceRule',remove:'/deleteReplaceRule',key:'id',title:'name',group:'group',fields:ruleFields}
+};
+const states=Object.fromEntries(modes.map(name=>[name,{
+  items:[],loaded:false,loading:false,listGeneration:0,detailGeneration:0,opening:false,filter:'',selection:new Set(),
+  original:null,draft:null,values:{},raw:'',editorMode:'fields',dirty:false,version:0,
+  importOpen:false,importText:'',fileName:'',importPreview:'',importVersion:0,importDirty:false,
+  testText:'',testResult:'',testGeneration:0,testing:false
+}]));
+let reader,workbench,streams,connectionController=null,connectionGeneration=0,sessionController=new AbortController();
+let token='',mode='books',pageGeneration=0,noticeGeneration=0,writing=false,activeRequests=0;
+const pendingRequests=[];
+try{token=decodeURIComponent(location.hash.slice(1))}catch{el('status').textContent='访问密钥编码无效，请重新连接'}
+history.replaceState(null,'',location.pathname);
+const current=()=>states[mode],keyOf=(item,name=mode)=>String(item[configs[name].key]);
+const titleOf=(item,name=mode)=>item[configs[name].title]||item.pattern||item[configs[name].key]||'未命名';
+const status=text=>{el('status').textContent=text};
+const visible=(name,page)=>mode===name&&pageGeneration===page;
+const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+function parsed(value){return typeof value==='string'?JSON.parse(value):value}
+function getPath(value,path){for(const part of path.split('.'))value=value?.[part];return value}
+function setPath(value,path,text){const parts=path.split('.');while(parts.length>1){const part=parts.shift();if(!object(value[part]))value[part]={};value=value[part]}value[parts[0]]=text}
+function bytes(value){return new TextEncoder().encode(value).length}
+
+function requestSlot(signal){
+  if(signal?.aborted)return Promise.reject(new DOMException('Aborted','AbortError'));
+  if(activeRequests<3){activeRequests++;return Promise.resolve()}
+  if(pendingRequests.length>=256)return Promise.reject(Error('等待中的请求过多，请稍后重试'));
+  return new Promise((resolve,reject)=>{
+    const item={resolve,reject,signal,abort:null};
+    item.abort=()=>{const index=pendingRequests.indexOf(item);if(index>=0)pendingRequests.splice(index,1);reject(new DOMException('Aborted','AbortError'))};
+    signal?.addEventListener('abort',item.abort,{once:true});pendingRequests.push(item);
+  });
+}
+function releaseRequest(){
+  activeRequests--;
+  while(pendingRequests.length){const item=pendingRequests.shift();item.signal?.removeEventListener('abort',item.abort);if(item.signal?.aborted){item.reject(new DOMException('Aborted','AbortError'));continue}activeRequests++;item.resolve();break}
+}
+async function request(path,body,options={}){
+  const controller=new AbortController(),bearer=token,signals=[sessionController.signal,options.signal].filter(Boolean);
+  const abort=()=>controller.abort();
+  for(const signal of signals){if(signal.aborted)controller.abort();else signal.addEventListener('abort',abort,{once:true})}
+  let acquired=false;
+  try{await requestSlot(controller.signal);acquired=true;return await performRequest(path,body,{...options,signal:controller.signal,bearer})}
+  finally{for(const signal of signals)signal.removeEventListener('abort',abort);if(acquired)releaseRequest()}
+}
+async function performRequest(path,body,options){
+  if(!options.bearer)throw Error('请先输入访问密钥连接');
+  const payload=body===undefined?undefined:JSON.stringify(body);
+  if(payload!==undefined&&bytes(payload)>8*1024*1024)throw Error('请求正文超过 8 MiB，请减少导入数量');
+  const response=await fetch(path,{
+    method:body===undefined?'GET':'POST',headers:{'Authorization':'Bearer '+options.bearer,'Content-Type':'application/json'},
+    body:payload,cache:'no-store',redirect:'error',credentials:'omit',signal:options.signal
+  });
+  if(response.status===401)throw Error('访问密钥无效或服务已重启，请更换密钥重新连接；草稿已保留');
+  if(response.status===403)throw Error(body===undefined?'当前服务未授权读取，请检查原生 Web 服务的访问许可':'当前服务只读或未授权此操作。请在原生 Web 服务中明确开启写入许可并重新连接；草稿已保留');
+  const isPDF=options.format==='pdf',limit=(isPDF?16:32)*1024*1024;
+  const length=Number(response.headers.get('Content-Length'));
+  if(Number.isFinite(length)&&length>limit){await response.body?.cancel();throw Error('响应超过 '+(isPDF?'16':'32')+' MiB')}
+  let chunks=[],size=0;
+  if(response.body){
+    const stream=response.body.getReader();
+    try{while(true){const {done,value}=await stream.read();if(done)break;size+=value.byteLength;if(size>limit){await stream.cancel();throw Error('响应超过 '+(isPDF?'16':'32')+' MiB')}chunks.push(value)}}finally{stream.releaseLock()}
+  }
+  const bytes=new Uint8Array(size);let offset=0;
+  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength}chunks=[];
+  if(isPDF&&response.ok){
+    if((response.headers.get('Content-Type')||'').split(';')[0].trim()!=='application/pdf')throw Error('服务未返回 PDF');
+    if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')throw Error('PDF 文件头无效');
+    return new Blob([bytes],{type:'application/pdf'});
+  }
+  let data;
+  try{data=JSON.parse(new TextDecoder().decode(bytes))}catch{throw Error('服务响应不是 JSON（HTTP '+response.status+'）')}
+  if(!response.ok||!data.isSuccess)throw Error(data.errorMsg||'请求失败（HTTP '+response.status+'）');
+  return data.data;
+}
+async function run(block,isCurrent=()=>true){
+  const page=pageGeneration,notice=++noticeGeneration;
+  status('');
+  try{await block()}catch(error){if(error.name!=='AbortError'&&page===pageGeneration&&notice===noticeGeneration&&isCurrent())status(error.message||String(error))}
+}
+async function write(block){
+  if(writing)return;
+  const s=current();
+  writing=true;s.listGeneration++;s.loading=false;s.detailGeneration++;s.opening=false;s.importVersion++;s.testGeneration++;
+  if(s.testing){s.testResult='';el('test-result').textContent=''}
+  s.testing=false;renderControls();renderList();
+  try{await block()}finally{writing=false;renderControls();renderList()}
+}
+function filteredItems(){const s=current(),query=s.filter.trim().toLocaleLowerCase(),c=configs[mode];return s.items.filter(item=>!query||[titleOf(item),item[c.key],item[c.group]].join(' ').toLocaleLowerCase().includes(query))}
+function renderControls(){
+  const s=current(),managed=!!configs[mode].save,sources=sourceModes.includes(mode);
+  for(const name of modes){el(name).setAttribute('aria-selected',String(name===mode));el(name).disabled=writing}
+  for(const id of ['refresh','reconnect','connect','new','import','choose-file','preview-import','confirm-import','close-import','field-mode','json-mode'])el(id).disabled=writing;
+  el('tools').hidden=!managed;el('import').hidden=!sources;
+  el('save').disabled=writing||s.opening||!s.draft;
+  el('delete').disabled=writing||s.opening||!s.original;
+  el('fields').disabled=writing;el('json').disabled=writing;el('import-json').disabled=writing;
+  el('selection-tools').hidden=!sources;el('delete-selected').hidden=!sources;
+  el('select-all').disabled=writing||s.loading||!s.loaded;
+  el('delete-selected').disabled=writing||s.loading||!s.selection.size;
+  el('delete-selected').textContent='删除所选（'+s.selection.size+'）';
+  el('test-rule').disabled=writing||s.testing||!s.draft;
+  el('draft-state').textContent=s.opening?'正在读取…':s.dirty?'未保存':s.original?'已保存':'新建草稿';
+  workbench?.render();
+}
+function renderList(){
+  if(mode==='search'){el('list').replaceChildren();el('list-count').textContent='';return}
+  const s=current(),items=filteredItems(),sources=sourceModes.includes(mode);
+  el('list').replaceChildren();
+  el('list-count').textContent=s.loading?'正在读取…':s.loaded?items.length+' / '+s.items.length+' 项':'尚未读取';
+  if(!items.length){const p=document.createElement('p');p.className='muted';p.textContent=s.loaded?(s.items.length?'没有匹配项':'列表为空'):'';el('list').append(p)}
+  for(const item of items){
+    const row=document.createElement('div'),button=document.createElement('button'),name=document.createElement('span'),detail=document.createElement('small'),key=keyOf(item),c=configs[mode];
+    row.className='row';name.textContent=titleOf(item);
+    detail.textContent=[item[c.group],mode==='rules'?'ID '+item.id:mode==='books'?item.author:item[c.key],(item.enabled===false||item.isEnabled===false)?'已停用':''].filter(Boolean).join(' · ');
+    button.append(name,detail);button.disabled=writing;
+    button.setAttribute('aria-pressed',String(mode==='books'?reader?.book?.bookUrl===item.bookUrl:!!s.original&&keyOf(s.original)===key));
+    const itemMode=mode;
+    button.onclick=()=>{if(!writing&&mode===itemMode)run(()=>itemMode==='books'?openBook(item):openItem(item))};
+    if(sources){const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=s.selection.has(key);checkbox.disabled=writing||s.loading;checkbox.setAttribute('aria-label','选择 '+titleOf(item));checkbox.onchange=()=>{if(checkbox.checked)s.selection.add(key);else s.selection.delete(key);renderControls();renderSelection()};row.append(checkbox)}
+    row.append(button);el('list').append(row);
+  }
+  renderSelection();
+}
+function renderSelection(){const s=current(),items=filteredItems(),count=items.filter(item=>s.selection.has(keyOf(item))).length;el('select-all').checked=items.length>0&&count===items.length;el('select-all').indeterminate=count>0&&count<items.length}
+function renderImport(){const s=current();el('import-panel').hidden=!sourceModes.includes(mode)||!s.importOpen;el('import-title').textContent='导入'+configs[mode].name;el('import-json').value=s.importText;el('file-name').textContent=s.fileName;el('import-preview').textContent=s.importPreview}
+function renderFields(){
+  const s=current();el('fields').replaceChildren();
+  for(const [key,name,type='text'] of configs[mode].fields){
+    const label=document.createElement('label'),input=document.createElement(type==='textarea'?'textarea':type==='select'?'select':'input');
+    label.textContent=name;
+    if(type==='checkbox'){label.className='check';input.type='checkbox';input.checked=!!s.values[key]}
+    else{
+      if(type==='select'){for(const value of [0,1,2]){const option=document.createElement('option');option.value=String(value);option.textContent=String(value);input.append(option)}}
+      else if(type!=='textarea')input.type=type;
+      input.value=s.values[key]??'';
+      if(type==='number')input.step='1';
+      if(type==='textarea'){label.className='wide';input.spellcheck=false;input.setAttribute('autocapitalize','off');input.setAttribute('autocorrect','off')}
+    }
+    input.dataset.key=key;
+    input.oninput=()=>{s.values[key]=type==='checkbox'?input.checked:input.value;edited(s)};
+    label.append(input);el('fields').append(label);
+  }
+}
+function renderEditor(){
+  const s=current();el('editor').hidden=!configs[mode].save||!s.draft;el('test-panel').hidden=mode!=='rules'||!s.draft;
+  if(!configs[mode].save||!s.draft)return;
+  el('editor-title').textContent=s.original?titleOf(s.original):'新建'+configs[mode].name;
+  el('fields').hidden=s.editorMode!=='fields';el('json-label').hidden=s.editorMode!=='json';
+  el('field-mode').setAttribute('aria-pressed',String(s.editorMode==='fields'));el('json-mode').setAttribute('aria-pressed',String(s.editorMode==='json'));
+  if(s.editorMode==='fields')renderFields();else el('json').value=s.raw;
+  el('test-text').value=s.testText;el('test-result').textContent=s.testResult;
+}
+function renderPage(){document.body.dataset.mode=mode;el('auth').hidden=!!token;el('filter').value=current().filter;renderImport();renderEditor();reader?.render(mode==='books'||mode==='search');renderControls();renderList()}
+async function reload(){
+  if(mode==='search'){workbench.render();return}
+  const name=mode,page=pageGeneration,s=current(),revision=++s.listGeneration;s.loading=true;renderControls();renderList();
+  try{
+    let data;
+    try{data=parsed(await request(configs[name].list))}
+    catch(error){
+      if(!visible(name,page)||revision!==s.listGeneration)return;
+      if(sourceModes.includes(name)&&['源列表为空','设备源列表为空'].includes(error.message))data=[];
+      else throw error;
+    }
+    if(!visible(name,page)||revision!==s.listGeneration)return;
+    if(!Array.isArray(data)||data.some(item=>!object(item)||item[configs[name].key]===undefined||item[configs[name].key]===null))throw Error('服务返回的列表格式无效');
+    s.items=data;s.loaded=true;
+    const keys=new Set(data.map(item=>keyOf(item,name)));s.selection=new Set([...s.selection].filter(key=>keys.has(key)));
+    renderList();
+  }finally{if(revision===s.listGeneration){s.loading=false;if(visible(name,page)){renderControls();renderList()}}}
+}
+function edited(s){workbench?.cancelDebug();s.dirty=true;s.version++;s.detailGeneration++;s.opening=false;s.testGeneration++;s.testResult='';s.testing=false;el('test-result').textContent='';renderControls()}
+function fillValues(s,name){s.values={};for(const [key,,type='text'] of configs[name].fields){const value=getPath(s.draft,key);s.values[key]=type==='checkbox'?(value??(['enabled','enabledCookieJar','enableJs','loadWithBaseUrl','isEnabled','isRegex','scopeContent'].includes(key))):value??''}}
+function setDraft(value,original=null){workbench?.cancelDebug();const s=current();s.detailGeneration++;s.opening=false;s.draft=clone(value);s.original=original?clone(original):null;s.raw=JSON.stringify(value,null,2);s.dirty=false;s.version++;s.testGeneration++;s.testing=false;s.testResult='';fillValues(s,mode);renderEditor();renderControls();renderList()}
+function discardAllowed(){return !current().dirty||confirm('放弃当前未保存的修改？')}
+async function openItem(item){
+  if(!discardAllowed())return;
+  const s=current(),name=mode,page=pageGeneration,revision=++s.detailGeneration;s.opening=true;renderControls();
+  try{
+    const value=name==='rss'?parsed(await request('/getRssSource?url='+encodeURIComponent(item.sourceUrl))):item;
+    if(!visible(name,page)||revision!==s.detailGeneration)return;
+    if(!object(value)||(name==='rss'&&value.sourceUrl!==item.sourceUrl))throw Error('服务返回的详情格式无效');
+    s.editorMode='fields';setDraft(value,value);
+  }catch(error){if(visible(name,page)&&revision===s.detailGeneration)throw error}
+  finally{if(revision===s.detailGeneration){s.opening=false;if(visible(name,page))renderControls()}}
+}
+function validateShape(value,name){
+  if(!object(value))throw Error('JSON 必须是单个对象');
+  for(const [key,label,type='text'] of configs[name].fields){
+    const parent=key.includes('.')?getPath(value,key.split('.').slice(0,-1).join('.')):null;
+    if(parent!==null&&parent!==undefined&&!object(parent))throw Error(label+'所属规则必须是 JSON 对象');
+    const v=getPath(value,key);if(v===undefined||v===null)continue;
+    if(type==='checkbox'){if(typeof v!=='boolean')throw Error(label+'必须是布尔值')}
+    else if(type==='number'||type==='select'){
+      if(!Number.isSafeInteger(v))throw Error(label+'必须是安全范围内的整数');
+      if(['order','customOrder'].includes(key)&&(v < -2147483648||v > 2147483647))throw Error(label+'超出 32 位整数范围');
+      if(type==='select'&&![0,1,2].includes(v))throw Error(label+'必须为 0、1 或 2');
+    }else if(typeof v!=='string')throw Error(label+'必须是字符串');
+  }
+  if(name==='rules'&&value.id!==undefined&&!Number.isSafeInteger(value.id))throw Error('规则 ID 必须是安全范围内的整数');
+}
+function validateItem(value,name){
+  validateShape(value,name);
+  if(name==='rules'){if(typeof value.pattern!=='string'||!value.pattern.length)throw Error('匹配内容不能为空');if(!Number.isSafeInteger(value.id)||value.id===0)throw Error('规则 ID 必须是非零安全整数')}
+  else{const c=configs[name];for(const key of [c.title,c.key])if(typeof value[key]!=='string'||!value[key].trim())throw Error('源名称和地址不能为空')}
+  return value;
+}
+function readDraft(required=true){
+  const s=current();if(!s.draft)throw Error('请先选择或新建项目');
+  let value;
+  if(s.editorMode==='json'){try{value=JSON.parse(s.raw)}catch(error){throw Error('JSON 格式错误：'+error.message)}}
+  else{
+    value=clone(s.draft);
+    for(const [key,label,type='text'] of configs[mode].fields){
+      let text=s.values[key];
+      if(type==='number'||type==='select'){if(String(text).trim()==='')throw Error(label+'不能为空');text=Number(text);if(!Number.isSafeInteger(text))throw Error(label+'必须是整数')}
+      if(text===''&&getPath(value,key)==null)continue;
+      setPath(value,key,text);
+    }
+  }
+  validateShape(value,mode);
+  if(mode==='rules'&&s.original&&value.id!==s.original.id)throw Error('编辑现有规则时不能修改 ID，请新建规则');
+  if(required)validateItem(value,mode);
+  return value;
+}
+function switchEditor(next){
+  const s=current();if(!s.draft||s.editorMode===next)return;
+  const value=readDraft(false);s.draft=value;s.raw=JSON.stringify(value,null,2);s.editorMode=next;fillValues(s,mode);renderEditor();renderControls();
+}
+function newItem(){
+  if(!discardAllowed())return;
+  const s=current();s.editorMode='fields';
+  let value;
+  if(mode==='sources')value={bookSourceName:'',bookSourceUrl:'',bookSourceType:0,enabled:true};
+  else if(mode==='rss')value={sourceName:'',sourceUrl:'',enabled:true,enabledCookieJar:true,singleUrl:false,articleStyle:0,customOrder:0,enableJs:true,loadWithBaseUrl:true};
+  else{let id=Date.now();while(s.items.some(item=>item.id===id))id++;value={id,name:'',pattern:'',replacement:'',isEnabled:true,isRegex:true,scopeTitle:false,scopeContent:true,timeoutMillisecond:3000,order:-2147483648}}
+  setDraft(value);s.dirty=true;renderControls();
+}
+async function saveItem(){
+  const s=current(),name=mode,value=readDraft(),c=configs[name];
+  if(s.original&&keyOf(value)!==keyOf(s.original)&&!confirm('地址已改变，将保存为新'+c.name+'并保留原地址的源。继续？'))return;
+  await write(async()=>{
+    const result=await request(c.save,value),saved=object(result)&&result[c.key]!==undefined?result:value;
+    setDraft(saved,saved);status('已保存'+c.name);await reload();
+    const stored=s.items.find(item=>keyOf(item,name)===keyOf(saved,name));
+    if(stored)setDraft(stored,stored);
+  });
+}
+async function deleteItems(items){
+  if(!items.length)return;
+  const s=current(),name=mode,c=configs[name],keys=new Set(items.map(item=>keyOf(item))),affected=s.original&&keys.has(keyOf(s.original));
+  const lines=items.slice(0,10).map(item=>titleOf(item)+'\n'+(name==='rules'?'ID '+item.id:item[c.key])).join('\n\n');
+  const warning=name==='sources'?'删除后使用这些源的书籍可能无法继续更新。':'删除操作不可撤销。';
+  if(!confirm('确认删除 '+items.length+' 个'+c.name+'？\n\n'+lines+(items.length>10?'\n\n另 '+(items.length-10)+' 项':'')+'\n\n'+warning+(affected&&s.dirty?'\n当前项目的未保存修改也会丢弃。':'')))return;
+  await write(async()=>{
+    await request(c.remove,name==='rules'?{id:items[0].id}:items.map(item=>({[c.key]:item[c.key]})));
+    for(const key of keys)s.selection.delete(key);
+    if(affected){s.draft=null;s.original=null;s.dirty=false;s.version++;s.testGeneration++;s.testing=false;renderEditor()}
+    status('已删除 '+items.length+' 个'+c.name);await reload();
+  });
+}
+function importData(){
+  const s=current();let value;
+  if(bytes(s.importText)>8*1024*1024)throw Error('导入内容超过 8 MiB');
+  try{value=JSON.parse(s.importText)}catch(error){throw Error('导入 JSON 格式错误：'+error.message)}
+  const items=Array.isArray(value)?value:[value];if(!items.length)throw Error('导入列表为空');
+  const keys=new Set();
+  items.forEach((item,index)=>{try{validateItem(item,mode);const key=keyOf(item);if(keys.has(key))throw Error('导入列表存在重复地址：'+key);keys.add(key)}catch(error){throw Error('第 '+(index+1)+' 项：'+error.message)}});
+  return {value,items};
+}
+function previewImport(){const {value,items}=importData(),s=current(),keys=new Set(s.items.map(item=>keyOf(item))),existing=items.filter(item=>keys.has(keyOf(item))).length;s.importPreview=(Array.isArray(value)?'批量':'单个')+'导入：'+items.length+' 项'+(s.loaded?'，其中 '+existing+' 项与当前列表同地址':'')+'\n'+items.slice(0,20).map(item=>titleOf(item)+' · '+item[configs[mode].key]).join('\n')+(items.length>20?'\n另 '+(items.length-20)+' 项':'');el('import-preview').textContent=s.importPreview;return {value,items}}
+async function commitImport(){
+  const {value,items}=previewImport(),s=current(),c=configs[mode];
+  if(!confirm('确认导入 '+items.length+' 个'+c.name+'？相同地址的现有源将被覆盖。'))return;
+  await write(async()=>{
+    const result=await request(Array.isArray(value)?c.batch:c.save,value);
+    const count=Array.isArray(result)?result.length:object(result)&&Number.isInteger(result.importedCount)?result.importedCount:items.length;
+    s.importPreview='已导入 '+count+' / '+items.length+' 项';
+    if(count===items.length){s.importOpen=false;s.importDirty=false}
+    renderImport();status(s.importPreview+(count!==items.length?'；未接收的项目仍保留在导入草稿中':''));await reload();
+  });
+}
+async function testRule(){
+  const s=current(),value=readDraft(),page=pageGeneration,revision=++s.testGeneration,version=s.version,text=s.testText;
+  s.testing=true;s.testResult='正在测试…';el('test-result').textContent=s.testResult;renderControls();
+  try{
+    const result=await request('/testReplaceRule',{rule:value,text});
+    if(!visible('rules',page)||revision!==s.testGeneration||version!==s.version)return;
+    if(typeof result!=='string')throw Error('服务返回的测试结果不是文本');
+    s.testResult=result;el('test-result').textContent=result;
+  }catch(error){if(visible('rules',page)&&revision===s.testGeneration){s.testResult='测试失败：'+error.message;el('test-result').textContent=s.testResult;throw error}}
+  finally{if(revision===s.testGeneration){s.testing=false;if(visible('rules',page))renderControls()}}
+}
+async function openBook(book){await reader.open(book,{preview:false})}
+function leavePage(){pageGeneration++;reader?.leave();workbench?.leave();const s=current();s.testGeneration++;if(s.testing)s.testResult='';s.testing=false;s.opening=false}
+async function connectService(){
+  connectionController?.abort();connectionController=new AbortController();const revision=++connectionGeneration;
+  el('service-state').textContent='正在连接 Web 服务…';
+  try{await streams.info(connectionController.signal)}catch(error){if(revision===connectionGeneration&&error.name!=='AbortError')el('service-state').textContent=error.message}
+  if(revision===connectionGeneration)await reload();
+}
+
+el('auth').onsubmit=e=>{e.preventDefault();if(writing)return;const value=el('secret').value.trim();if(!value){status('访问密钥不能为空');return}leavePage();reader.resetSession();connectionController?.abort();sessionController.abort();sessionController=new AbortController();token=value;el('secret').value='';for(const s of Object.values(states)){s.loaded=false;s.listGeneration++}renderPage();run(connectService)};
+el('reconnect').onclick=()=>{leavePage();connectionController?.abort();sessionController.abort();sessionController=new AbortController();connectionGeneration++;reader.resetSession();token='';el('auth').hidden=false;el('secret').focus();el('service-state').textContent='未连接'};
+for(const name of modes)el(name).onclick=()=>{if(writing||name===mode)return;leavePage();mode=name;renderPage();run(reload)};
+el('refresh').onclick=()=>{if(!writing)run(reload)};
+el('filter').oninput=()=>{current().filter=el('filter').value;renderList()};
+el('select-all').onchange=()=>{const s=current();for(const item of filteredItems()){const key=keyOf(item);if(el('select-all').checked)s.selection.add(key);else s.selection.delete(key)}renderControls();renderList()};
+el('delete-selected').onclick=()=>run(()=>deleteItems(current().items.filter(item=>current().selection.has(keyOf(item)))));
+el('editor').onsubmit=e=>e.preventDefault();
+el('new').onclick=()=>{if(!writing)newItem()};
+el('save').onclick=()=>run(saveItem);
+el('delete').onclick=()=>run(()=>current().original?deleteItems([current().original]):undefined);
+el('field-mode').onclick=()=>run(()=>switchEditor('fields'));
+el('json-mode').onclick=()=>run(()=>switchEditor('json'));
+el('json').oninput=()=>{const s=current();s.raw=el('json').value;edited(s)};
+el('import').onclick=()=>{current().importOpen=true;renderImport()};
+el('close-import').onclick=()=>{current().importOpen=false;renderImport()};
+el('import-json').oninput=()=>{const s=current();s.importText=el('import-json').value;s.importVersion++;s.importDirty=!!s.importText;s.importPreview='';s.fileName='';el('file-name').textContent='';el('import-preview').textContent=''};
+el('choose-file').onclick=()=>el('file').click();
+el('file').onchange=()=>{
+  const file=el('file').files[0];el('file').value='';if(!file)return;
+  const s=current(),name=mode,page=pageGeneration,revision=++s.importVersion;
+  run(async()=>{if(file.size>8*1024*1024)throw Error('文件超过 8 MiB');const text=await file.text();if(!visible(name,page)||revision!==s.importVersion)return;s.importText=text;s.importDirty=true;s.fileName=file.name;s.importPreview='';renderImport();previewImport()},()=>revision===s.importVersion);
+};
+el('preview-import').onclick=()=>run(previewImport);
+el('confirm-import').onclick=()=>run(commitImport);
+el('test-text').oninput=()=>{const s=current();s.testText=el('test-text').value;s.testGeneration++;s.testing=false;s.testResult='';el('test-result').textContent='';renderControls()};
+el('test-rule').onclick=()=>{const s=current(),version=s.version,text=s.testText;run(testRule,()=>version===s.version&&text===s.testText)};
+window.addEventListener('beforeunload',event=>{if(writing||reader?.isDirty()||Object.values(states).some(s=>s.dirty||s.importDirty)){event.preventDefault();event.returnValue=''}});
+window.addEventListener('pagehide',()=>{connectionController?.abort();sessionController.abort();leavePage()});
+window.addEventListener('pageshow',event=>{if(event.persisted&&token){sessionController=new AbortController();run(connectService)}});
+streams=LegadoWebStream.create({request,getToken:()=>token,onInfo:info=>{reader?.setPermissions(info.allowsWrites);el('service-state').textContent=info.allowsWrites?'已连接 · 允许写入':'已连接 · 只读'}});
+reader=LegadoWebReading.create({request,run,onChange:()=>renderList(),onShelfChanged:()=>{states.books.loaded=false}});
+workbench=LegadoWebWorkbench.create({streams,run,getMode:()=>mode,isWriting:()=>writing,openPreview:book=>reader.open(book,{preview:true}),getDraft:required=>{
+  if(!sourceModes.includes(mode)||!current().draft)return null;
+  if(!required)return current().draft;
+  if(writing||current().opening)throw Error('源正在保存或读取，请稍后再调试');
+  if(current().dirty||!current().original)throw Error('请先保存当前源，再调试已保存的源');
+  return clone(current().original);
+}});
+renderPage();if(token)run(connectService);
+</script>
+</body>
+</html>

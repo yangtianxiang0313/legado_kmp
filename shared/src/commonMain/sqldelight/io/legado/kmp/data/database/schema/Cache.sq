@@ -1,0 +1,45 @@
+CREATE TABLE caches (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT,
+    deadline INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX idx_caches_key ON caches(key);
+CREATE INDEX idx_caches_deadline ON caches(deadline);
+
+selectAll:
+SELECT * FROM caches ORDER BY key;
+
+selectByPrefix:
+SELECT * FROM caches WHERE instr(key, ?) = 1 ORDER BY key;
+
+selectByKey:
+SELECT * FROM caches WHERE key = ?;
+
+selectValueByKey:
+SELECT value FROM caches WHERE key = ? AND (deadline = 0 OR deadline > ?);
+
+insert:
+INSERT OR REPLACE INTO caches (key, value, deadline) VALUES (?, ?, ?);
+
+replaceValueIfUnchanged:
+UPDATE caches SET value = ? WHERE key = ? AND value IS ? AND deadline = ?;
+
+selectChangedRows:
+SELECT changes();
+
+deleteByKey:
+DELETE FROM caches WHERE key = ?;
+
+deleteByPrefix:
+DELETE FROM caches WHERE instr(key, ?) = 1;
+
+deleteSourceVariables:
+DELETE FROM caches
+WHERE key LIKE 'v_' || ? || '_%'
+   OR key = 'userInfo_' || ?
+   OR key = 'loginHeader_' || ?
+   OR key = 'sourceVariable_' || ?;
+
+clearDeadline:
+DELETE FROM caches WHERE deadline > 0 AND deadline < ?;

@@ -1,0 +1,158 @@
+CREATE TABLE rss_articles (
+    origin TEXT NOT NULL,
+    sort TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    link TEXT NOT NULL,
+    pub_date TEXT,
+    description TEXT,
+    content TEXT,
+    image TEXT,
+    article_group TEXT NOT NULL DEFAULT '默认分组',
+    read INTEGER NOT NULL DEFAULT 0,
+    variable TEXT,
+    PRIMARY KEY (origin, link)
+);
+
+CREATE INDEX idx_rss_articles_origin ON rss_articles(origin, sort_order DESC);
+CREATE INDEX idx_rss_articles_read ON rss_articles(origin, read);
+
+selectRssArticlesByOriginSort:
+SELECT
+    t1.origin,
+    t1.sort,
+    t1.title,
+    t1.sort_order,
+    t1.link,
+    t1.pub_date,
+    t1.description,
+    t1.content,
+    t1.image,
+    t1.article_group,
+    IFNULL(t2.read, t1.read) AS read,
+    t1.variable
+FROM rss_articles AS t1
+LEFT JOIN rss_read_records AS t2 ON t1.link = t2.record
+WHERE t1.origin = ? AND t1.sort = ?
+ORDER BY t1.sort_order DESC;
+
+selectRssArticlesByOrigin:
+SELECT
+    t1.origin,
+    t1.sort,
+    t1.title,
+    t1.sort_order,
+    t1.link,
+    t1.pub_date,
+    t1.description,
+    t1.content,
+    t1.image,
+    t1.article_group,
+    IFNULL(t2.read, t1.read) AS read,
+    t1.variable
+FROM rss_articles AS t1
+LEFT JOIN rss_read_records AS t2 ON t1.link = t2.record
+WHERE t1.origin = ?
+ORDER BY t1.sort_order DESC;
+
+selectRssArticlesByOriginAndGroup:
+SELECT
+    t1.origin,
+    t1.sort,
+    t1.title,
+    t1.sort_order,
+    t1.link,
+    t1.pub_date,
+    t1.description,
+    t1.content,
+    t1.image,
+    t1.article_group,
+    IFNULL(t2.read, t1.read) AS read,
+    t1.variable
+FROM rss_articles AS t1
+LEFT JOIN rss_read_records AS t2 ON t1.link = t2.record
+WHERE t1.origin = ? AND t1.article_group = ?
+ORDER BY t1.sort_order DESC;
+
+selectUnreadRssArticlesByOrigin:
+SELECT
+    t1.origin,
+    t1.sort,
+    t1.title,
+    t1.sort_order,
+    t1.link,
+    t1.pub_date,
+    t1.description,
+    t1.content,
+    t1.image,
+    t1.article_group,
+    IFNULL(t2.read, t1.read) AS read,
+    t1.variable
+FROM rss_articles AS t1
+LEFT JOIN rss_read_records AS t2 ON t1.link = t2.record
+WHERE t1.origin = ? AND IFNULL(t2.read, t1.read) = 0
+ORDER BY t1.sort_order DESC;
+
+selectRssArticleByLink:
+SELECT
+    t1.origin,
+    t1.sort,
+    t1.title,
+    t1.sort_order,
+    t1.link,
+    t1.pub_date,
+    t1.description,
+    t1.content,
+    t1.image,
+    t1.article_group,
+    IFNULL(t2.read, t1.read) AS read,
+    t1.variable
+FROM rss_articles AS t1
+LEFT JOIN rss_read_records AS t2 ON t1.link = t2.record
+WHERE t1.origin = ? AND t1.link = ?;
+
+searchRssArticlesByOrigin:
+SELECT
+    t1.origin,
+    t1.sort,
+    t1.title,
+    t1.sort_order,
+    t1.link,
+    t1.pub_date,
+    t1.description,
+    t1.content,
+    t1.image,
+    t1.article_group,
+    IFNULL(t2.read, t1.read) AS read,
+    t1.variable
+FROM rss_articles AS t1
+LEFT JOIN rss_read_records AS t2 ON t1.link = t2.record
+WHERE t1.origin = ? AND (t1.title LIKE ? OR t1.description LIKE ?)
+ORDER BY t1.sort_order DESC;
+
+insertRssArticle:
+INSERT OR REPLACE INTO rss_articles (
+    origin, sort, title, sort_order, link, pub_date,
+    description, content, image, article_group, read, variable
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+appendRssArticle:
+INSERT OR IGNORE INTO rss_articles (
+    origin, sort, title, sort_order, link, pub_date,
+    description, content, image, article_group, read, variable
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+clearOldRssArticles:
+DELETE FROM rss_articles WHERE origin = ? AND sort = ? AND sort_order < ?;
+
+updateRssArticle:
+UPDATE rss_articles
+SET sort = ?, title = ?, sort_order = ?, pub_date = ?, description = ?,
+    content = ?, image = ?, article_group = ?, read = ?, variable = ?
+WHERE origin = ? AND link = ?;
+
+updateRssArticleOrigin:
+UPDATE rss_articles SET origin = ? WHERE origin = ?;
+
+deleteRssArticlesByOrigin:
+DELETE FROM rss_articles WHERE origin = ?;

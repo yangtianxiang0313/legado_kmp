@@ -1,0 +1,17 @@
+ReaderAndroidNumber.ttf
+
+Unmodified copy of app/src/main/assets/font/number.ttf from Android Legado,
+commit 5f5d31404af9957684703747ecee2b91e7161f1d.
+Source: https://github.com/gedoor/legado
+
+Embedded font metadata: Roboto Regular, version 1.00000 (2011).
+Font data copyright Google 2011.
+Roboto is a trademark of Google.
+Designer: Christian Robertson.
+
+Roboto is distributed under the Apache License, Version 2.0.
+The license is reproduced in ReaderAndroidNumber-LICENSE.txt.
+Upstream license: https://github.com/googlefonts/roboto-2/blob/main/LICENSE
+
+Used privately for battery/time-battery digits, matching Android's BatteryView.
+The font is not registered globally and does not replace imported reader fonts.

@@ -1,0 +1,16 @@
+Android Holo Spinner Backgrounds
+
+Copyright (C) 2010, 2013 The Android Open Source Project
+Licensed under the Apache License, Version 2.0.
+The full license is included in ColorPicker-LICENSE.txt in this bundle.
+
+Source: Android SDK platform android-36.1/data/res/drawable-mdpi/
+spinner_default_holo_light_am.9.png
+SHA-256: 547963a44ffc401116b19e50b303644c8b968e20a4557ba081d21dae9e570ad7
+spinner_default_holo_dark_am.9.png
+SHA-256: 9f7d1b5251fee4d489e8ebe9ece84540065eef23a0522ced1accb0b3de0c9e56
+
+Original PNG files are unchanged. BookInfoEditTypeButton removes the one-pixel
+nine-patch metadata border at runtime and uses the original stretch regions.
+The assets retain the Holo underline and trailing corner indicator; RTL mirrors
+the original automatically mirrored Android background.

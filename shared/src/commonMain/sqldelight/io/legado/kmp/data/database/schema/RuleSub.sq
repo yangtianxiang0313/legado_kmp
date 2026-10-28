@@ -1,0 +1,24 @@
+CREATE TABLE rule_subs (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL DEFAULT '',
+    type INTEGER NOT NULL DEFAULT 0,
+    custom_order INTEGER NOT NULL DEFAULT 0,
+    auto_update INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+selectAll:
+SELECT * FROM rule_subs ORDER BY custom_order, updated_at DESC;
+
+selectById:
+SELECT * FROM rule_subs WHERE id = ?;
+
+insert:
+INSERT OR REPLACE INTO rule_subs (id, name, url, type, custom_order, auto_update, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM rule_subs WHERE id = ?;
+
+deleteAll:
+DELETE FROM rule_subs;

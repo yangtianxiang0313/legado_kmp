@@ -1,0 +1,90 @@
+-- BookChapter.sq
+-- Mirrors legacy chapter persistence semantics: primary key is (url, book_url),
+-- with a secondary unique index on (book_url, index).
+
+CREATE TABLE chapters (
+    url TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    is_volume INTEGER NOT NULL DEFAULT 0,
+    base_url TEXT NOT NULL DEFAULT '',
+    book_url TEXT NOT NULL,
+    chapter_index INTEGER NOT NULL DEFAULT 0,
+    is_vip INTEGER NOT NULL DEFAULT 0,
+    is_pay INTEGER NOT NULL DEFAULT 0,
+    resource_url TEXT,
+    tag TEXT,
+    word_count TEXT,
+    start INTEGER,
+    end INTEGER,
+    start_fragment_id TEXT,
+    end_fragment_id TEXT,
+    variable TEXT,
+    PRIMARY KEY (url, book_url),
+    FOREIGN KEY (book_url) REFERENCES books(book_url) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_chapters_book_url ON chapters(book_url);
+CREATE UNIQUE INDEX idx_chapters_book_url_index ON chapters(book_url, chapter_index);
+
+selectAll:
+SELECT * FROM chapters ORDER BY book_url, chapter_index;
+
+selectByBookUrl:
+SELECT * FROM chapters WHERE book_url = ? ORDER BY chapter_index;
+
+selectByBookUrlRange:
+SELECT * FROM chapters
+WHERE book_url = ? AND chapter_index >= ? AND chapter_index <= ?
+ORDER BY chapter_index;
+
+searchByBookUrl:
+SELECT * FROM chapters
+WHERE book_url = ? AND title LIKE '%' || ? || '%'
+ORDER BY chapter_index;
+
+searchByBookUrlRange:
+SELECT * FROM chapters
+WHERE book_url = ? AND chapter_index >= ? AND chapter_index <= ? AND title LIKE '%' || ? || '%'
+ORDER BY chapter_index;
+
+selectByBookUrlAndIndex:
+SELECT * FROM chapters WHERE book_url = ? AND chapter_index = ?;
+
+selectByBookUrlAndTitle:
+SELECT * FROM chapters WHERE book_url = ? AND title = ?;
+
+countByBookUrl:
+SELECT COUNT(url) FROM chapters WHERE book_url = ?;
+
+insert:
+INSERT OR REPLACE INTO chapters (
+    url, title, is_volume, base_url, book_url, chapter_index, is_vip, is_pay,
+    resource_url, tag, word_count, start, end, start_fragment_id, end_fragment_id, variable
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+update:
+UPDATE chapters SET
+    title = ?,
+    is_volume = ?,
+    base_url = ?,
+    chapter_index = ?,
+    is_vip = ?,
+    is_pay = ?,
+    resource_url = ?,
+    tag = ?,
+    word_count = ?,
+    start = ?,
+    end = ?,
+    start_fragment_id = ?,
+    end_fragment_id = ?,
+    variable = ?
+WHERE url = ? AND book_url = ?;
+
+deleteByBookUrl:
+DELETE FROM chapters WHERE book_url = ?;
+
+updateWordCount:
+UPDATE chapters SET word_count = ? WHERE book_url = ? AND url = ?;
+
+updateTitle:
+UPDATE chapters SET title = ? WHERE book_url = ? AND chapter_index = ? AND url = ?;

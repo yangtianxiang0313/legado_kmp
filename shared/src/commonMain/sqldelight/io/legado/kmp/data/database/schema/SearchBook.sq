@@ -1,0 +1,167 @@
+CREATE TABLE search_books (
+    book_url TEXT NOT NULL PRIMARY KEY,
+    origin TEXT NOT NULL DEFAULT '',
+    origin_name TEXT NOT NULL DEFAULT '',
+    type INTEGER NOT NULL DEFAULT 0,
+    name TEXT NOT NULL DEFAULT '',
+    author TEXT NOT NULL DEFAULT '',
+    kind TEXT,
+    cover_url TEXT,
+    intro TEXT,
+    word_count TEXT,
+    latest_chapter_title TEXT,
+    toc_url TEXT NOT NULL DEFAULT '',
+    time INTEGER NOT NULL DEFAULT 0,
+    variable TEXT,
+    origin_order INTEGER NOT NULL DEFAULT 0,
+    chapter_word_count_text TEXT,
+    chapter_word_count INTEGER NOT NULL DEFAULT -1,
+    respond_time INTEGER NOT NULL DEFAULT -1
+);
+
+CREATE UNIQUE INDEX idx_search_books_book_url ON search_books(book_url);
+CREATE INDEX idx_search_books_origin ON search_books(origin);
+CREATE INDEX idx_search_books_name_author ON search_books(name, author);
+CREATE INDEX idx_search_books_time ON search_books(time DESC);
+
+selectAll:
+SELECT * FROM search_books ORDER BY time DESC, origin_order ASC;
+
+selectByBookUrl:
+SELECT * FROM search_books WHERE book_url = ?;
+
+selectByOrigin:
+SELECT * FROM search_books WHERE origin = ? ORDER BY time DESC, origin_order ASC;
+
+countAll:
+SELECT COUNT(*) FROM search_books;
+
+selectFirstByNameAuthor:
+SELECT * FROM search_books
+WHERE name = ? AND author = ?
+  AND origin IN (SELECT book_source_url FROM book_sources)
+ORDER BY origin_order
+LIMIT 1;
+
+changeSourceByGroup:
+SELECT
+    t1.book_url,
+    t1.origin,
+    t1.origin_name,
+    t1.type,
+    t1.name,
+    t1.author,
+    t1.kind,
+    t1.cover_url,
+    t1.intro,
+    t1.word_count,
+    t1.latest_chapter_title,
+    t1.toc_url,
+    t1.time,
+    t1.variable,
+    t2.custom_order AS origin_order,
+    t1.chapter_word_count_text,
+    t1.chapter_word_count,
+    t1.respond_time
+FROM search_books AS t1
+INNER JOIN book_sources AS t2 ON t1.origin = t2.book_source_url
+WHERE t1.name = ? AND t1.author LIKE '%' || ? || '%'
+  AND t2.enabled = 1
+  AND t2.book_source_group LIKE '%' || ? || '%'
+ORDER BY t2.custom_order;
+
+changeSourceSearch:
+SELECT
+    t1.book_url,
+    t1.origin,
+    t1.origin_name,
+    t1.type,
+    t1.name,
+    t1.author,
+    t1.kind,
+    t1.cover_url,
+    t1.intro,
+    t1.word_count,
+    t1.latest_chapter_title,
+    t1.toc_url,
+    t1.time,
+    t1.variable,
+    t2.custom_order AS origin_order,
+    t1.chapter_word_count_text,
+    t1.chapter_word_count,
+    t1.respond_time
+FROM search_books AS t1
+INNER JOIN book_sources AS t2 ON t1.origin = t2.book_source_url
+WHERE t1.name = ? AND t1.author LIKE '%' || ? || '%'
+  AND t2.book_source_group LIKE '%' || ? || '%'
+  AND (t1.origin_name LIKE '%' || ? || '%' OR t1.latest_chapter_title LIKE '%' || ? || '%')
+  AND t2.enabled = 1
+ORDER BY t2.custom_order;
+
+selectEnabledHasCover:
+SELECT
+    t1.book_url,
+    t1.origin,
+    t1.origin_name,
+    t1.type,
+    t1.name,
+    t1.author,
+    t1.kind,
+    t1.cover_url,
+    t1.intro,
+    t1.word_count,
+    t1.latest_chapter_title,
+    t1.toc_url,
+    t1.time,
+    t1.variable,
+    t2.custom_order AS origin_order,
+    t1.chapter_word_count_text,
+    t1.chapter_word_count,
+    t1.respond_time
+FROM search_books AS t1
+INNER JOIN book_sources AS t2 ON t1.origin = t2.book_source_url
+WHERE t1.name = ? AND t1.author = ?
+  AND t1.cover_url IS NOT NULL AND t1.cover_url <> ''
+  AND t2.enabled = 1
+ORDER BY t2.custom_order;
+
+insert:
+INSERT OR REPLACE INTO search_books (
+    book_url, origin, origin_name, type, name, author, kind, cover_url,
+    intro, word_count, latest_chapter_title, toc_url, time, variable,
+    origin_order, chapter_word_count_text, chapter_word_count, respond_time
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+update:
+UPDATE search_books SET
+    origin = ?,
+    origin_name = ?,
+    type = ?,
+    name = ?,
+    author = ?,
+    kind = ?,
+    cover_url = ?,
+    intro = ?,
+    word_count = ?,
+    latest_chapter_title = ?,
+    toc_url = ?,
+    time = ?,
+    variable = ?,
+    origin_order = ?,
+    chapter_word_count_text = ?,
+    chapter_word_count = ?,
+    respond_time = ?
+WHERE book_url = ?;
+
+deleteByBookUrl:
+DELETE FROM search_books WHERE book_url = ?;
+
+deleteByNameAuthor:
+DELETE FROM search_books WHERE name = ? AND author = ?;
+
+deleteExpired:
+DELETE FROM search_books WHERE time < ?;
+
+deleteAll:
+DELETE FROM search_books;
+

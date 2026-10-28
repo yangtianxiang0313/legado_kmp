@@ -1,0 +1,57 @@
+CREATE TABLE read_record (
+    device_id TEXT NOT NULL,
+    book_name TEXT NOT NULL,
+    read_time INTEGER NOT NULL DEFAULT 0,
+    last_read INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (device_id, book_name)
+);
+
+CREATE INDEX idx_read_record_book_name ON read_record(book_name);
+
+selectAll:
+SELECT * FROM read_record;
+
+selectAllForAggregation:
+SELECT * FROM read_record ORDER BY book_name;
+
+searchForAggregation:
+SELECT * FROM read_record
+WHERE book_name LIKE '%' || ? || '%'
+ORDER BY book_name;
+
+selectByBookName:
+SELECT * FROM read_record WHERE book_name = ?;
+
+selectReadTimeByDeviceAndBook:
+SELECT read_time FROM read_record WHERE device_id = ? AND book_name = ?;
+
+insert:
+INSERT OR REPLACE INTO read_record (device_id, book_name, read_time, last_read)
+VALUES (?, ?, ?, ?);
+
+ensureLocalRecord:
+INSERT OR IGNORE INTO read_record (device_id, book_name, read_time, last_read)
+VALUES ('', :book_name, 0, :last_read);
+
+addLocalReadTime:
+UPDATE read_record
+SET read_time = CASE
+        WHEN read_time < 0 THEN :elapsedMillis
+        WHEN read_time > 9223372036854775807 - :elapsedMillis THEN 9223372036854775807
+        ELSE read_time + :elapsedMillis
+    END,
+    last_read = MAX(last_read, :lastRead)
+WHERE device_id = '' AND book_name = :book_name;
+
+update:
+UPDATE read_record SET read_time = ?, last_read = ?
+WHERE device_id = ? AND book_name = ?;
+
+deleteByPrimaryKey:
+DELETE FROM read_record WHERE device_id = ? AND book_name = ?;
+
+clear:
+DELETE FROM read_record;
+
+deleteByBookName:
+DELETE FROM read_record WHERE book_name = ?;

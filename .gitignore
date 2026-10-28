@@ -1,0 +1,38 @@
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.cursor/
+.claude/
+
+# Local env
+local.properties
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.p8
+*.mobileprovision
+*.provisionprofile
+*.privatekey
+
+# Build and caches
+.gradle/
+.kotlin/
+build/
+**/build/
+*.xcworkspace
+*.xcuserstate
+*.xcuserdata/
+
+# Archive/temp
+.archive/
+
+# Alignment working notes
+/ALIGNMENT.md
+/alignment/
+
+# Legacy nested repository (managed separately)
+/legado/

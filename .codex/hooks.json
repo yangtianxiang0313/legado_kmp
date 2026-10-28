@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3 .codex/hooks/module-completion-stop.py"
+          }
+        ]
+      }
+    ]
+  }
+}

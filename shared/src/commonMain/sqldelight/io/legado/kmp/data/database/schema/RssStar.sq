@@ -1,0 +1,59 @@
+CREATE TABLE rss_stars (
+    origin TEXT NOT NULL,
+    sort TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    star_time INTEGER NOT NULL DEFAULT 0,
+    link TEXT NOT NULL,
+    pub_date TEXT,
+    description TEXT,
+    content TEXT,
+    image TEXT,
+    star_group TEXT NOT NULL DEFAULT '默认分组',
+    variable TEXT,
+    PRIMARY KEY (origin, link)
+);
+
+CREATE INDEX idx_rss_stars_origin ON rss_stars(origin, star_time DESC);
+CREATE INDEX idx_rss_stars_group ON rss_stars(star_group, star_time DESC);
+
+selectAllRssStars:
+SELECT * FROM rss_stars ORDER BY star_time DESC;
+
+selectRssStarGroups:
+SELECT star_group FROM rss_stars GROUP BY star_group ORDER BY star_group;
+
+selectRssStarsByGroup:
+SELECT * FROM rss_stars WHERE star_group = ? ORDER BY star_time DESC;
+
+selectRssStarByOriginAndLink:
+SELECT * FROM rss_stars WHERE origin = ? AND link = ?;
+
+insertRssStar:
+INSERT OR REPLACE INTO rss_stars (
+    origin, sort, title, star_time, link, pub_date, description,
+    content, image, star_group, variable
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateRssStar:
+UPDATE rss_stars
+SET sort = ?, title = ?, star_time = ?, pub_date = ?, description = ?,
+    content = ?, image = ?, star_group = ?, variable = ?
+WHERE origin = ? AND link = ?;
+
+updateRssStarOrigin:
+UPDATE rss_stars SET origin = ? WHERE origin = ?;
+
+retainRssStarContent:
+UPDATE rss_stars SET content = ? WHERE origin = ? AND link = ?;
+
+deleteRssStarsByOrigin:
+DELETE FROM rss_stars WHERE origin = ?;
+
+deleteRssStarByOriginAndLink:
+DELETE FROM rss_stars WHERE origin = ? AND link = ?;
+
+deleteRssStarsByGroup:
+DELETE FROM rss_stars WHERE star_group = ?;
+
+deleteAllRssStars:
+DELETE FROM rss_stars;

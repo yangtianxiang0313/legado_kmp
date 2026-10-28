@@ -1,0 +1,32 @@
+CREATE TABLE http_tts (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL DEFAULT '',
+    content_type TEXT,
+    concurrent_rate TEXT DEFAULT '0',
+    login_url TEXT,
+    login_ui TEXT,
+    header TEXT,
+    js_lib TEXT,
+    enabled_cookie_jar INTEGER NOT NULL DEFAULT 0,
+    login_check_js TEXT,
+    last_update_time INTEGER NOT NULL DEFAULT 0
+);
+
+selectAll:
+SELECT * FROM http_tts ORDER BY last_update_time DESC, name;
+
+selectById:
+SELECT * FROM http_tts WHERE id = ?;
+
+insert:
+INSERT OR REPLACE INTO http_tts (
+    id, name, url, content_type, concurrent_rate, login_url, login_ui, header, js_lib,
+    enabled_cookie_jar, login_check_js, last_update_time
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM http_tts WHERE id = ?;
+
+deleteAll:
+DELETE FROM http_tts;

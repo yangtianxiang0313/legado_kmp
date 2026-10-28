@@ -1,0 +1,3 @@
+headers = libarchive_wrapper.h
+headerFilter = libarchive_wrapper.h
+linkerOpts = -larchive

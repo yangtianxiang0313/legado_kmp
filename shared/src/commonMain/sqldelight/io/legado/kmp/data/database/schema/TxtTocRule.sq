@@ -1,0 +1,44 @@
+CREATE TABLE txt_toc_rules (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    rule TEXT NOT NULL DEFAULT '',
+    example TEXT,
+    serial_number INTEGER NOT NULL DEFAULT -1,
+    enable INTEGER NOT NULL DEFAULT 1
+);
+
+selectAll:
+SELECT * FROM txt_toc_rules ORDER BY serial_number;
+
+selectEnabled:
+SELECT * FROM txt_toc_rules WHERE enable = 1 ORDER BY serial_number;
+
+selectDisabled:
+SELECT * FROM txt_toc_rules WHERE enable != 1 ORDER BY serial_number;
+
+countAll:
+SELECT COUNT(*) FROM txt_toc_rules;
+
+selectById:
+SELECT * FROM txt_toc_rules WHERE id = ?;
+
+minOrder:
+SELECT IFNULL(MIN(serial_number), 0) FROM txt_toc_rules;
+
+maxOrder:
+SELECT IFNULL(MAX(serial_number), 0) FROM txt_toc_rules;
+
+insert:
+INSERT OR REPLACE INTO txt_toc_rules (id, name, rule, example, serial_number, enable)
+VALUES (?, ?, ?, ?, ?, ?);
+
+update:
+UPDATE txt_toc_rules
+SET name = ?, rule = ?, example = ?, serial_number = ?, enable = ?
+WHERE id = ?;
+
+deleteById:
+DELETE FROM txt_toc_rules WHERE id = ?;
+
+deleteDefault:
+DELETE FROM txt_toc_rules WHERE id < 0;

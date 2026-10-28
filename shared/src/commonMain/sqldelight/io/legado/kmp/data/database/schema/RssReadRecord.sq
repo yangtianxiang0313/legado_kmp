@@ -1,0 +1,20 @@
+CREATE TABLE rss_read_records (
+    record TEXT NOT NULL PRIMARY KEY,
+    title TEXT,
+    read_time INTEGER,
+    read INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX idx_rss_read_records_time ON rss_read_records(read_time DESC);
+
+selectAllRssReadRecords:
+SELECT * FROM rss_read_records ORDER BY read_time DESC;
+
+countAllRssReadRecords:
+SELECT COUNT(*) FROM rss_read_records;
+
+insertIgnoreRssReadRecord:
+INSERT OR IGNORE INTO rss_read_records (record, title, read_time, read) VALUES (?, ?, ?, ?);
+
+deleteAllRssReadRecords:
+DELETE FROM rss_read_records;

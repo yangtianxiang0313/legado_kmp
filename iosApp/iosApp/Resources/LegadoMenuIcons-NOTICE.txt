@@ -1,0 +1,528 @@
+Reader menu icons are adapted without geometry changes from Legado and its
+pinned AppCompat toolbar resources.
+
+Reading preference single-choice indicators use the original paths from
+AndroidX AppCompat 1.7.1, Copyright 2018 The Android Open Source Project,
+licensed under Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+- res/drawable/btn_radio_on_mtrl.xml:
+  SHA-256 77e695531986e4bf05311decabd3e0b3ffe8078f174e164f7b6d0897cc092810
+- res/drawable/btn_radio_off_mtrl.xml:
+  SHA-256 1498e23a215e75bb92662494c5c4c460c87d0c879095b39e31fd1435ac63e5e5
+The unchanged 32dp viewport, Bezier ring and dot paths are drawn as template
+images. Their colors follow Legado TintHelper.setTint(RadioButton).
+
+Reading preference switches retain AOSP AppCompat 1.7.1 xxxhdpi 9-patch PNG
+alpha and shadow data (Apache License 2.0), embedded in ReaderAndroidSwitchControl:
+- abc_switch_track_mtrl_alpha.9.png:
+  SHA-256 91d0c42b4faddb7780b83d9a4a466ac86bfb42ae4443ba1b19d20c1bf0b051d8
+- abc_btn_switch_to_on_mtrl_00001.9.png:
+  SHA-256 ee6714e32746ccb7125f5c196025c145495e4a426b2f8e3a8845b444c2ccf09d
+- abc_btn_switch_to_on_mtrl_00012.9.png:
+  SHA-256 db7c2500efac17590c4dfca9de30e9ad19213a14e3201debf44888605977c2a8
+Only the one-pixel 9-patch metadata border is cropped. Track stretch regions
+and optical insets follow SwitchCompat.onMeasure/onLayout/draw at this density;
+the UIKit renderer uses Legado TintHelper.modifySwitchDrawable state colors.
+
+Reader compact controls (same pinned revision, GPL-3.0):
+- The decrease button renders ic_reduce.xml's original 24 x 24 path directly;
+  its source SHA-256 is 21e0a1764f156187f334c595f1112acc2c0b22d0636d48439459c9e14f054fe5.
+  The increase button reuses BookshelfAndroidAdd, converted from ic_add.xml.
+- ReaderAndroidCheckIndicatorView follows SmoothCheckBox.kt's nonanimated
+  setChecked geometry and resource colors, mapping its integer pixel rounding
+  to the iOS backing scale; it does not substitute an SF checkmark glyph.
+  Source SHA-256: 865bb506cbf0ee3e778329bc0d81cd078a52c4187a90f57f1c6c65379a6528b7.
+
+Inline change-source TOC close arrow (same pinned revision, GPL-3.0):
+- ReaderTocAndroidIcon.down: app/src/main/res/drawable/ic_arrow_down.xml.
+  Source SHA-256: 97c62b8ce408014ef716120481d8f9e5d1c84be2be840571a6591cc96018fd58
+  Original 64dp intrinsic size, 1024 x 1024 viewport and nonzero path fill.
+  ReaderTocAndroidIcon.swift renders that path directly into a template image
+  at the close strip's 36pt fitCenter size, without added RTL mirroring.
+
+Source debug toolbar (same pinned Legado revision and GPL-3.0 license):
+- SourceDebugAndroidScan: app/src/main/res/drawable/ic_scan.xml.
+  Original 1024 x 1024 viewport and pathData are unchanged, scaled to 24pt.
+  Converted with the existing attrs/add_children template PDF pipeline.
+  Source SHA-256: 6b96673d20d56969c6a38085c22f59ca4ac05533290a8ee76618472c26bb6177
+  PDF SHA-256: 48d8b64d4d4a9149c9eb919ce784a12c8f40c3b1e70ee6f13a952ef8913223a8
+  No autoMirrored declaration is present; no RTL mirroring is added.
+
+Source editor toolbar (same pinned Legado revision and GPL-3.0 license):
+- SourceEditorAndroidDebug: app/src/main/res/drawable/ic_bug_report.xml.
+  Original 24 x 24 viewport, single pathData and fill rule are unchanged.
+  Converted with the existing attrs/add_children template PDF pipeline.
+  No autoMirrored declaration is present, and no RTL mirroring is added.
+  source_edit.xml supplies its always-visible 48pt action slot.
+
+Project: https://github.com/gedoor/legado
+Revision: 5f5d31404af9957684703747ecee2b91e7161f1d
+Source: app/src/main/res/drawable/
+License: GNU General Public License version 3; see LegadoMenuIcons-LICENSE.txt.
+
+The original Android VectorDrawable paths are converted to template PDF assets.
+The original drawable names are recorded in ReaderMenuAndroidIcon.swift.
+
+Bookshelf management entry (same pinned revision and GPL-3.0 license):
+- BookshelfAndroidArrange: ic_arrange.xml, original 24 x 24 paths and fill rules.
+  Only the opaque fill becomes the UIKit template tint; geometry is unchanged.
+
+Main navigation icons (same pinned Legado revision and GPL-3.0 license):
+- MainTabAndroidBooksNormal/Selected: ic_bottom_books_e/s.xml
+- MainTabAndroidExploreNormal/Selected: ic_bottom_explore_e/s.xml
+- MainTabAndroidRssNormal/Selected: ic_bottom_rss_feed_e/s.xml
+- MainTabAndroidPersonNormal/Selected: ic_bottom_person_e/s.xml
+The selectors in main_bnv.xml resolve these unchecked/checked vectors.
+All original 24 x 24 pathData, fill rules and opacity are retained; only the
+original opaque fill is converted to UIKit's monochrome template tint.
+No RTL mirroring is added; the source vectors do not declare autoMirrored.
+
+Book detail information-row icons (same pinned revision and GPL-3.0 license):
+- BookDetailAndroidAuthor: ic_author.xml (16dp intrinsic, 24 x 24 viewport)
+- BookDetailAndroidWeb: ic_web_outline.xml
+- BookDetailAndroidBookLast: ic_book_last.xml
+- BookDetailAndroidGroups: ic_groups.xml
+- BookDetailAndroidFolderOpen: ic_folder_open.xml
+The last four have 24dp intrinsic size and 24 x 24 viewports. Conversion uses
+the same attrs/add_children pipeline, retaining all paths, fill rules, stroke
+widths/caps/joins and opacity. Only the vector container and template tint
+change. activity_book_info.xml supplies the 18sp slot and internal padding.
+None declares autoMirrored; no additional RTL mirroring is applied.
+
+Reader find and detail toolbar resources (same pinned Legado revision, GPL-3.0):
+- BookDetailAndroidEdit: ic_edit.xml, 24dp intrinsic, 24 x 24 viewport.
+- BookDetailAndroidShare: ic_share.xml, 20dp intrinsic, 24 x 24 viewport.
+- ReaderFindAndroidArrow: ic_arrow_right.xml, 64dp intrinsic, 1024 x 1024
+  viewport. The result-navigation FAB displays it in a 24dp image slot;
+  the previous-result control rotates the same image by 180 degrees.
+- ReaderFindAndroidMenu: ic_menu.xml, 24dp intrinsic, 24 x 24 viewport.
+- EditorAndroidSave: ic_save.xml, 24dp intrinsic, 24 x 24 viewport.
+  Used by book_info_edit.xml and content_edit.xml. Both original paths
+  are retained without hand-drawn geometry; no autoMirrored declaration.
+- BookshelfAndroidHistory/Add/Layout/Log: ic_history.xml, ic_add.xml,
+  ic_view_quilt.xml, ic_cfg_about.xml at the same revision (GPL-3.0).
+  All retain their original 24dp geometry and use monochrome template tint.
+- BookshelfAndroidCoverDefault.jpg is an unchanged copy of that revision's
+  app/src/main/res/drawable/image_cover_default.jpg, not a new illustration.
+All use the existing attrs/add_children vector-to-PDF conversion without
+geometry changes. No source declares autoMirrored; none is added. The source
+opaque fill is supplied through the existing monochrome UIKit template tint.
+
+Search-screen resources:
+- SearchScopeAndroidSearch/Clear: AppCompat 1.7.1 drawable/
+  abc_ic_search_api_material.xml (AOSP 2016) and abc_ic_clear_material.xml
+  (AOSP 2015), Apache License 2.0, original 24 x 24 paths and template tint.
+- SearchScopeAndroidCheckOn/Off and RadioOn/Off: AppCompat 1.7.1 drawable/
+  btn_checkbox_checked_mtrl.xml, btn_checkbox_unchecked_mtrl.xml,
+  btn_radio_on_mtrl.xml and btn_radio_off_mtrl.xml (AOSP 2018), Apache-2.0.
+  Original 32 x 32 visible paths and transforms are retained. The radio-off
+  drawable's zero-scale invisible dot group is omitted from the PDF conversion.
+- SearchToolbarAndroidGo: AppCompat 1.7.1 abc_ic_go_search_api_material.xml,
+  Copyright (C) 2015 The Android Open Source Project, Apache License 2.0
+  (license text below), 24dp intrinsic and 24 x 24 viewport.
+- SearchToolbarAndroidHint: pinned Legado drawable/ic_search_hint.xml,
+  GPL-3.0, 8dp intrinsic and 1024 x 1024 viewport. SearchView draws it at
+  its 14sp text size with the original #c0c0c0 tint.
+- SearchToolbarAndroidPlay: pinned Legado drawable/ic_play_24dp.xml,
+  GPL-3.0, 24dp intrinsic and 24 x 24 viewport.
+The existing attrs/add_children conversion retains all paths and viewport
+transforms; only the PDF container and monochrome template tint change.
+None declares autoMirrored; no additional RTL mirroring is applied.
+
+Top reader-menu icons (same Legado revision as above):
+
+Change-source toolbar resources:
+- ChangeSourceAndroidSearch: AppCompat 1.7.1 abc_ic_search_api_material.xml,
+  Copyright (C) 2016 The Android Open Source Project, Apache License 2.0
+  (license text below). SearchView's iconified search button uses this resource;
+  the menu's ic_screen is not its displayed actionView image.
+- ChangeSourceAndroidStop: pinned Legado drawable/ic_stop_black_24dp.xml,
+  GNU GPL version 3, see LegadoMenuIcons-LICENSE.txt.
+Both retain the original 24dp intrinsic/viewport dimensions and pathData.
+The existing attrs/add_children conversion changes only the PDF container and
+monochrome template tint. Neither declares autoMirrored; none is added.
+
+- ReaderMenuAndroidDownload: app/src/main/res/drawable/ic_download_line.xml,
+  referenced by menu_download in app/src/main/res/menu/book_read.xml.
+  android:autoMirrored is absent (false).
+- ReaderMenuAndroidBack: AppCompat res/drawable/abc_ic_ab_back_material.xml.
+  android:autoMirrored="true" is preserved by UIKit RTL image mirroring.
+- ReaderMenuAndroidMore: AppCompat res/drawable/abc_ic_menu_overflow_material.xml.
+  android:autoMirrored is absent (false).
+
+Charset menu icon (same Legado revision as above):
+- ReaderMenuAndroidCharset: app/src/main/res/drawable/ic_translate.xml,
+  referenced by menu_set_charset in app/src/main/res/menu/book_read.xml.
+  The 24dp size, 24 x 24 viewport and both pathData values are retained;
+  the opaque #595757 fill is converted to the existing monochrome template.
+  android:autoMirrored is absent (false); no UIKit RTL mirroring is applied.
+
+Toolbar provenance:
+The TOC expanded SearchView close/clear icon also uses AppCompat 1.7.1's
+res/drawable/abc_ic_clear_material.xml, referenced by Widget.AppCompat.SearchView.
+ReaderMenuAndroidClear retains its 24 x 24 viewport and original single pathData;
+only the vector container and monochrome tint change. Root autoMirrored is absent.
+Source XML SHA-256: 8281d223ed08dad679e43f01a7a40e3b9be3ab6b22fe9ff11011ebc4e40f33b6
+Template PDF SHA-256: 19ef2b53a7ac2edd1044e0ed9ccc7a09d99e8e01be73b4e5dae41c5624798fcb
+The AppCompat Apache License 2.0 notice below also covers this resource.
+
+app/src/main/res/layout/view_read_menu.xml uses TitleBar, which inflates
+app/src/main/res/layout/view_title_bar.xml. TitleBar.kt attaches its AppCompat
+Toolbar with setSupportActionBar and enables displayHomeAsUp. The application
+theme inherits Theme.AppCompat.DayNight.NoActionBar without replacing the
+navigation or overflow icons. ReadBookActivity.kt inflates book_read.xml.
+gradle/libs.versions.toml pins androidx.appcompat:appcompat to 1.7.1.
+
+In that dependency, ToolbarWidgetWrapper.java uses abc_ic_ab_back_material
+as the default navigation icon/homeAsUpIndicator. ActionMenuPresenter.java
+creates OverflowMenuButton with actionOverflowButtonStyle, whose inherited
+Widget.AppCompat.ActionButton.Overflow srcCompat is abc_ic_menu_overflow_material.
+These are the actual toolbar defaults, not Legado's separate ic_arrow_back.xml
+or ic_more_vert.xml. Sources and original resources:
+https://dl.google.com/dl/android/maven2/androidx/appcompat/appcompat/1.7.1/appcompat-1.7.1-sources.jar
+https://dl.google.com/dl/android/maven2/androidx/appcompat/appcompat/1.7.1/appcompat-1.7.1.aar
+
+Conversion changes only the vector container and monochrome template color;
+pathData, viewport, fill rules and opacity are retained. AppCompat's
+?attr/colorControlNormal tint is supplied by the existing UIKit button tint.
+The conversion reuses convert_vectors.py's attrs/add_children pipeline used
+for the other reader-menu icons; no existing asset is overwritten.
+
+AppCompat toolbar drawables are licensed separately under Apache License 2.0.
+Copyright (C) 2015 The Android Open Source Project
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Apache License
+Version 2.0, January 2004
+http://www.apache.org/licenses/
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. Definitions.
+
+   "License" shall mean the terms and conditions for use, reproduction,
+   and distribution as defined by Sections 1 through 9 of this document.
+
+   "Licensor" shall mean the copyright owner or entity authorized by
+   the copyright owner that is granting the License.
+
+   "Legal Entity" shall mean the union of the acting entity and all
+   other entities that control, are controlled by, or are under common
+   control with that entity. For the purposes of this definition,
+   "control" means (i) the power, direct or indirect, to cause the
+   direction or management of such entity, whether by contract or
+   otherwise, or (ii) ownership of fifty percent (50%) or more of the
+   outstanding shares, or (iii) beneficial ownership of such entity.
+
+   "You" (or "Your") shall mean an individual or Legal Entity
+   exercising permissions granted by this License.
+
+   "Source" form shall mean the preferred form for making modifications,
+   including but not limited to software source code, documentation
+   source, and configuration files.
+
+   "Object" form shall mean any form resulting from mechanical
+   transformation or translation of a Source form, including but
+   not limited to compiled object code, generated documentation,
+   and conversions to other media types.
+
+   "Work" shall mean the work of authorship, whether in Source or
+   Object form, made available under the License, as indicated by a
+   copyright notice that is included in or attached to the work
+   (an example is provided in the Appendix below).
+
+   "Derivative Works" shall mean any work, whether in Source or Object
+   form, that is based on (or derived from) the Work and for which the
+   editorial revisions, annotations, elaborations, or other modifications
+   represent, as a whole, an original work of authorship. For the purposes
+   of this License, Derivative Works shall not include works that remain
+   separable from, or merely link (or bind by name) to the interfaces of,
+   the Work and Derivative Works thereof.
+
+   "Contribution" shall mean any work of authorship, including
+   the original version of the Work and any modifications or additions
+   to that Work or Derivative Works thereof, that is intentionally
+   submitted to Licensor for inclusion in the Work by the copyright owner
+   or by an individual or Legal Entity authorized to submit on behalf of
+   the copyright owner. For the purposes of this definition, "submitted"
+   means any form of electronic, verbal, or written communication sent
+   to the Licensor or its representatives, including but not limited to
+   communication on electronic mailing lists, source code control systems,
+   and issue tracking systems that are managed by, or on behalf of, the
+   Licensor for the purpose of discussing and improving the Work, but
+   excluding communication that is conspicuously marked or otherwise
+   designated in writing by the copyright owner as "Not a Contribution."
+
+   "Contributor" shall mean Licensor and any individual or Legal Entity
+   on behalf of whom a Contribution has been received by Licensor and
+   subsequently incorporated within the Work.
+
+2. Grant of Copyright License. Subject to the terms and conditions of
+   this License, each Contributor hereby grants to You a perpetual,
+   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+   copyright license to reproduce, prepare Derivative Works of,
+   publicly display, publicly perform, sublicense, and distribute the
+   Work and such Derivative Works in Source or Object form.
+
+3. Grant of Patent License. Subject to the terms and conditions of
+   this License, each Contributor hereby grants to You a perpetual,
+   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+   (except as stated in this section) patent license to make, have made,
+   use, offer to sell, sell, import, and otherwise transfer the Work,
+   where such license applies only to those patent claims licensable
+   by such Contributor that are necessarily infringed by their
+   Contribution(s) alone or by combination of their Contribution(s)
+   with the Work to which such Contribution(s) was submitted. If You
+   institute patent litigation against any entity (including a
+   cross-claim or counterclaim in a lawsuit) alleging that the Work
+   or a Contribution incorporated within the Work constitutes direct
+   or contributory patent infringement, then any patent licenses
+   granted to You under this License for that Work shall terminate
+   as of the date such litigation is filed.
+
+4. Redistribution. You may reproduce and distribute copies of the
+   Work or Derivative Works thereof in any medium, with or without
+   modifications, and in Source or Object form, provided that You
+   meet the following conditions:
+
+   (a) You must give any other recipients of the Work or
+       Derivative Works a copy of this License; and
+
+   (b) You must cause any modified files to carry prominent notices
+       stating that You changed the files; and
+
+   (c) You must retain, in the Source form of any Derivative Works
+       that You distribute, all copyright, patent, trademark, and
+       attribution notices from the Source form of the Work,
+       excluding those notices that do not pertain to any part of
+       the Derivative Works; and
+
+   (d) If the Work includes a "NOTICE" text file as part of its
+       distribution, then any Derivative Works that You distribute must
+       include a readable copy of the attribution notices contained
+       within such NOTICE file, excluding those notices that do not
+       pertain to any part of the Derivative Works, in at least one
+       of the following places: within a NOTICE text file distributed
+       as part of the Derivative Works; within the Source form or
+       documentation, if provided along with the Derivative Works; or,
+       within a display generated by the Derivative Works, if and
+       wherever such third-party notices normally appear. The contents
+       of the NOTICE file are for informational purposes only and
+       do not modify the License. You may add Your own attribution
+       notices within Derivative Works that You distribute, alongside
+       or as an addendum to the NOTICE text from the Work, provided
+       that such additional attribution notices cannot be construed
+       as modifying the License.
+
+   You may add Your own copyright statement to Your modifications and
+   may provide additional or different license terms and conditions
+   for use, reproduction, or distribution of Your modifications, or
+   for any such Derivative Works as a whole, provided Your use,
+   reproduction, and distribution of the Work otherwise complies with
+   the conditions stated in this License.
+
+5. Submission of Contributions. Unless You explicitly state otherwise,
+   any Contribution intentionally submitted for inclusion in the Work
+   by You to the Licensor shall be under the terms and conditions of
+   this License, without any additional terms or conditions.
+   Notwithstanding the above, nothing herein shall supersede or modify
+   the terms of any separate license agreement you may have executed
+   with Licensor regarding such Contributions.
+
+6. Trademarks. This License does not grant permission to use the trade
+   names, trademarks, service marks, or product names of the Licensor,
+   except as required for reasonable and customary use in describing the
+   origin of the Work and reproducing the content of the NOTICE file.
+
+7. Disclaimer of Warranty. Unless required by applicable law or
+   agreed to in writing, Licensor provides the Work (and each
+   Contributor provides its Contributions) on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+   implied, including, without limitation, any warranties or conditions
+   of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+   PARTICULAR PURPOSE. You are solely responsible for determining the
+   appropriateness of using or redistributing the Work and assume any
+   risks associated with Your exercise of permissions under this License.
+
+8. Limitation of Liability. In no event and under no legal theory,
+   whether in tort (including negligence), contract, or otherwise,
+   unless required by applicable law (such as deliberate and grossly
+   negligent acts) or agreed to in writing, shall any Contributor be
+   liable to You for damages, including any direct, indirect, special,
+   incidental, or consequential damages of any character arising as a
+   result of this License or out of the use or inability to use the
+   Work (including but not limited to damages for loss of goodwill,
+   work stoppage, computer failure or malfunction, or any and all
+   other commercial damages or losses), even if such Contributor
+   has been advised of the possibility of such damages.
+
+9. Accepting Warranty or Additional Liability. While redistributing
+   the Work or Derivative Works thereof, You may choose to offer,
+   and charge a fee for, acceptance of support, warranty, indemnity,
+   or other liability obligations and/or rights consistent with this
+   License. However, in accepting such obligations, You may act only
+   on Your own behalf and on Your sole responsibility, not on behalf
+   of any other Contributor, and only if You agree to indemnify,
+   defend, and hold each Contributor harmless for any liability
+   incurred by, or claims asserted against, such Contributor by reason
+   of your accepting any such warranty or additional liability.
+
+END OF TERMS AND CONDITIONS
+
+APPENDIX: How to apply the Apache License to your work.
+
+   To apply the Apache License to your work, attach the following
+   boilerplate notice, with the fields enclosed by brackets "[]"
+   replaced with your own identifying information. (Don't include
+   the brackets!) The text should be enclosed in the appropriate
+   comment syntax for the file format. We also recommend that a
+   file or class name and description of purpose be included on the
+   same "printed page" as the copyright notice for easier
+   identification within third-party archives.
+
+Copyright [yyyy] [name of copyright owner]
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Reader TOC icons and chapter-row provenance:
+
+Project: https://github.com/gedoor/legado
+Local source repository: /Users/ytx/Documents/legado-work/legado
+Revision: 5f5d31404af9957684703747ecee2b91e7161f1d
+License: GNU General Public License version 3; see LegadoMenuIcons-LICENSE.txt.
+
+These five ReaderTocAndroid assets are separate from ReaderMenuAndroid assets.
+The source bytes were read with git show at the revision above, not from an
+unpinned working tree. Each XML has one path, a 24dp intrinsic size and a
+24 x 24 viewport. None declares android:autoMirrored (default false).
+
+- ReaderTocAndroidTop
+  XML: app/src/main/res/drawable/ic_arrow_drop_up.xml
+  XML SHA-256: 30693cfc6cb339c8c8545b0e6e2a3595b154e2f857c15df8a7be546b19d95ef9
+  PDF SHA-256: aeb0526dc19d54fe16b1337e0a7e0d98738cae958e7d4a5c922cffa027553537
+- ReaderTocAndroidBottom
+  XML: app/src/main/res/drawable/ic_arrow_drop_down.xml
+  XML SHA-256: ba98b522c0c4fe5f16f7e5f24b171efa7458f932f3f0c37d94d64fd847524008
+  PDF SHA-256: 5470a58d3165db139024c0aa77ae9688a38ba1fbf28e70e57f9155c849139027
+- ReaderTocAndroidCheck
+  XML: app/src/main/res/drawable/ic_check.xml
+  XML SHA-256: 9f5e4156311dc6b4afa636ba7c22e2fb38d47e4ccf8ed33fcf406640447faa37
+  PDF SHA-256: f216f3620d68ed12fb7fc69f6ee5875250684354a51db9f40a4b24ea9e88d180
+- ReaderTocAndroidCloud
+  XML: app/src/main/res/drawable/ic_outline_cloud_24.xml
+  XML SHA-256: e08573b542385ce79a1516413e33f00e65e2a0aa3025fdd0b142065960276f23
+  PDF SHA-256: 30c681003dd59d0a10bf092ca4919181c5136a1ca3ca6f425de071820c1579bc
+- ReaderTocAndroidLock
+  XML: app/src/main/res/drawable/ic_lock_outline.xml
+  XML SHA-256: 5c2cbb8cf65c86f349cd0cf3ac181949dbe22221a0527b945a8744d8580ae90e
+  PDF SHA-256: ffe0d77c4e587bd2e6a943e7f3152820fa514a54000a419730682e0740ce9b95
+
+Conversion reuses attrs() and add_children() directly from the existing
+/tmp/reader-menu-android-5f5d314/convert_vectors.py pipeline, with the separate
+ReaderTocAndroid prefix. The pipeline's main() was not invoked, so it did not
+regenerate or overwrite ReaderMenuAndroid resources. Original pathData,
+viewport, fill rules, groups and opacity are retained. Only the container
+changes to a 24pt monochrome template PDF (ReportLab, invariant PDF 1.4).
+The cloud's ?attr/colorControlNormal root tint is supplied by the UIKit
+template image tint; item_chapter_list.xml explicitly applies secondaryText
+to both the check/cloud and lock ImageViews. No SF Symbol substitutions or
+manual path redraws are used. Contents.json preserves vector representation
+and sets template rendering intent for every new imageset.
+
+Original usage and row behavior at the same revision:
+- app/src/main/res/layout/fragment_chapter_list.xml
+  SHA-256: 11a57a0df5208b1d5eed52f5bbf8f81f50970ebb1ed4926ff8b0d7ce52a0b4e2
+  iv_chapter_top/bottom use ic_arrow_drop_up/down, respectively.
+- app/src/main/res/layout/item_chapter_list.xml
+  SHA-256: fe00ceffa73caeccbb40d40599e8b877cbd8f5cb4a8d1b1b33aed433c8eba8b4
+  Padding 12dp; lock 24dp with paddingEnd 8dp; check/cloud 24dp with
+  padding 4dp; single-line title; wordCount/tag 12sp with an 18dp gap.
+- app/src/main/java/io/legado/app/ui/book/toc/ChapterListAdapter.kt
+  SHA-256: bb20c665db925a9136c5719d329acad6d0875e90f854eda68fb222899c8f4761
+  convert(): current title uses accent; volumes use btn_bg_press without
+  bold text and suppress metadata; VIP and not paid shows the lock.
+  upHasCache(): current check takes precedence over uncached cloud;
+  cached non-current rows leave the state slot empty.
+- app/src/main/res/drawable/ic_divider.xml
+  SHA-256: 5082d45de14a00d1a9f5c6804cabdea905688f6f73478672346333928410049d
+  Used by VerticalDivider in ChapterListFragment: 1px, bg_divider_line.
+  Day bg_divider_line is #8FE0E0E0; night is #FF363636.
+
+ReaderTocPalette uses the day/night resource background (#FFFAFAFA and
+#FF212121), primaryText (#DE000000 and #FFFFFFFF), secondaryText
+(#8A000000 and #B3FFFFFF), btn_bg_press (#63ACACAC and #634D4D4D), and
+the divider colors above. Toolbar/accent/bottom colors use ThemeConfig's
+default primary/accent/bottomBackground rather than daytime resource
+primary/accent fallbacks: day #FF795548/#FFE53935/#FFEEEEEE and night
+#FF546E7A/#FFD84315/#FF303030. Both default toolbar colors use white text.
+Color and default sources:
+- app/src/main/res/values/colors.xml
+  SHA-256: 6792eccda059b7e8623cb82bcc9b57c47b1ebd3a9e2cd20d4f3da8e7312bb3d8
+- app/src/main/res/values-night/colors.xml
+  SHA-256: 60af875622ef9397e904496b11f86d53a9723a8d61f1c8e2da3e2336039cde13
+- app/src/main/java/io/legado/app/help/config/ThemeConfig.kt
+  SHA-256: 500ce291a796310e5577502bcb6a05142fa9611f7092bb4476d38429d2eb6cc7
+- app/src/main/res/values/colors_material_design.xml
+  Resolves md_grey_50/200/850/900, md_brown_500, md_red_600,
+  md_blue_grey_600 and md_deep_orange_800 to the values above.
+
+Bookshelf transfer menu icons, from the same pinned Legado commit:
+- BookshelfAndroidAddOnline: app/src/main/res/drawable/ic_add_online.xml
+  XML SHA-256: f5937232376d45168c5bea229300cb1df3b03f1206eb3dc6c52b6e761fef04ab
+- BookshelfAndroidExport: app/src/main/res/drawable/ic_export.xml
+  XML SHA-256: ca0bc39143d05c52b2895fd16b3db82d7f8bcb3b1f0dfaf468516bb5898cd8a1
+- BookshelfAndroidImport: app/src/main/res/drawable/ic_import.xml
+  XML SHA-256: ec84629c1ce08373b51caefb193233e63fa20b5da07748f4c5aa8ade002d1c11
+Unchanged pathData, converted to template PDF with original 24x24 or
+28x24 intrinsic size. Source license remains GNU GPL version 3.
+
+Reader background scheme editor, from the same pinned Legado commit:
+- Reuses BookDetailAndroidEdit (ic_edit), BookshelfAndroidImport (ic_import),
+  and BookshelfAndroidExport (ic_export) with their original vector paths.
+- ReaderPresetAndroidDelete: app/src/main/res/drawable/ic_clear_all.xml
+  XML SHA-256: d7400710a5c708c548871ba1b612b5e0e4d410ed4ca6a696d6f79ddb2c1871fb
+  PDF SHA-256: 184e95beb74069e3607fdb0a6a9aa3ba25e3b79cead0aec07ddfe3e20c3cf451
+  Three unchanged pathData entries, 24x24 viewport and intrinsic size, opaque
+  monochrome template PDF. Source license remains GNU GPL version 3.
+
+Reader background image import (same pinned Legado commit, GPL-3.0):
+- ReaderBackgroundAndroidImage: app/src/main/res/drawable/ic_image.xml.
+  XML SHA-256: adb19b11962080d69c3250baa8d61c4e4eb4ef7438102f9e05e457edc2c24897
+  Both original pathData entries and the 1024 x 1024 viewport are unchanged;
+  SVG template representation retains the original 24dp intrinsic size.
+
+My preferences icons (same pinned Legado commit, GPL-3.0):
+- MyAndroidSource: ic_cfg_source.xml
+- MyAndroidReplace: ic_cfg_replace.xml
+- MyAndroidTranslate: ic_translate.xml
+- MyAndroidTheme: ic_cfg_theme.xml
+- MyAndroidBackup: ic_cfg_backup.xml
+- MyAndroidOther: ic_cfg_other.xml
+- MyAndroidBookmark: ic_bookmark.xml
+- MyAndroidFolder: ic_folder_outline.xml
+- MyAndroidAbout: ic_cfg_about.xml
+All nine retain the original 24 x 24 viewport, pathData and fill rules,
+converted with the existing attrs/add_children template PDF pipeline.
+Only the opaque fill becomes the UIKit template tint. None declares
+autoMirrored; no RTL mirroring is added. pref_main.xml supplies the icon
+order and view_preference.xml supplies the 24dp slot and 16dp text gap.

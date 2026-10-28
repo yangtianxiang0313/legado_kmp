@@ -1,0 +1,25 @@
+CREATE TABLE dict_rules (
+    name TEXT NOT NULL PRIMARY KEY,
+    url_rule TEXT NOT NULL DEFAULT '',
+    show_rule TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sort_number INTEGER NOT NULL DEFAULT 0
+);
+
+selectAll:
+SELECT * FROM dict_rules ORDER BY sort_number, name;
+
+selectEnabled:
+SELECT * FROM dict_rules WHERE enabled = 1 ORDER BY sort_number, name;
+
+selectByName:
+SELECT * FROM dict_rules WHERE name = ?;
+
+insert:
+INSERT OR REPLACE INTO dict_rules (name, url_rule, show_rule, enabled, sort_number) VALUES (?, ?, ?, ?, ?);
+
+deleteByName:
+DELETE FROM dict_rules WHERE name = ?;
+
+deleteAll:
+DELETE FROM dict_rules;
