@@ -12,6 +12,7 @@ internal class BookExportImages(
     private val budget: BookExportBudget,
     private val reservedEntries: Int,
     private val checkActive: () -> Unit,
+    private val imageDirectory: String = "Images",
 ) {
     private val book = if (book.isLocal) book.copy(origin = BookType.LOCAL_TAG) else book
     private val resolved = mutableMapOf<Key, String?>()
@@ -56,7 +57,7 @@ internal class BookExportImages(
         }
         budget.resourceCount(reservedEntries + zipEntries.size + 1)
         budget.image(bytes)
-        val path = "Images/image_${zipEntries.size + 1}.${format.extension}"
+        val path = "$imageDirectory/image_${zipEntries.size + 1}.${format.extension}"
         resourceList += EpubResourceEntry(path, format.mediaType, isCover)
         zipEntries += ZipEntryData("OEBPS/$path", bytes)
         resolved[key] = path

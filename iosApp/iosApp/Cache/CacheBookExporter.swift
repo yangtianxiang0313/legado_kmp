@@ -92,11 +92,17 @@ final class CacheBookExporter {
         guard let count = Int32(exactly: options.chaptersPerFile) else { throw invalidConfiguration() }
         if facade == nil { facade = try BookExportFacade.companion.create() }
         guard let facade else { throw CancellationError() }
+        if format == .epub && options.useCustomEpubTemplate && options.epubTemplateBase64.isEmpty {
+            throw NSError(
+                domain: "io.legado.cache.export", code: -4,
+                userInfo: [NSLocalizedDescriptionKey: "自定义 EPUB 模板不可用，请重新导入或选择内置模板"])
+        }
         let settings = BookExportOptions(
             chapterScope: options.chapterScope, chaptersPerFile: count, charset: options.charset,
             includeChapterTitle: options.includeChapterTitle, useReplaceRules: options.useReplaceRules,
             fileNameScript: options.fileNameScript, splitFileNameScript: options.splitFileNameScript,
-            includeImages: format == .txt && options.includeImages)
+            includeImages: format == .txt && options.includeImages,
+            epubTemplateBase64: format == .epub && options.useCustomEpubTemplate ? options.epubTemplateBase64 : "")
         let batch = try await CacheExportAsync.prepareConfigured(
             bookURL: book.bookUrl, format: format, options: settings, facade: facade, onProgress: onProgress)
         try Task.checkCancellation()

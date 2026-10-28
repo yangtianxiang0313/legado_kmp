@@ -14,6 +14,7 @@ internal fun epubOpf(
     resources: List<EpubResourceEntry> = emptyList(),
     language: String = "zh-CN",
     includeNcx: Boolean = false,
+    resourceProperties: Map<String, Set<String>> = emptyMap(),
 ): String {
     val indexed = epubIndexedChapters(chapters)
     val paths = (listOf("content.opf", "nav.xhtml", "toc.ncx") + indexed.map { it.path }).map { it.lowercase() }.toMutableSet()
@@ -21,10 +22,10 @@ internal fun epubOpf(
     resources.forEach { resource ->
         validateExportArchivePath(resource.path)
         require(paths.add(resource.path.lowercase())) { "EPUB 资源路径重名：${resource.path}" }
-        require(resource.mediaType in EPUB_IMAGE_MEDIA_TYPES) { "EPUB 图片媒体类型无效：${resource.mediaType}" }
+        requireEpubStaticMediaType(resource.mediaType, resource.isCover)
     }
     val coverIndex = resources.indexOfFirst { it.isCover }
-    val description = book.intro?.takeIf { it.isNotEmpty() }?.let {
+    val description = book.displayIntro?.takeIf { it.isNotEmpty() }?.let {
         val safe = BookExportDocument.parse(BookChapter(), it).render(emptyMap(), "")
         Ksoup.parseBodyFragment(safe).text()
     }.orEmpty()
@@ -47,12 +48,20 @@ internal fun epubOpf(
         if (includeNcx) append("    <item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>\n")
         indexed.forEach { chapter ->
             append("    <item id=\"").append(chapter.id).append("\" href=\"").append(chapter.path.epubHref())
-                .append("\" media-type=\"application/xhtml+xml\"/>\n")
+                .append("\" media-type=\"application/xhtml+xml\"")
+            val properties = epubXhtmlManifestProperties(chapter.entry.content, chapter.path, resourceProperties)
+            if (properties.isNotEmpty()) append(" properties=\"").append(properties.joinToString(" ")).append('"')
+            append("/>\n")
         }
         resources.forEachIndexed { index, resource ->
             append("    <item id=\"resource-").append(index + 1).append("\" href=\"").append(resource.path.epubHref())
                 .append("\" media-type=\"").append(resource.mediaType.xmlEscaped()).append('"')
-            if (resource.isCover) append(" properties=\"cover-image\"")
+            val properties = resourceProperties[resource.path].orEmpty().toMutableSet()
+            require(properties.all { it in setOf("svg", "mathml", "remote-resources") }) { "EPUB 静态资源属性无效" }
+            require(resource.mediaType in setOf("text/html", "application/xhtml+xml") ||
+                properties.none { it in setOf("svg", "mathml") }) { "EPUB 独立资源不能声明 XHTML 内联属性" }
+            if (resource.isCover) properties += "cover-image"
+            if (properties.isNotEmpty()) append(" properties=\"").append(properties.joinToString(" ")).append('"')
             append("/>\n")
         }
         append("  </manifest>\n  <spine")
@@ -177,4 +186,21 @@ private fun String.epubHref(): String = split('/').joinToString("/") { it.encode
 private val EPUB_IMAGE_MEDIA_TYPES = setOf(
     "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/svg+xml", "image/avif",
     "image/heic", "image/heif", "image/tiff", "image/x-icon",
+)
+
+internal fun requireEpubStaticMediaType(mediaType: String, isCover: Boolean = false) {
+    require(mediaType in EPUB_IMAGE_MEDIA_TYPES || mediaType in EPUB_STATIC_MEDIA_TYPES) {
+        "EPUB 静态资源媒体类型无效：$mediaType"
+    }
+    require(!isCover || mediaType in EPUB_IMAGE_MEDIA_TYPES) { "EPUB 封面必须是真实图片资源" }
+}
+
+private val EPUB_STATIC_MEDIA_TYPES = setOf(
+    "text/css", "font/ttf", "font/otf", "font/woff", "font/woff2", "font/collection", "font/sfnt",
+    "application/vnd.ms-opentype", "application/font-sfnt", "application/font-woff",
+    "application/x-font-ttf", "application/x-font-truetype", "application/x-font-opentype",
+    "application/x-font-otf", "application/x-font-woff", "application/x-font-woff2",
+    "application/xhtml+xml", "text/html", "text/plain", "application/xml", "application/json",
+    "application/smil+xml", "application/pls+xml", "application/mathml+xml", "text/vtt",
+    "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/flac",
 )

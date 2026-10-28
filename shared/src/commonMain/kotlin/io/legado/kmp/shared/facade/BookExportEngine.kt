@@ -52,6 +52,9 @@ internal class BookExportEngine(
         val volumes = bookExportVolumes(selected, options.chaptersPerFile, extension, checkActive)
         requireBookExport(!options.useReplaceRules || transform != null, "正文替换规则服务不可用，无法导出")
         if (extension == "txt") validateBookExportCharset(options.charset)
+        val template = if (extension == "epub" && options.epubTemplateBase64.isNotEmpty()) {
+            BookExportEpubTemplateArchive.read(options.epubTemplateBase64, checkActive)
+        } else null
         val outputExtension = if (extension == "txt" && options.includeImages) "zip" else extension
         val batchBudget = BookExportBatchBudget(budget, checkActive)
         val fileNames = volumes.indices.map { index ->
@@ -86,7 +89,7 @@ internal class BookExportEngine(
                 val state = State()
                 val bytes = when (extension) {
                     "txt" -> txt(book, volume, state, budget, partProgress, checkActive, options)
-                    else -> epub(book, volume, state, budget, partProgress, checkActive, options, batchBudget)
+                    else -> epub(book, volume, state, budget, partProgress, checkActive, options, batchBudget, template)
                 }
                 result(bytes, extension, volume.size, state)
             }
@@ -196,10 +199,34 @@ internal class BookExportEngine(
         checkActive: () -> Unit,
         options: BookExportOptions? = null,
         batchBudget: BookExportBatchBudget? = null,
+        template: BookExportEpubTemplateArchive? = null,
     ): ByteArray {
-        val collector = BookExportImages(book, images, budget, directory.size + 5, checkActive)
-        val chapterEntries = mutableListOf<EpubChapterEntry>()
-        val zipEntries = mutableListOf<ZipEntryData>()
+        val customPaths = template?.let { bundle ->
+            (bundle.resources.map { it.path } + bundle.sectionTemplates.map { it.path }).map { it.lowercase() }
+        }.orEmpty()
+        var imageDirectory = "Images/legado-export"
+        var suffix = 1
+        while (customPaths.any { it.startsWith("${imageDirectory.lowercase()}/") || it == imageDirectory.lowercase() }) {
+            checkActive()
+            imageDirectory = "Images/legado-export-${suffix++}"
+        }
+        val reserved = directory.size + 5 + (template?.let { it.resources.size + it.sectionTemplates.size } ?: 4)
+        val collector = BookExportImages(book, images, budget, reserved, checkActive, imageDirectory)
+        collector.cover()
+        checkActive()
+        val layout = BookExportEpubLayout(
+            book, template, collector.resources.firstOrNull { it.isCover }?.path,
+            options?.includeChapterTitle ?: true, checkActive,
+        )
+        val chapterEntries = layout.frontMatter.toMutableList()
+        val occupiedPaths = (customPaths + layout.frontMatter.map { "Text/${it.fileName}".lowercase() }).toMutableSet()
+        val zipEntries = layout.entries.toMutableList()
+        layout.entries.forEach { budget.resource(it.data) }
+        layout.frontMatter.forEach { entry ->
+            checkActive()
+            budget.rendered(entry.content)
+            zipEntries += ZipEntryData("OEBPS/Text/${entry.fileName}", entry.content.encodeToByteArray())
+        }
         directory.forEachIndexed { index, originalChapter ->
             checkActive()
             val source = chapterContent(book, originalChapter, budget, checkActive, options)
@@ -225,16 +252,21 @@ internal class BookExportEngine(
                 BookExportDocument.parse(chapter, missingChapterMessage(book)).render(emptyMap())
             } else ""
             checkActive()
-            val entry = EpubChapterEntry(chapter, "chapter_${index + 1}.xhtml", "")
-            val xhtml = epubChapterXhtml(book, entry, body = body, includeTitle = options?.includeChapterTitle ?: true)
+            var fileName = "chapter_${index + 1}.xhtml"
+            var alternative = 0
+            while (!occupiedPaths.add("Text/$fileName".lowercase())) {
+                checkActive()
+                fileName = "chapter_${index + 1}_${++alternative}.xhtml"
+            }
+            val entry = EpubChapterEntry(chapter, fileName, "")
+            val xhtml = layout.chapter(entry, body)
             budget.rendered(xhtml)
-            chapterEntries += entry
+            chapterEntries += entry.copy(content = xhtml)
             zipEntries += ZipEntryData("OEBPS/Text/${entry.fileName}", xhtml.encodeToByteArray())
             checkActive()
             progress(index + 1, directory.size, onProgress, checkActive)
         }
         if (options == null) requireReadable(state.readable, txt = false)
-        collector.cover()
         checkActive()
         fun document(path: String, text: String) {
             checkActive()
@@ -244,7 +276,8 @@ internal class BookExportEngine(
         document("mimetype", "application/epub+zip")
         document("META-INF/container.xml", epubContainerXml())
         document("OEBPS/content.opf", epubOpf(book.copy(intro = book.displayIntro), chapterEntries,
-            resources = collector.resources, includeNcx = true))
+            resources = collector.resources + layout.resources, includeNcx = true,
+            resourceProperties = layout.resourceProperties))
         document("OEBPS/nav.xhtml", epubNav(book, chapterEntries))
         document("OEBPS/toc.ncx", epubNcx(book, chapterEntries))
         zipEntries += collector.entries

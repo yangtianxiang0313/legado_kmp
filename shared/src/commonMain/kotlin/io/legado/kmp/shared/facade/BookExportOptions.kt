@@ -9,6 +9,7 @@ data class BookExportOptions(
     val fileNameScript: String = "",
     val splitFileNameScript: String = "",
     val includeImages: Boolean = false,
+    val epubTemplateBase64: String = "",
 ) {
     override fun toString(): String = "BookExportOptions(redacted)"
 }

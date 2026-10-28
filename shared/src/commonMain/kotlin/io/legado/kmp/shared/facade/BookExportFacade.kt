@@ -132,6 +132,7 @@ internal fun requireBookExport(condition: Boolean, message: String) {
 
 internal fun bookExportErrorMessage(error: Throwable): String = when {
     error is BookExportFailure -> error.message ?: "书籍导出失败"
+    error is BookExportEpubTemplateFailure -> error.problem.message
     error is RecoverableSharedException && error.code == "BookExportFacade.prepare" -> error.message
     else -> "书籍导出失败，请检查本地文件或已有缓存后重试"
 }

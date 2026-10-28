@@ -33,9 +33,11 @@ internal class BookExportBudget(private val checkActive: () -> Unit) {
         return size
     }
 
-    fun image(bytes: ByteArray) {
+    fun image(bytes: ByteArray) = resource(bytes)
+
+    fun resource(bytes: ByteArray) {
         checkActive()
-        requireBookExport(bytes.size.toLong() <= BookExportLimits.RESOURCE_BYTES, "单个图片资源超过 32 MiB 导出限制")
+        requireBookExport(bytes.size.toLong() <= BookExportLimits.RESOURCE_BYTES, "单个导出资源超过 32 MiB 限制")
         imageBytes += bytes.size
         requireBookExport(imageBytes + renderedBytes <= BookExportLimits.PACKAGE_BYTES, "导出文件超过 128 MiB 限制")
     }

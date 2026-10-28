@@ -418,6 +418,9 @@
 		F02A39010000000000000002 /* CacheExportOptionsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A39020000000000000002; };
 		F02A3C010000000000000001 /* CacheExportCloudAsync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A3C020000000000000001; };
 		F02A3C010000000000000002 /* CacheExportCloudDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A3C020000000000000002; };
+		F02A3D010000000000000001 /* CacheExportTemplateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A3D020000000000000001; };
+		F02A3D010000000000000002 /* CacheExportTemplateImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A3D020000000000000002; };
+		F02A3D010000000000000003 /* CacheExportTemplateImportController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A3D020000000000000003; };
 		D81A90010000000000000004 /* AndroidCacheBookCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A90020000000000000004 /* AndroidCacheBookCell.swift */; };
 		D81A90010000000000000005 /* CacheManagementToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A90020000000000000005 /* CacheManagementToolbarView.swift */; };
 		D81A90010000000000000006 /* CacheDownloadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A90020000000000000006 /* CacheDownloadCoordinator.swift */; };
@@ -1151,6 +1154,9 @@
 		F02A39020000000000000002 /* CacheExportOptionsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheExportOptionsViewController.swift; sourceTree = "<group>"; };
 		F02A3C020000000000000001 /* CacheExportCloudAsync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheExportCloudAsync.swift; sourceTree = "<group>"; };
 		F02A3C020000000000000002 /* CacheExportCloudDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheExportCloudDelivery.swift; sourceTree = "<group>"; };
+		F02A3D020000000000000001 /* CacheExportTemplateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheExportTemplateStore.swift; sourceTree = "<group>"; };
+		F02A3D020000000000000002 /* CacheExportTemplateImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheExportTemplateImport.swift; sourceTree = "<group>"; };
+		F02A3D020000000000000003 /* CacheExportTemplateImportController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheExportTemplateImportController.swift; sourceTree = "<group>"; };
 		D81A90020000000000000004 /* AndroidCacheBookCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidCacheBookCell.swift; sourceTree = "<group>"; };
 		D81A90020000000000000005 /* CacheManagementToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheManagementToolbarView.swift; sourceTree = "<group>"; };
 		D81A90020000000000000006 /* CacheDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheDownloadCoordinator.swift; sourceTree = "<group>"; };
@@ -2283,6 +2289,9 @@
 				F02A39020000000000000002,
 				F02A3C020000000000000001,
 				F02A3C020000000000000002,
+				F02A3D020000000000000001,
+				F02A3D020000000000000002,
+				F02A3D020000000000000003,
 				D81A90020000000000000004 /* AndroidCacheBookCell.swift */,
 				D81A90020000000000000005 /* CacheManagementToolbarView.swift */,
 				D81A90020000000000000006 /* CacheDownloadCoordinator.swift */,
@@ -2901,6 +2910,9 @@
 				F02A39010000000000000002 /* CacheExportOptionsViewController.swift in Sources */,
 				F02A3C010000000000000001 /* CacheExportCloudAsync.swift in Sources */,
 				F02A3C010000000000000002 /* CacheExportCloudDelivery.swift in Sources */,
+				F02A3D010000000000000001 /* CacheExportTemplateStore.swift in Sources */,
+				F02A3D010000000000000002 /* CacheExportTemplateImport.swift in Sources */,
+				F02A3D010000000000000003 /* CacheExportTemplateImportController.swift in Sources */,
 				D81A90010000000000000004 /* AndroidCacheBookCell.swift in Sources */,
 				D81A90010000000000000005 /* CacheManagementToolbarView.swift in Sources */,
 				D81A90010000000000000006 /* CacheDownloadCoordinator.swift in Sources */,

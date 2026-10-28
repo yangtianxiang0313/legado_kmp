@@ -3,7 +3,7 @@ import UIKit
 @MainActor
 final class CacheExportOptionsViewController: UITableViewController, UITextFieldDelegate {
     private enum Section: Int, CaseIterable {
-        case chapters, format, content, fileNames, destination
+        case chapters, format, content, fileNames, destination, template
     }
 
     private let format: CacheExportFormat
@@ -14,6 +14,11 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     private var hasFinished = false
     private var hasDeliveredExport = false
     private var isVisible = false
+    private var isLeavingSettings = false
+    private var isCommitting = false
+    private var confirmationTask: Task<Void, Never>?
+    private let templateStore: CacheExportTemplateStore
+    private var templateImport: CacheExportTemplateImportController?
     private var previousNavigationBarHidden: Bool?
     private var controlCells: [ObjectIdentifier: CacheExportOptionsControlCell] = [:]
 
@@ -41,14 +46,16 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         return toolbar
     }()
 
-    // The owner presents this in a navigation controller and owns persistence and export work.
+    // The owner persists small preferences and starts export after the template's atomic commit.
     init(
         options: CacheExportOptions, format: CacheExportFormat,
+        templateStore: CacheExportTemplateStore = CacheExportTemplateStore(),
         onExport: @escaping (CacheExportOptions) -> Void
     ) {
         draft = options
         draft.charset = CacheExportOptions.supportedCharset(options.charset)
         self.format = format
+        self.templateStore = templateStore
         self.onExport = onExport
         selectsChapters = !options.chapterScope.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         splitsEPUB = format == .epub && options.chaptersPerFile > 0
@@ -89,6 +96,13 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         configure(replaceSwitch, title: "替换净化", identifier: "useReplaceRules", value: draft.useReplaceRules)
         configure(imagesSwitch, title: "TXT与图片（ZIP）", identifier: "includeImages", value: draft.includeImages)
         configureCharsetButton()
+        if format == .epub {
+            let importer = CacheExportTemplateImportController(owner: self, options: draft, store: templateStore)
+            importer.onChange = { [weak self] in self?.reloadTemplateSection() }
+            importer.onError = { [weak self] message in self?.showTemplateError(message) }
+            templateImport = importer
+            importer.load()
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -102,12 +116,14 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         isVisible = true
+        isLeavingSettings = false
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         isVisible = false
-        if isMovingFromParent || isBeingDismissed || navigationController?.isBeingDismissed == true {
+        isLeavingSettings = isMovingFromParent || isBeingDismissed || navigationController?.isBeingDismissed == true
+        if isLeavingSettings {
             view.endEditing(true)
             if let previousNavigationBarHidden {
                 navigationController?.setNavigationBarHidden(previousNavigationBarHidden, animated: animated)
@@ -115,7 +131,14 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         }
     }
 
-    override func numberOfSections(in tableView: UITableView) -> Int { Section.allCases.count }
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isLeavingSettings { templateImport?.close() }
+    }
+
+    override func numberOfSections(in tableView: UITableView) -> Int {
+        Section.allCases.count - (format == .txt ? 1 : 0)
+    }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         switch Section(rawValue: section) {
@@ -124,6 +147,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         case .content: return "正文"
         case .fileNames: return "文件名"
         case .destination: return "导出目标"
+        case .template: return "EPUB 模板"
         case nil: return nil
         }
     }
@@ -135,6 +159,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         case .content: return 2
         case .fileNames: return format == .txt ? 1 : 2
         case .destination: return CacheExportDestination.allCases.count
+        case .template: return format == .epub ? 3 : 0
         case nil: return 0
         }
     }
@@ -170,6 +195,8 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
             return selectionCell(
                 title: destination == .share ? "系统分享" : "WebDAV", selected: destination == draft.destination,
                 identifier: "destination.\(destination.rawValue)")
+        case .template:
+            return templateImport?.cell(for: indexPath.row) ?? UITableViewCell(style: .default, reuseIdentifier: nil)
         case nil:
             return UITableViewCell(style: .default, reuseIdentifier: nil)
         }
@@ -192,6 +219,9 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
             view.endEditing(true)
             draft.destination = destination
             tableView.reloadSections(IndexSet(integer: Section.destination.rawValue), with: .none)
+        case .template:
+            view.endEditing(true)
+            templateImport?.select(row: indexPath.row)
         default:
             break
         }
@@ -319,7 +349,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     @objc private func finishEditing() { view.endEditing(true) }
 
     private var canInteract: Bool {
-        !hasFinished && isVisible && viewIfLoaded?.window != nil && !isBeingDismissed
+        !hasFinished && !isCommitting && isVisible && viewIfLoaded?.window != nil && !isBeingDismissed
             && navigationController?.isBeingDismissed != true
     }
 
@@ -333,6 +363,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     @objc private func cancel() {
         guard canInteract else { return }
         hasFinished = true
+        templateImport?.close()
         view.endEditing(true)
         if let dismissalTarget {
             dismissalTarget.dismiss(animated: true)
@@ -343,6 +374,10 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
 
     @objc private func confirmExport() {
         guard canInteract, presentedViewController == nil, let dismissalTarget else { return }
+        if format == .epub, templateImport?.canConfirm != true {
+            showTemplateError(CacheExportTemplateError.unavailable.localizedDescription)
+            return
+        }
         view.endEditing(true)
         var options = draft
         options.chapterScope = ""
@@ -390,17 +425,56 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
             }
         }
         // Shared code remains authoritative for chapter syntax, bounds and JavaScript evaluation.
-        hasFinished = true
+        isCommitting = true
         exportButton.isEnabled = false
         cancelButton.isEnabled = false
         tableView.isUserInteractionEnabled = false
+        let wasModalInPresentation = dismissalTarget.isModalInPresentation
         dismissalTarget.isModalInPresentation = true
-        dismissalTarget.dismiss(animated: true) { [self, dismissalTarget] in
-            guard !hasDeliveredExport, dismissalTarget.presentingViewController == nil, viewIfLoaded?.window == nil
-            else { return }
-            hasDeliveredExport = true
-            onExport(options)
+        confirmationTask = Task { [self, dismissalTarget] in
+            do {
+                let snapshot: CacheExportOptions
+                if format == .epub, let templateImport {
+                    snapshot = try await templateImport.confirm(options)
+                } else {
+                    // TXT carries the unchanged template preference, but never consumes its archive.
+                    var textOptions = options
+                    textOptions.epubTemplateBase64 = ""
+                    textOptions.epubTemplateName = ""
+                    snapshot = textOptions
+                }
+                confirmationTask = nil
+                guard !hasFinished, viewIfLoaded?.window != nil, !dismissalTarget.isBeingDismissed else { return }
+                hasFinished = true
+                dismissalTarget.dismiss(animated: true) { [self, dismissalTarget] in
+                    guard !hasDeliveredExport, dismissalTarget.presentingViewController == nil, viewIfLoaded?.window == nil
+                    else { return }
+                    hasDeliveredExport = true
+                    onExport(snapshot)
+                }
+            } catch {
+                confirmationTask = nil
+                isCommitting = false
+                dismissalTarget.isModalInPresentation = wasModalInPresentation
+                cancelButton.isEnabled = true
+                tableView.isUserInteractionEnabled = true
+                reloadTemplateSection()
+                showTemplateError("保存模板失败：\(error.localizedDescription)")
+            }
         }
+    }
+
+    private func reloadTemplateSection() {
+        guard isViewLoaded, format == .epub else { return }
+        exportButton.isEnabled = !hasFinished && !isCommitting && templateImport?.canConfirm == true
+        tableView.reloadSections(IndexSet(integer: Section.template.rawValue), with: .none)
+    }
+
+    private func showTemplateError(_ message: String) {
+        guard canInteract, presentedViewController == nil else { return }
+        let alert = UIAlertController(title: "EPUB 模板", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        present(alert, animated: true)
     }
 
     private func showError(_ message: String, field: UIView, at indexPath: IndexPath) {
