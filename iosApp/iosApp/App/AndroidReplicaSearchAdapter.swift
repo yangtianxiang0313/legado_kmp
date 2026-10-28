@@ -202,6 +202,15 @@ internal final class AndroidReplicaSearchAdapter {
         }
     }
 
+    func retryFailedSources() {
+        guard expectedKeyword != nil else { return }
+        performOperation { facade in
+            try await SharedAsync.void { completion in
+                facade.retryFailedSources(completionHandler: completion)
+            }
+        }
+    }
+
     func togglePrecisionSearch() async throws {
         guard let settingsFacade else { throw runtimeNotReadyError() }
         try await settingsFacade.setPrecisionSearchAsync(enabled: !precisionSearch)

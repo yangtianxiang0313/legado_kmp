@@ -3,7 +3,7 @@ package io.legado.kmp.shared.facade
 import io.legado.kmp.shared.model.SearchBook
 import io.legado.kmp.shared.model.SearchScope
 
-// Access is serialized by the facade mutex; attempt generations are gated by the caller.
+// Source updates are serialized per attempt; the facade gates checkpoint reuse by generation.
 internal class SearchPageRecovery(
     val keyword: String,
     val searchScope: SearchScope,
@@ -34,6 +34,7 @@ internal class SearchPageRecovery(
         get() = books.mapTo(linkedSetOf()) { it.primaryId }
 
     val hasMore: Boolean
+        // Unfinished sources remain retryable, but do not indicate another page.
         get() = resultIds.any { it !in seedResultIds }
 
     val sourceTotalCount: Int

@@ -63,6 +63,7 @@ class SearchFacade(
     private val searchStartMutex = Mutex()
     private var seenResultIds = emptySet<String>()
     private var pageRecovery: SearchPageRecovery? = null
+    private var pageRecoveryGeneration: Long? = null
 
     fun watchSourceParts(onUpdate: (List<BookSourcePart>) -> Unit): FlowSubscription {
         return watchFlow(getBookSourcesUseCase.observeEnabledParts(), onUpdate, label = "SearchFacade.sourceParts")
@@ -102,11 +103,11 @@ class SearchFacade(
         beginSearch(searchScope, keyword, page)
     }
 
-    private suspend fun beginSearch(searchScope: SearchScope, keyword: String, page: Int, recovery: SearchPageRecovery? = null) {
+    private suspend fun beginSearch(searchScope: SearchScope, keyword: String, page: Int) {
         val generation = searchGeneration.updateAndGet { it + 1 }
         searchStartMutex.withLock {
             if (isCurrentGeneration(generation)) {
-                startSearchLocked(searchScope, keyword, page, generation, recovery)
+                startSearchLocked(searchScope, keyword, page, generation, recovery = null)
             }
         }
     }
@@ -123,11 +124,13 @@ class SearchFacade(
         previous?.cancelAndJoin()
         kotlin.coroutines.coroutineContext.ensureActive()
         if (!isCurrentGeneration(generation)) return
-        if (recovery == null) pageRecovery = null
+        pageRecovery = recovery
+        pageRecoveryGeneration = if (recovery != null) generation else null
         val normalizedKeyword = keyword.trim()
         val requestedPage = page.coerceAtLeast(1)
         if (normalizedKeyword.isBlank()) {
-            publishSession(
+            publishIfCurrent(
+                generation,
                 SearchSessionState(
                     keyword = "",
                     scope = searchScope,
@@ -157,7 +160,8 @@ class SearchFacade(
         val seedResultIds = recovery?.seedResultIds ?: if (continuesSession) seenResultIds else emptySet()
         val visibleResults = if (recovery != null) session.value.results else seedResults
 
-        publishSession(
+        publishIfCurrent(
+            generation,
             SearchSessionState(
                 keyword = normalizedKeyword,
                 scope = searchScope,
@@ -173,14 +177,15 @@ class SearchFacade(
             )
         )
 
+        var attemptRecovery = recovery
         searchJob = scope.launch(CoroutineExceptionHandler { _, error ->
             if (!isCurrentGeneration(generation)) return@CoroutineExceptionHandler
-            val checkpoint = pageRecovery
+            val checkpoint = attemptRecovery
             checkpoint?.pendingSourceUrls?.forEach { checkpoint.recordFailure(it, error.message ?: "搜索失败") }
             publishIfCurrent(generation, session.value.copy(
                 isRunning = false,
                 isPaused = false,
-                hasMore = checkpoint?.pendingSourceUrls?.isNotEmpty() == true,
+                hasMore = checkpoint?.hasMore == true,
                 sourceTotalCount = checkpoint?.sourceTotalCount ?: 0,
                 completedSourceCount = checkpoint?.completedSourceCount ?: 0,
                 failedSourceCount = checkpoint?.failedSourceCount ?: 0,
@@ -195,7 +200,9 @@ class SearchFacade(
                 sources.map { it.bookSourceUrl },
             )
             checkpoint.retainAvailableSources(sources.mapTo(mutableSetOf()) { it.bookSourceUrl })
+            attemptRecovery = checkpoint
             pageRecovery = checkpoint
+            pageRecoveryGeneration = generation
             val pendingUrls = checkpoint.pendingSourceUrls
             val pendingSources = sources.filter { it.bookSourceUrl in pendingUrls }
             checkpoint.beginAttempt(pendingSources.mapTo(mutableSetOf()) { it.bookSourceUrl })
@@ -234,6 +241,8 @@ class SearchFacade(
                         semaphore.withPermit {
                             if (!isCurrentGeneration(generation)) return@withPermit
                             awaitResume()
+                            kotlin.coroutines.coroutineContext.ensureActive()
+                            if (!isCurrentGeneration(generation)) return@withPermit
                             runCatching {
                                 withTimeout(SOURCE_SEARCH_TIMEOUT_MS) {
                                     searchWebBooksUseCase.searchFromSource(source, normalizedKeyword, requestedPage).getOrThrow()
@@ -247,6 +256,8 @@ class SearchFacade(
                                 .onSuccess { books ->
                                     var partialState: SearchSessionState? = null
                                     guard.withLock {
+                                        kotlin.coroutines.coroutineContext.ensureActive()
+                                        if (!isCurrentGeneration(generation)) return@withLock
                                         checkpoint.recordSuccess(source.bookSourceUrl, books)
                                         aggregated = mergeResults(
                                             existing = seedResults,
@@ -275,6 +286,8 @@ class SearchFacade(
                                 .onFailure { throwable ->
                                     if (throwable is CancellationException) throw throwable
                                     guard.withLock {
+                                        kotlin.coroutines.coroutineContext.ensureActive()
+                                        if (!isCurrentGeneration(generation)) return@withLock
                                         checkpoint.recordFailure(source.bookSourceUrl, throwable.message ?: "搜索失败")
                                     }
                                 }
@@ -283,18 +296,19 @@ class SearchFacade(
                 }.forEach { it.join() }
             }
 
-            if (!isCurrentGeneration(generation)) {
-                return@launch
-            }
+            kotlin.coroutines.coroutineContext.ensureActive()
+            if (!isCurrentGeneration(generation)) return@launch
             searchUseCase.setResults(aggregated)
+            kotlin.coroutines.coroutineContext.ensureActive()
             if (!isCurrentGeneration(generation)) return@launch
             seenResultIds = seedResultIds + checkpoint.resultIds
-            publishSession(
+            publishIfCurrent(
+                generation,
                 session.value.copy(
                     isRunning = false,
                     isPaused = false,
                     results = aggregated,
-                    hasMore = checkpoint.hasMore || checkpoint.pendingSourceUrls.isNotEmpty(),
+                    hasMore = checkpoint.hasMore,
                     sourceTotalCount = checkpoint.sourceTotalCount,
                     completedSourceCount = checkpoint.completedSourceCount,
                     failedSourceCount = checkpoint.failedSourceCount,
@@ -306,15 +320,36 @@ class SearchFacade(
 
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun loadNextPage() = runRecoverable("SearchFacade.loadNextPage") {
-        val current = session.value
-        val searchScope = current.scope ?: return@runRecoverable
-        if (current.keyword.isBlank() || current.isRunning) return@runRecoverable
-        val recovery = pageRecovery?.takeIf {
-            it.keyword == current.keyword && it.searchScope == searchScope &&
-                it.page == current.page && it.pendingSourceUrls.isNotEmpty()
+        val expectedGeneration = searchGeneration.value
+        searchStartMutex.withLock {
+            if (!isCurrentGeneration(expectedGeneration)) return@withLock
+            val current = session.value
+            val searchScope = current.scope ?: return@withLock
+            if (current.keyword.isBlank() || current.isRunning || !current.hasMore) return@withLock
+            val generation = expectedGeneration + 1
+            if (!searchGeneration.compareAndSet(expectedGeneration, generation)) return@withLock
+            startSearchLocked(searchScope, current.keyword, current.page + 1, generation, recovery = null)
         }
-        if (!current.hasMore && recovery == null) return@runRecoverable
-        beginSearch(searchScope, current.keyword, recovery?.page ?: current.page.coerceAtLeast(1) + 1, recovery)
+    }
+
+    /** Retries only unfinished sources on the current page; it never advances pagination. */
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun retryFailedSources() = runRecoverable("SearchFacade.retryFailedSources") {
+        val expectedGeneration = searchGeneration.value
+        searchStartMutex.withLock {
+            if (!isCurrentGeneration(expectedGeneration) || pageRecoveryGeneration != expectedGeneration) return@withLock
+            val current = session.value
+            val searchScope = current.scope ?: return@withLock
+            if (current.keyword.isBlank() || current.isRunning) return@withLock
+            val recovery = pageRecovery ?: return@withLock
+            if (recovery.keyword != current.keyword || recovery.searchScope != searchScope ||
+                recovery.page != current.page || recovery.pendingSourceUrls.isEmpty()
+            ) return@withLock
+            // Claim this exact attempt, so cancellation or a newer search cannot revive it.
+            val generation = expectedGeneration + 1
+            if (!searchGeneration.compareAndSet(expectedGeneration, generation)) return@withLock
+            startSearchLocked(searchScope, current.keyword, current.page, generation, recovery)
+        }
     }
 
     fun pauseSearch() {
@@ -492,15 +527,17 @@ class SearchFacade(
     }
 
     private fun publishIfCurrent(generation: Long, sessionState: SearchSessionState) {
-        if (isCurrentGeneration(generation)) {
-            publishSession(sessionState)
-        }
+        publishSession(sessionState, generation)
     }
 
-    private fun publishSession(sessionState: SearchSessionState) {
+    private fun publishSession(sessionState: SearchSessionState, generation: Long? = null) {
         // Source progress retains the scheduling gate; explicit pause/resume updates it directly.
         session.updateAndGet { current ->
-            if (current.isRunning && sessionState.isRunning) sessionState.copy(isPaused = current.isPaused) else sessionState
+            when {
+                generation != null && !isCurrentGeneration(generation) -> current
+                current.isRunning && sessionState.isRunning -> sessionState.copy(isPaused = current.isPaused)
+                else -> sessionState
+            }
         }
     }
 

@@ -419,7 +419,8 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
 
     private var canContinueSearch: Bool {
         isScopeReady && !isShowingInputHelp && !isSearchStopped && !isSearchRunning
-            && recoveryMessage == nil && session?.hasMore == true && session?.isRunning == false
+            && scopeLoadError == nil && startupError == nil && retryMessage == nil
+            && session?.hasMore == true && session?.isRunning == false
             && submittedKeyword?.isEmpty == false
     }
 
@@ -427,7 +428,7 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
         let running = isSearchRunning
         let canRetry = recoveryMessage != nil
         progressView.isHidden = isShowingInputHelp || !running
-        stopButton.setAction(running ? .stop : (canRetry ? .retry : .nextPage))
+        stopButton.setAction(running ? .stop : (canContinueSearch ? .nextPage : .retry))
         stopButton.isHidden =
             !isScopeReady || isShowingInputHelp
             || (!running && !canRetry && !canContinueSearch)
@@ -614,10 +615,10 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
     @objc private func stopSearch() {
         guard canInteractWithSearch else { return }
         guard isSearchRunning else {
-            if recoveryMessage != nil {
-                retrySearch()
-            } else if canContinueSearch {
+            if canContinueSearch {
                 loadNextPage()
+            } else if recoveryMessage != nil {
+                retrySearch()
             }
             return
         }
@@ -695,8 +696,15 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
     }
 
     private func retrySearch() {
-        guard canInteractWithSearch, !isShowingInputHelp, !isSearchRunning, let message = recoveryMessage else { return }
-        if startupError == nil, let session, session.error != nil, session.failedSourceCount > 0 {
+        guard isScopeReady, canInteractWithSearch, !isShowingInputHelp, !isSearchStopped, !isSearchRunning,
+            scopeLoadError == nil, let keyword = submittedKeyword, !keyword.isEmpty,
+            searchField.markedTextRange == nil,
+            searchField.text?.trimmingCharacters(in: .whitespacesAndNewlines) == keyword,
+            let message = recoveryMessage
+        else { return }
+        if startupError == nil, let session, !session.isRunning, session.failedSourceCount > 0,
+            session.keyword == keyword, (session.scope as? NSObject)?.isEqual(selectedScope.toSharedScope()) == true
+        {
             emptyResultPrompt.beginOperation()
             cancelHistorySelection()
             retryMessage = message
@@ -704,10 +712,8 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
             isStartingOperation = true
             progressView.progress = 0
             updateSearchControls()
-            adapter.loadNextPage()
+            adapter.retryFailedSources()
         } else {
-            let keyword = searchField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !keyword.isEmpty else { return }
             performSearch(keyword: keyword, preservingResults: true)
         }
     }
@@ -744,14 +750,16 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
             defer { self.paginationCheckScheduled = false }
             guard self.canInteractWithSearch, self.canContinueSearch, self.resultList.isContentSettled,
                 !self.results.isEmpty,
-                self.tableView.bounds.height > self.tableView.adjustedContentInset.top + self.tableView.adjustedContentInset.bottom
+                self.tableView.bounds.height > self.tableView.adjustedContentInset.top
+                    + self.tableView.adjustedContentInset.bottom
             else { return }
             self.tableView.layoutIfNeeded()
             guard self.resultList.isContentSettled, let page = self.session?.page,
                 page < Int32.max, self.automaticallyRequestedPage != page + 1
             else { return }
             let height = self.tableView.contentSize.height
-            let bottom = self.tableView.contentOffset.y + self.tableView.bounds.height - self.tableView.adjustedContentInset.bottom
+            let bottom =
+                self.tableView.contentOffset.y + self.tableView.bounds.height - self.tableView.adjustedContentInset.bottom
             let pixel = 1 / max(1, self.tableView.traitCollection.displayScale)
             guard height > self.automaticContentHeight, bottom >= height - pixel else { return }
             self.automaticContentHeight = height
