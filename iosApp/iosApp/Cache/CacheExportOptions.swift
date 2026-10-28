@@ -1,13 +1,19 @@
 import Foundation
 
+enum CacheExportDestination: String, Codable, CaseIterable {
+    case share, webDAV
+}
+
 struct CacheExportOptions: Codable, Equatable {
     var chapterScope: String = ""
     var chaptersPerFile: Int = 0
     var charset: String = "UTF-8"
     var includeChapterTitle: Bool = true
     var useReplaceRules: Bool = true
+    var includeImages: Bool = false
     var fileNameScript: String = ""
     var splitFileNameScript: String = ""
+    var destination: CacheExportDestination = .share
 
     static let charsets = ["UTF-8", "UTF-16LE", "UTF-16BE", "GB18030", "GBK", "Big5"]
     static let maximumChapterScopeLength = 8_192
@@ -34,8 +40,10 @@ struct CacheExportOptionsPreferences {
             charset: CacheExportOptions.supportedCharset(saved.charset),
             includeChapterTitle: saved.includeChapterTitle,
             useReplaceRules: saved.useReplaceRules,
+            includeImages: saved.includeImages,
             fileNameScript: Self.safeScript(saved.fileNameScript),
-            splitFileNameScript: Self.safeScript(saved.splitFileNameScript))
+            splitFileNameScript: Self.safeScript(saved.splitFileNameScript),
+            destination: saved.destination)
     }
 
     func save(_ options: CacheExportOptions) {
@@ -43,8 +51,10 @@ struct CacheExportOptionsPreferences {
             charset: CacheExportOptions.supportedCharset(options.charset),
             includeChapterTitle: options.includeChapterTitle,
             useReplaceRules: options.useReplaceRules,
+            includeImages: options.includeImages,
             fileNameScript: Self.safeScript(options.fileNameScript),
-            splitFileNameScript: Self.safeScript(options.splitFileNameScript))
+            splitFileNameScript: Self.safeScript(options.splitFileNameScript),
+            destination: options.destination)
         guard let data = try? JSONEncoder().encode(saved) else { return }
         defaults.set(data, forKey: Self.key)
     }
@@ -58,22 +68,27 @@ struct CacheExportOptionsPreferences {
         var charset: String
         var includeChapterTitle: Bool
         var useReplaceRules: Bool
+        var includeImages: Bool
         var fileNameScript: String
         var splitFileNameScript: String
+        var destination: CacheExportDestination
 
         enum CodingKeys: String, CodingKey {
-            case charset, includeChapterTitle, useReplaceRules, fileNameScript, splitFileNameScript
+            case charset, includeChapterTitle, useReplaceRules, includeImages
+            case fileNameScript, splitFileNameScript, destination
         }
 
         init(
-            charset: String, includeChapterTitle: Bool, useReplaceRules: Bool,
-            fileNameScript: String, splitFileNameScript: String
+            charset: String, includeChapterTitle: Bool, useReplaceRules: Bool, includeImages: Bool,
+            fileNameScript: String, splitFileNameScript: String, destination: CacheExportDestination
         ) {
             self.charset = charset
             self.includeChapterTitle = includeChapterTitle
             self.useReplaceRules = useReplaceRules
+            self.includeImages = includeImages
             self.fileNameScript = fileNameScript
             self.splitFileNameScript = splitFileNameScript
+            self.destination = destination
         }
 
         init(from decoder: Decoder) throws {
@@ -81,8 +96,10 @@ struct CacheExportOptionsPreferences {
             charset = (try? container.decode(String.self, forKey: .charset)) ?? "UTF-8"
             includeChapterTitle = (try? container.decode(Bool.self, forKey: .includeChapterTitle)) ?? true
             useReplaceRules = (try? container.decode(Bool.self, forKey: .useReplaceRules)) ?? true
+            includeImages = (try? container.decode(Bool.self, forKey: .includeImages)) ?? false
             fileNameScript = (try? container.decode(String.self, forKey: .fileNameScript)) ?? ""
             splitFileNameScript = (try? container.decode(String.self, forKey: .splitFileNameScript)) ?? ""
+            destination = (try? container.decode(CacheExportDestination.self, forKey: .destination)) ?? .share
         }
     }
 }

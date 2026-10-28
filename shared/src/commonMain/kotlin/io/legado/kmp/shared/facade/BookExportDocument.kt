@@ -7,21 +7,41 @@ import com.fleeksoft.ksoup.nodes.TextNode
 import com.fleeksoft.ksoup.parser.Parser
 import io.legado.kmp.shared.model.BookChapter
 
-/** An inert, ordered snapshot; original markup and URLs never reach the exported XHTML. */
-internal class BookExportDocument private constructor(private val parts: List<Part>) {
-    val imageSources: List<String> = parts.mapNotNull { (it as? Part.Image)?.source }
-    val imageCount: Int = parts.count { it is Part.Image }
-    val hasReadableText: Boolean = parts.any { it is Part.Text && it.value.isNotBlank() }
+/** An inert, ordered snapshot; image URLs never reach exported markup or TXT image references. */
+internal class BookExportDocument private constructor(private val parts: List<Part>, checkActive: () -> Unit) {
+    val imageSources: List<String> = parts.mapNotNull {
+        checkActive()
+        (it as? Part.Image)?.source
+    }
+    val imageCount: Int = parts.count {
+        checkActive()
+        it is Part.Image
+    }
+    val hasReadableText: Boolean = parts.any {
+        checkActive()
+        it is Part.Text && it.value.isNotBlank()
+    }
 
-    fun renderText(missingImageText: String = "[图片未导出]"): String = buildString {
+    fun renderText(
+        missingImageText: String = "[图片未导出]",
+        imagePaths: Map<String, String> = emptyMap(),
+        checkActive: () -> Unit = {},
+    ): String = buildString {
         for (part in parts) {
+            checkActive()
             when (part) {
                 is Part.Text -> append(part.value)
-                is Part.Image -> append(missingImageText)
+                is Part.Image -> {
+                    val path = part.source?.let(imagePaths::get)?.takeIf {
+                        it.startsWith("Images/") && isExportImageReference(it)
+                    }
+                    if (path == null) append(missingImageText) else append("[图片：").append(path).append(']')
+                }
                 Part.LineBreak -> append('\n')
                 Part.Boundary -> if (isNotEmpty() && last() != '\n') append('\n')
             }
         }
+        checkActive()
     }
 
     fun render(imagePaths: Map<String, String>, missingImageText: String = "[图片未缓存]"): String = buildString {
@@ -91,34 +111,49 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
         )
         private val legacyOptions = Regex("""\s*,\s*(?=\{)""")
 
-        fun parse(chapter: BookChapter, content: String, imageBook: Boolean = false): BookExportDocument {
+        fun parse(
+            chapter: BookChapter,
+            content: String,
+            imageBook: Boolean = false,
+            checkActive: () -> Unit = {},
+        ): BookExportDocument {
+            checkActive()
             require(content.length <= MAX_CONTENT_BYTES && content.encodeToByteArray().size <= MAX_CONTENT_BYTES) {
                 "导出章节超过 16 MiB"
             }
+            checkActive()
             val document = Ksoup.parse(content)
+            checkActive()
             val body = document.body()
             val elements = document.getAllElements()
+            checkActive()
             require(elements.size <= MAX_NODES) { "导出章节节点超过 100000 项" }
             // Unknown angle-bracket prose and ordinary ampersands are not HTML.
             val html = elements.any { element ->
+                checkActive()
                 val name = element.tagName().lowercase()
                 name in blockTags || name in inlineTags || name in removedTags && name != "head"
             } || Ksoup.parse(html = content, parser = Parser.xmlParser()).getAllElements().any {
+                checkActive()
                 it.tagName().lowercase() in setOf("html", "head", "body")
             }
+            checkActive()
             if (!html) {
                 if (imageBook) {
                     val sources = MangaChapterParser.imageSources(chapter, content)
+                    checkActive()
                     if (sources.isNotEmpty()) return BookExportDocument(sources.flatMap {
+                        checkActive()
                         listOf(Part.Image(it, ""), Part.Boundary)
-                    })
+                    }, checkActive)
                 }
                 val parts = mutableListOf<Part>()
                 content.replace("\r\n", "\n").replace('\r', '\n').split('\n').forEach { line ->
+                    checkActive()
                     parts += Part.Text(line)
                     parts += Part.Boundary
                 }
-                return BookExportDocument(parts)
+                return BookExportDocument(parts, checkActive)
             }
 
             // Reuse the reader's legacy ,{options} repair rather than a second HTML regex parser.
@@ -127,12 +162,17 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
             val repaired = if (legacyOptions.containsMatchIn(content)) {
                 MangaChapterParser.imageSources(chapter, content).takeIf { it.size == images.size }
             } else null
+            checkActive()
             val repairedSources = if (repaired == null) emptyMap() else images.zip(repaired).toMap()
             val result = mutableListOf<Part>()
             val pending = ArrayDeque<Visit>()
-            body.childNodes().reversed().forEach { pending.addLast(Visit(it, 0)) }
+            body.childNodes().reversed().forEach {
+                checkActive()
+                pending.addLast(Visit(it, 0))
+            }
             var count = 0
             while (pending.isNotEmpty()) {
+                checkActive()
                 val visit = pending.removeLast()
                 require(++count <= MAX_NODES && visit.depth <= MAX_DEPTH) { "导出章节节点过多或嵌套超过 128 层" }
                 if (visit.closeBlock) {
@@ -147,6 +187,7 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
                         when (name) {
                             "img" -> {
                                 val source = repairedSources[node] ?: MangaChapterParser.imageSources(chapter, node.outerHtml()).firstOrNull()
+                                checkActive()
                                 result += Part.Image(source, node.attr("alt"))
                             }
                             "br", "wbr" -> result += Part.LineBreak
@@ -155,13 +196,17 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
                                     result += Part.Boundary
                                     pending.addLast(visit.copy(closeBlock = true))
                                 }
-                                node.childNodes().reversed().forEach { pending.addLast(Visit(it, visit.depth + 1)) }
+                                node.childNodes().reversed().forEach {
+                                    checkActive()
+                                    pending.addLast(Visit(it, visit.depth + 1))
+                                }
                             }
                         }
                     }
                 }
             }
-            return BookExportDocument(result)
+            checkActive()
+            return BookExportDocument(result, checkActive)
         }
 
         private data class Visit(val node: Node, val depth: Int, val closeBlock: Boolean = false)

@@ -3,6 +3,7 @@ import shared
 
 struct CacheBookExportResult {
     let files: [CacheExportFileLease]
+    let uploadPayloads: [KotlinByteArray]
     let chapterCount: Int
     let readableChapterCount: Int
     let missingChapterCount: Int
@@ -19,10 +20,11 @@ struct CacheBookExportResult {
 
     init(
         files: [CacheExportFileLease], chapterCount: Int, readableChapterCount: Int,
-        missingChapterCount: Int, missingImageCount: Int
+        missingChapterCount: Int, missingImageCount: Int, uploadPayloads: [KotlinByteArray] = []
     ) {
         precondition(!files.isEmpty)
         self.files = files
+        self.uploadPayloads = uploadPayloads
         self.chapterCount = chapterCount
         self.readableChapterCount = readableChapterCount
         self.missingChapterCount = missingChapterCount
@@ -93,7 +95,8 @@ final class CacheBookExporter {
         let settings = BookExportOptions(
             chapterScope: options.chapterScope, chaptersPerFile: count, charset: options.charset,
             includeChapterTitle: options.includeChapterTitle, useReplaceRules: options.useReplaceRules,
-            fileNameScript: options.fileNameScript, splitFileNameScript: options.splitFileNameScript)
+            fileNameScript: options.fileNameScript, splitFileNameScript: options.splitFileNameScript,
+            includeImages: format == .txt && options.includeImages)
         let batch = try await CacheExportAsync.prepareConfigured(
             bookURL: book.bookUrl, format: format, options: settings, facade: facade, onProgress: onProgress)
         try Task.checkCancellation()
@@ -105,12 +108,13 @@ final class CacheBookExporter {
         var missingChapterCount = 0
         var missingImageCount = 0
         var names = Set<String>()
+        let extensionName = format == .txt && options.includeImages ? "zip" : format.rawValue
         do {
             for part in batch.parts {
                 try Task.checkCancellation()
                 let payload = part.export_
-                guard payload.fileExtension == format.rawValue, payload.data.size > 0,
-                    (part.fileName as NSString).pathExtension.lowercased() == format.rawValue,
+                guard payload.fileExtension == extensionName, payload.data.size > 0,
+                    (part.fileName as NSString).pathExtension.lowercased() == extensionName,
                     names.insert(part.fileName.lowercased()).inserted
                 else { throw invalidConfiguration() }
                 totalBytes += Int64(payload.data.size)
@@ -127,7 +131,8 @@ final class CacheBookExporter {
             guard readableChapterCount > 0 else { throw noContent() }
             return CacheBookExportResult(
                 files: files, chapterCount: chapterCount, readableChapterCount: readableChapterCount,
-                missingChapterCount: missingChapterCount, missingImageCount: missingImageCount)
+                missingChapterCount: missingChapterCount, missingImageCount: missingImageCount,
+                uploadPayloads: options.destination == .webDAV ? batch.parts.map { $0.export_.data } : [])
         } catch {
             files.forEach { $0.cleanup() }
             throw error

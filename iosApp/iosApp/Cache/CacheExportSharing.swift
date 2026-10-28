@@ -73,6 +73,10 @@ final class CacheExportSharing: NSObject, UIAdaptivePresentationControllerDelega
     }
 
     private var warningMessage: String? {
+        Self.warningMessage(for: items, failedCount: failedCount, verb: "分享")
+    }
+
+    static func warningMessage(for items: [Item], failedCount: Int, verb: String) -> String? {
         let partialCount = items.filter { $0.result.isPartial }.count
         guard partialCount > 0 || failedCount > 0 else { return nil }
         let missingChapters = items.reduce(0) { $0 + $1.result.missingChapterCount }
@@ -80,7 +84,7 @@ final class CacheExportSharing: NSObject, UIAdaptivePresentationControllerDelega
         var lines = ["完整 \(items.count - partialCount) 本，内容不完整 \(partialCount) 本，失败 \(failedCount) 本。"]
         if missingChapters > 0 { lines.append("已生成文件中缺失 \(missingChapters) 章正文。") }
         if missingImages > 0 { lines.append("已生成文件中缺失 \(missingImages) 张图片。") }
-        lines.append("是否分享已完成的内容？")
+        lines.append("是否\(verb)已完成的内容？")
         return lines.joined(separator: "\n")
     }
 
@@ -151,7 +155,7 @@ final class CacheExportSharing: NSObject, UIAdaptivePresentationControllerDelega
         confirmationDismissal = nil
     }
 
-    private static func dismiss(_ controller: UIViewController) async {
+    static func dismiss(_ controller: UIViewController) async {
         while controller.presentingViewController != nil || controller.viewIfLoaded?.window != nil {
             if !controller.isBeingPresented, !controller.isBeingDismissed,
                 controller.presentingViewController != nil

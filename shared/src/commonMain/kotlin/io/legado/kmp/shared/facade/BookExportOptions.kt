@@ -8,6 +8,7 @@ data class BookExportOptions(
     val useReplaceRules: Boolean = true,
     val fileNameScript: String = "",
     val splitFileNameScript: String = "",
+    val includeImages: Boolean = false,
 ) {
     override fun toString(): String = "BookExportOptions(redacted)"
 }

@@ -32,6 +32,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     private var exportProgress: CacheExportProgress?
     private var exportCancellationRequested = false
     private var exportSharing: CacheExportSharing?
+    private var cloudDelivery: CacheExportCloudDelivery?
     private var exportResults: [String: String] = [:]
     private var exportFormat: CacheExportFormat = .txt
     private var ready = false
@@ -48,8 +49,9 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     deinit {
         loadTask?.cancel()
         exportTask?.cancel()
-        Task { @MainActor [screen, downloads, downloadObservation, exportSharing] in
+        Task { @MainActor [screen, downloads, downloadObservation, exportSharing, cloudDelivery] in
             exportSharing?.cancelUndelivered()
+            cloudDelivery?.cancel()
             screen.unbind()
             if let downloadObservation { downloads.removeObserver(downloadObservation) }
         }
@@ -127,6 +129,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
         if isMovingFromParent || isBeingDismissed || navigationController?.isBeingDismissed == true {
             cancelExport()
             exportSharing?.cancelUndelivered()
+            cloudDelivery?.cancel()
         }
     }
 
@@ -141,6 +144,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
         loadTask?.cancel()
         cancelExport()
         exportSharing?.cancelUndelivered()
+        cloudDelivery?.cancel()
         screen.unbind()
         if let downloadObservation { downloads.removeObserver(downloadObservation) }
         downloadObservation = nil
@@ -353,7 +357,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
         var entries = [
             item(
                 "export.all", title: "导出全部",
-                enabled: exportTask == nil && exportSharing == nil && !visibleBooks.isEmpty
+                enabled: exportTask == nil && exportSharing == nil && cloudDelivery == nil && !visibleBooks.isEmpty
             ) { $0.configureExport($0.visibleBooks, anchor: $0.toolbar.moreButton) },
             item("export.type", title: "导出类型(\(exportFormat.title))") { $0.showExportTypes() },
             item("log", title: "日志") { $0.present(ReaderAppLogDialogViewController(), animated: true) },
@@ -404,12 +408,14 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     }
 
     private func configureExport(_ targets: [Book], anchor: UIView) {
-        guard canInteract, exportTask == nil, exportSharing == nil, !targets.isEmpty else { return }
+        guard canInteract, exportTask == nil, exportSharing == nil, cloudDelivery == nil, !targets.isEmpty else { return }
         let format = exportFormat
         let controller = CacheExportOptionsViewController(
             options: exportOptionsPreferences.load(), format: format
         ) { [weak self, weak anchor] options in
-            guard let self, self.canInteract, self.exportTask == nil, self.exportSharing == nil else { return }
+            guard let self, self.canInteract, self.exportTask == nil, self.exportSharing == nil,
+                self.cloudDelivery == nil
+            else { return }
             self.exportOptionsPreferences.save(options)
             self.export(targets, format: format, options: options, anchor: anchor ?? self.toolbar.moreButton)
         }
@@ -419,7 +425,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     }
 
     private func export(_ targets: [Book], format: CacheExportFormat, options: CacheExportOptions, anchor: UIView) {
-        guard canInteract, exportTask == nil, exportSharing == nil, !targets.isEmpty else { return }
+        guard canInteract, exportTask == nil, exportSharing == nil, cloudDelivery == nil, !targets.isEmpty else { return }
         let id = UUID()
         exportID = id
         exportCancellationRequested = false
@@ -429,6 +435,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
             var prepared: [CacheExportSharing.Item] = []
             var failedCount = 0
             var wasCancelled = false
+            var preparedUploadBytes: Int64 = 0
             defer {
                 for item in prepared {
                     item.result.cleanup()
@@ -479,10 +486,20 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
                         wasCancelled = true
                         break
                     }
+                    if options.destination == .webDAV {
+                        let bytes = result.uploadPayloads.reduce(Int64(0)) { $0 + Int64($1.size) }
+                        guard bytes <= 128 * 1024 * 1024 - preparedUploadBytes else {
+                            result.cleanup()
+                            throw NSError(
+                                domain: "io.legado.cache.export", code: -5,
+                                userInfo: [NSLocalizedDescriptionKey: "多书上传总量超过 128 MiB，请分批导出"])
+                        }
+                        preparedUploadBytes += bytes
+                    }
                     prepared.append(.init(bookURL: book.bookUrl, result: result))
                     self.exportResults[book.bookUrl] =
                         result.isPartial
-                        ? "内容不完整：\(result.missingContentMessage)（待分享）" : "已准备 \(result.files.count) 个文件，待分享"
+                        ? "内容不完整：\(result.missingContentMessage)（待交付）" : "已准备 \(result.files.count) 个文件，待交付"
                 } catch {
                     if error is CancellationError || Task.isCancelled {
                         self.exportResults[book.bookUrl] = "已取消导出"
@@ -502,6 +519,30 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
             }
             guard self.canInteract else { return }
             let items = prepared
+            if options.destination == .webDAV {
+                let delivery = CacheExportCloudDelivery(items: items, failedCount: failedCount)
+                self.cloudDelivery = delivery
+                prepared = []
+                delivery.present(
+                    from: self,
+                    canContinue: { [weak self] in
+                        guard let self, !self.hasLeftPage, let window = self.viewIfLoaded?.window else { return false }
+                        return AppLockManager.shared.isUnlocked(in: window)
+                    }
+                ) { [weak self, weak delivery] outcome in
+                    guard let self, let delivery, self.cloudDelivery === delivery else { return }
+                    self.cloudDelivery = nil
+                    for item in items { self.exportResults[item.bookURL] = outcome.message(for: item) }
+                    guard !self.hasLeftPage else { return }
+                    self.reloadList()
+                    if self.canInteract {
+                        let uploaded = outcome.uploaded.values.reduce(0, +)
+                        let uncertain = outcome.uncertain.isEmpty ? "" : "，部分状态不确定，请检查云端"
+                        self.showTransientMessage("WebDAV 已上传 \(uploaded) 个文件\(uncertain)")
+                    }
+                }
+                return
+            }
             let sharing = CacheExportSharing(items: items, failedCount: failedCount)
             self.exportSharing = sharing
             prepared = []
@@ -603,7 +644,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
                 cacheText: text, message: message, isLocal: book.isLocal,
                 isRunning: state?.isActive == true, isStopping: state?.phase == .stopping,
                 canDownload: ready && exportBookURL != url,
-                canExport: exportTask == nil && exportSharing == nil && state?.isActive != true,
+                canExport: exportTask == nil && exportSharing == nil && cloudDelivery == nil && state?.isActive != true,
                 isExporting: isExporting, exportProgress: progress?.fraction))
         cell.onDownload = { [weak self] in
             guard let self, self.canInteract, let current = self.visibleBooks.first(where: { $0.bookUrl == url }) else {

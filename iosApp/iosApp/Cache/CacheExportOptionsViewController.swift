@@ -3,7 +3,7 @@ import UIKit
 @MainActor
 final class CacheExportOptionsViewController: UITableViewController, UITextFieldDelegate {
     private enum Section: Int, CaseIterable {
-        case chapters, format, content, fileNames
+        case chapters, format, content, fileNames, destination
     }
 
     private let format: CacheExportFormat
@@ -24,6 +24,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     private let splitSwitch = UISwitch()
     private let titleSwitch = UISwitch()
     private let replaceSwitch = UISwitch()
+    private let imagesSwitch = UISwitch()
     private let charsetButton = UIButton(type: .system)
 
     private lazy var cancelButton = UIBarButtonItem(
@@ -86,6 +87,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         splitSwitch.addTarget(self, action: #selector(splitChanged), for: .valueChanged)
         configure(titleSwitch, title: "章节标题", identifier: "includeChapterTitle", value: draft.includeChapterTitle)
         configure(replaceSwitch, title: "替换净化", identifier: "useReplaceRules", value: draft.useReplaceRules)
+        configure(imagesSwitch, title: "TXT与图片（ZIP）", identifier: "includeImages", value: draft.includeImages)
         configureCharsetButton()
     }
 
@@ -121,6 +123,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         case .format: return format.title
         case .content: return "正文"
         case .fileNames: return "文件名"
+        case .destination: return "导出目标"
         case nil: return nil
         }
     }
@@ -128,9 +131,10 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch Section(rawValue: section) {
         case .chapters: return selectsChapters ? 3 : 2
-        case .format: return format == .epub && splitsEPUB ? 2 : 1
+        case .format: return format == .txt || splitsEPUB ? 2 : 1
         case .content: return 2
         case .fileNames: return format == .txt ? 1 : 2
+        case .destination: return CacheExportDestination.allCases.count
         case nil: return 0
         }
     }
@@ -139,21 +143,18 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         switch Section(rawValue: indexPath.section) {
         case .chapters:
             if indexPath.row < 2 {
-                let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
                 let selected = (indexPath.row == 1) == selectsChapters
-                cell.textLabel?.text = indexPath.row == 0 ? "全部章节" : "指定章节"
-                cell.textLabel?.font = .preferredFont(forTextStyle: .body)
-                cell.textLabel?.adjustsFontForContentSizeCategory = true
-                cell.textLabel?.numberOfLines = 0
-                cell.textLabel?.lineBreakMode = .byWordWrapping
-                cell.accessoryType = selected ? .checkmark : .none
-                cell.accessibilityTraits = selected ? [.button, .selected] : .button
-                cell.accessibilityIdentifier = "cache.export.options.\(indexPath.row == 0 ? "allChapters" : "selectedChapters")"
-                return cell
+                return selectionCell(
+                    title: indexPath.row == 0 ? "全部章节" : "指定章节", selected: selected,
+                    identifier: indexPath.row == 0 ? "allChapters" : "selectedChapters")
             }
             return controlCell(title: "章节范围", control: scopeField)
         case .format:
-            if format == .txt { return controlCell(title: "字符集", control: charsetButton) }
+            if format == .txt {
+                return indexPath.row == 0
+                    ? controlCell(title: "字符集", control: charsetButton)
+                    : controlCell(title: "TXT与图片（ZIP）", control: imagesSwitch, inline: true)
+            }
             if indexPath.row == 0 { return controlCell(title: "EPUB 分卷", control: splitSwitch, inline: true) }
             return controlCell(title: "每卷章数", control: countField)
         case .content:
@@ -164,6 +165,11 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
             return indexPath.row == 0
                 ? controlCell(title: "文件名 JS (name, author)", control: fileNameEditor)
                 : controlCell(title: "分卷文件名 JS (name, author, epubIndex)", control: splitFileNameEditor)
+        case .destination:
+            let destination = CacheExportDestination.allCases[indexPath.row]
+            return selectionCell(
+                title: destination == .share ? "系统分享" : "WebDAV", selected: destination == draft.destination,
+                identifier: "destination.\(destination.rawValue)")
         case nil:
             return UITableViewCell(style: .default, reuseIdentifier: nil)
         }
@@ -171,12 +177,24 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard canInteract, indexPath.section == Section.chapters.rawValue, indexPath.row < 2 else { return }
-        let selected = indexPath.row == 1
-        guard selectsChapters != selected else { return }
-        scopeField.resignFirstResponder()
-        selectsChapters = selected
-        tableView.reloadSections(IndexSet(integer: Section.chapters.rawValue), with: .none)
+        guard canInteract else { return }
+        switch Section(rawValue: indexPath.section) {
+        case .chapters:
+            guard indexPath.row < 2 else { return }
+            let selected = indexPath.row == 1
+            guard selectsChapters != selected else { return }
+            scopeField.resignFirstResponder()
+            selectsChapters = selected
+            tableView.reloadSections(IndexSet(integer: Section.chapters.rawValue), with: .none)
+        case .destination:
+            let destination = CacheExportDestination.allCases[indexPath.row]
+            guard draft.destination != destination else { return }
+            view.endEditing(true)
+            draft.destination = destination
+            tableView.reloadSections(IndexSet(integer: Section.destination.rawValue), with: .none)
+        default:
+            break
+        }
     }
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -278,6 +296,19 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         return cell
     }
 
+    private func selectionCell(title: String, selected: Bool, identifier: String) -> UITableViewCell {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        cell.textLabel?.text = title
+        cell.textLabel?.font = .preferredFont(forTextStyle: .body)
+        cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.numberOfLines = 0
+        cell.textLabel?.lineBreakMode = .byWordWrapping
+        cell.accessoryType = selected ? .checkmark : .none
+        cell.accessibilityTraits = selected ? [.button, .selected] : .button
+        cell.accessibilityIdentifier = "cache.export.options.\(identifier)"
+        return cell
+    }
+
     @objc private func splitChanged() {
         guard canInteract else { return }
         countField.resignFirstResponder()
@@ -344,6 +375,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         }
         options.includeChapterTitle = titleSwitch.isOn
         options.useReplaceRules = replaceSwitch.isOn
+        options.includeImages = format == .txt && imagesSwitch.isOn
         options.fileNameScript = fileNameEditor.text ?? ""
         options.splitFileNameScript = splitFileNameEditor.text ?? ""
         for (script, editor, row, title) in [

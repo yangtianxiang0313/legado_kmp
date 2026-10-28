@@ -30,9 +30,9 @@ internal suspend fun bookExportFileName(
     val context = currentCoroutineContext()
     val checkActive: () -> Unit = { context.ensureActive() }
     checkActive()
-    requireBookExport(extension.length <= 16, "仅支持 TXT 或 EPUB 导出文件名")
+    requireBookExport(extension.length <= 16, "仅支持 TXT、EPUB 或 ZIP 导出文件名")
     val suffix = extension.trim().lowercase()
-    requireBookExport(suffix == "txt" || suffix == "epub", "仅支持 TXT 或 EPUB 导出文件名")
+    requireBookExport(suffix == "txt" || suffix == "epub" || suffix == "zip", "仅支持 TXT、EPUB 或 ZIP 导出文件名")
     requireBookExport(partIndex == null || partIndex > 0, "导出分卷序号必须从 1 开始")
     val budget = BookExportBudget(checkActive)
     val metadataBytes = budget.textBytes(book.name, BookExportLimits.METADATA_BYTES) +

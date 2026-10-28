@@ -52,10 +52,11 @@ internal class BookExportEngine(
         val volumes = bookExportVolumes(selected, options.chaptersPerFile, extension, checkActive)
         requireBookExport(!options.useReplaceRules || transform != null, "正文替换规则服务不可用，无法导出")
         if (extension == "txt") validateBookExportCharset(options.charset)
+        val outputExtension = if (extension == "txt" && options.includeImages) "zip" else extension
         val batchBudget = BookExportBatchBudget(budget, checkActive)
         val fileNames = volumes.indices.map { index ->
             checkActive()
-            bookExportFileName(book, extension, if (options.chaptersPerFile > 0) index + 1 else null, options)
+            bookExportFileName(book, outputExtension, if (options.chaptersPerFile > 0) index + 1 else null, options)
                 .also {
                     checkActive()
                     batchBudget.reserveFileName(it)
@@ -67,22 +68,36 @@ internal class BookExportEngine(
         progress(0, selected.size, onProgress, checkActive)
         for ((index, volume) in volumes.withIndex()) {
             checkActive()
-            val state = State()
             val partProgress: (BookExportProgress) -> Unit = { value ->
                 progress(completed + value.completed, selected.size, onProgress, checkActive)
             }
-            val bytes = when (extension) {
-                "txt" -> txt(book, volume, state, budget, partProgress, checkActive, options)
-                else -> epub(book, volume, state, budget, partProgress, checkActive, options, batchBudget)
+            val export = if (outputExtension == "zip") {
+                BookExportTxtArchive(book, images, budget, batchBudget, checkActive).prepare(
+                    directory = volume,
+                    fileName = fileNames[index],
+                    options = options,
+                    onProgress = partProgress,
+                    readChapter = { chapter ->
+                        val source = chapterContent(book, chapter, budget, checkActive, options)
+                        BookExportTxtChapter(source.chapter, source.body, source.hasContent)
+                    },
+                )
+            } else {
+                val state = State()
+                val bytes = when (extension) {
+                    "txt" -> txt(book, volume, state, budget, partProgress, checkActive, options)
+                    else -> epub(book, volume, state, budget, partProgress, checkActive, options, batchBudget)
+                }
+                result(bytes, extension, volume.size, state)
             }
             checkActive()
-            batchBudget.accept(bytes)
-            parts += BookExportPart(fileNames[index], result(bytes, extension, volume.size, state))
+            batchBudget.accept(export.data)
+            parts += BookExportPart(fileNames[index], export)
             completed += volume.size
-            readable += state.readable
+            readable += export.readableChapterCount
         }
         // A missing-only volume is valid only when another selected volume has real content.
-        requireReadable(readable, txt = extension == "txt")
+        requireReadable(readable, txt = outputExtension == "txt")
         checkActive()
         return BookExportBatchResult(parts.toList())
     }
