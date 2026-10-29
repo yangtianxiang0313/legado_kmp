@@ -56,11 +56,14 @@ internal class AnalyzeRuleLegacyJsSupport(
             putAll(sourceHeaderBindings)
             putAll(additionalBindings)
         }
+        val bindingPreamble = analyzeRule.prepareVariableBindings(coroutineContext)
+        val jsVariables = buildLegacyJsVariables(contentValue, previousResult, effectiveBindings)
         val effectiveRuleData = buildLegacyRuleData(contentValue, effectiveBindings)
-        val jsResult = runtime.execute(
-            script = analyzeRule.prepareVariableBindings(coroutineContext) + rule,
+        val primitiveResult = (runtime as? LegacySourceJsRuntime)?.executePrimitiveRule(rule, legacySource, jsVariables)
+        val jsResult = primitiveResult ?: runtime.execute(
+            script = bindingPreamble + rule,
             source = legacySource,
-            variables = buildLegacyJsVariables(contentValue, previousResult, effectiveBindings),
+            variables = jsVariables,
             connect = { urlRule, headerJson ->
                 val availableGateway = gateway ?: throw missingLegacyJsNetworkCapability()
                 availableGateway.executeForLegacyJs(

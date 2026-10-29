@@ -42,6 +42,15 @@ class LegacySourceJsRuntime(
     private val scriptCache = LegacySourceScriptCache()
     private val compiledExecution = LegacyCompiledExecution()
     private val librarySupport = LegacySourceJsLibrarySupport(sourceStateStore)
+    private val sourceSnapshotCache = LegacySourceSnapshotCache()
+
+    internal suspend fun executePrimitiveRule(
+        script: String,
+        source: BookSource,
+        variables: Map<String, Any?>,
+    ): JsResult? = executeLegacyPrimitiveRule(script, source, variables, executionTimeoutMs) {
+        sourceSnapshotCache.code(source)
+    }
 
     /**
      * Remove cached scope/script for a given jsLib.
@@ -61,6 +70,7 @@ class LegacySourceJsRuntime(
     fun clearScopes() {
         scriptCache.clear()
         compiledExecution.clear()
+        sourceSnapshotCache.clear()
         LegacyCompiledShim.clear()
     }
 
@@ -931,7 +941,7 @@ class LegacySourceJsRuntime(
                     val inputs = buildString {
                         append(buildVariablesCode(variables))
                         appendLine()
-                        append(buildSourceSnapshotCode(source))
+                        append(sourceSnapshotCache.code(source))
                         appendLine()
                     }
                     val execution = buildLegacyJsDomExecution(library, cachedNormalized)
