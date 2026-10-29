@@ -271,6 +271,9 @@ class BookRepositoryImpl(
     override suspend fun mergeWebFileMetadataIfUnchanged(expectedOnlineBook: Book, expectedLocalBook: Book): Book? =
         mergeImportedWebFileMetadata(database, expectedOnlineBook, expectedLocalBook, ::mapToBook)
 
+    override suspend fun associateRemoteOriginIfUnchanged(remoteOrigin: String, expectedLocalBook: Book): Book? =
+        associateImportedRemoteBookOrigin(database, remoteOrigin, expectedLocalBook, ::mapToBook)
+
     override suspend fun insertPreviewIfAbsent(book: Book): Book {
         require(book.bookUrl.isNotBlank()) { "Book URL is empty" }
         val context = currentCoroutineContext()

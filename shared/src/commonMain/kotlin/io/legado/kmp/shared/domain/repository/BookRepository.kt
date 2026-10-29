@@ -115,6 +115,15 @@ interface BookRepository {
     suspend fun mergeWebFileMetadataIfUnchanged(expectedOnlineBook: Book, expectedLocalBook: Book): Book?
 
     /**
+     * Associate a remote origin with a still-matching local import. Compare URL/local identity,
+     * origin, type and raw variable before writing only origin/variable. Preserve archive origins,
+     * other remote primary origins and all latest progress, raw config, metadata and related rows.
+     * Return null for missing/changed snapshots; cancellation before commit rolls back. A successful
+     * commit is returned without any post-commit query or cancellation check.
+     */
+    suspend fun associateRemoteOriginIfUnchanged(remoteOrigin: String, expectedLocalBook: Book): Book?
+
+    /**
      * Explicitly prepare a NOT_SHELF book only if its URL is absent, in one transaction.
      * An existing row is returned unchanged, including its latest source, type and raw JSON.
      * Does not write chapters, bookmarks or content caches.

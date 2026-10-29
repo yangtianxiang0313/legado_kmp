@@ -1,12 +1,15 @@
 import shared
 import UIKit
-import UniformTypeIdentifiers
 
+@MainActor
 final class RemoteBookViewController: UIViewController, NavigationCustomToolbarProviding, UITableViewDataSource,
-    UITableViewDelegate, UIDocumentPickerDelegate
+    UITableViewDelegate
 {
     private let screen: BookshelfScreenAdapter
     private let path: String?
+    private let browser: Result<RemoteBookBrowserClient, Error>
+    private lazy var operation = RemoteBookOperation(owner: self, screen: screen, browser: browser)
+    private var hasLoaded = false
     private var remoteBooks: [RemoteBook] = []
     private let topBar = NavigationToolbarView()
     private let titleLabel = UILabel()
@@ -20,9 +23,14 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
         path == nil ? L10n.Bookshelf.remoteTitle : path?.remoteBookLastPathComponentFallback ?? L10n.Bookshelf.remoteTitle
     }
 
-    init(screen: BookshelfScreenAdapter, path: String? = nil) {
+    convenience init(screen: BookshelfScreenAdapter, path: String? = nil) {
+        self.init(screen: screen, path: path, browser: Result { try RemoteBookBrowserClient() })
+    }
+
+    private init(screen: BookshelfScreenAdapter, path: String?, browser: Result<RemoteBookBrowserClient, Error>) {
         self.screen = screen
         self.path = path
+        self.browser = browser
         super.init(nibName: nil, bundle: nil)
         title = headerTitleText
     }
@@ -36,12 +44,60 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
         super.viewDidLoad()
         view.backgroundColor = AndroidReplicaTheme.background
         configureViews()
-        loadRemoteBooks()
+        operation.onStateChanged = { [weak self] message, canCancel in
+            self?.renderOperation(message: message, canCancel: canCancel)
+        }
+        operation.onBooksLoaded = { [weak self] books in
+            guard let self else { return }
+            self.hasLoaded = true
+            self.remoteBooks = books.sorted { lhs, rhs in
+                if lhs.isDir != rhs.isDir { return lhs.isDir && !rhs.isDir }
+                return lhs.filename.localizedCaseInsensitiveCompare(rhs.filename) == .orderedAscending
+            }
+            self.renderBooks()
+        }
+        operation.onLoadFailed = { [weak self] message in
+            guard let self else { return }
+            self.tableView.isHidden = self.remoteBooks.isEmpty
+            self.stateView.apply(self.remoteBooks.isEmpty ? .error(message) : .hidden)
+        }
+        operation.onReady = { [weak self] in self?.resumeBrowser() }
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        DispatchQueue.main.async { [weak self] in
+            self?.operation.appear()
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingFromParent || isBeingDismissed || navigationController?.isBeingDismissed == true
+            || navigationController?.topViewController !== self
+        {
+            operation.disappear()
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        operation.ownerDidDisappear()
+    }
+
+    override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        if parent == nil, isViewLoaded { operation.disappear() }
+    }
+
+    private func resumeBrowser() {
+        guard !operation.isBusy else { return }
+        if !hasLoaded || operation.needsReload { loadRemoteBooks() }
     }
 
     private func configureViews() {
@@ -74,7 +130,8 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
         tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 12, right: 0)
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.register(AndroidReplicaRemoteBookCell.self, forCellReuseIdentifier: AndroidReplicaRemoteBookCell.reuseIdentifier)
+        tableView.register(
+            AndroidReplicaRemoteBookCell.self, forCellReuseIdentifier: AndroidReplicaRemoteBookCell.reuseIdentifier)
         let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleRemoteBookLongPress(_:)))
         tableView.addGestureRecognizer(longPressRecognizer)
 
@@ -108,7 +165,8 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
             uploadButton.widthAnchor.constraint(equalToConstant: 40),
             uploadButton.heightAnchor.constraint(equalToConstant: 40),
 
-            refreshButton.trailingAnchor.constraint(equalTo: path == nil ? uploadButton.leadingAnchor : topBar.trailingAnchor, constant: -8),
+            refreshButton.trailingAnchor.constraint(
+                equalTo: path == nil ? uploadButton.leadingAnchor : topBar.trailingAnchor, constant: -8),
             refreshButton.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
             refreshButton.widthAnchor.constraint(equalToConstant: 40),
             refreshButton.heightAnchor.constraint(equalToConstant: 40),
@@ -141,6 +199,7 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
     }
 
     @objc private func handleBack() {
+        operation.disappear()
         navigationController?.popViewController(animated: true)
     }
 
@@ -150,8 +209,11 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let remoteBook = remoteBooks[indexPath.row]
-        let cell = tableView.dequeueReusableCell(withIdentifier: AndroidReplicaRemoteBookCell.reuseIdentifier, for: indexPath) as! AndroidReplicaRemoteBookCell
+        let cell =
+            tableView.dequeueReusableCell(withIdentifier: AndroidReplicaRemoteBookCell.reuseIdentifier, for: indexPath)
+            as! AndroidReplicaRemoteBookCell
         cell.configure(remoteBook: remoteBook)
+        cell.isUserInteractionEnabled = !operation.isBusy
         cell.onMore = { [weak self] in
             self?.showRemoteBookActionSheet(remoteBook)
         }
@@ -160,10 +222,12 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard operation.canStart, remoteBooks.indices.contains(indexPath.row) else { return }
         let remoteBook = remoteBooks[indexPath.row]
         if remoteBook.isDir {
             navigationController?.pushViewController(
-                RemoteBookViewController(screen: screen, path: remoteBook.path).configuredForDrillDownPresentation(),
+                RemoteBookViewController(screen: screen, path: remoteBook.path, browser: browser)
+                    .configuredForDrillDownPresentation(),
                 animated: true
             )
         } else {
@@ -172,10 +236,10 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
     }
 
     @objc private func handleRemoteBookLongPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
-        guard gestureRecognizer.state == .began else { return }
+        guard gestureRecognizer.state == .began, operation.canStart else { return }
         let location = gestureRecognizer.location(in: tableView)
         guard let indexPath = tableView.indexPathForRow(at: location),
-              remoteBooks.indices.contains(indexPath.row)
+            remoteBooks.indices.contains(indexPath.row)
         else {
             return
         }
@@ -187,6 +251,8 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
     }
 
     private func showRemoteBookActionSheet(_ remoteBook: RemoteBook) {
+        guard operation.canStart else { return }
+        let generation = operation.interactionGeneration
         var actions: [AndroidReplicaOptionSheetViewController.Option] = []
         if remoteBook.isDir == false {
             actions.append(
@@ -195,7 +261,8 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
                     systemImage: "square.and.arrow.down",
                     isSelected: false
                 ) { [weak self] in
-                    self?.downloadAndImport(remoteBook)
+                    guard let self, self.operation.acceptsInteraction(generation) else { return }
+                    self.downloadAndImport(remoteBook)
                 }
             )
         }
@@ -206,7 +273,8 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
                 isSelected: false,
                 isDestructive: true
             ) { [weak self] in
-                self?.confirmDelete(remoteBook)
+                guard let self, self.operation.acceptsInteraction(generation) else { return }
+                self.confirmDelete(remoteBook)
             }
         )
         actions.append(
@@ -230,111 +298,35 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
     }
 
     @objc private func refreshRemoteBooks() {
-        loadRemoteBooks()
+        if operation.isBusy { operation.cancel() } else { loadRemoteBooks() }
     }
 
     @objc private func openUploadPicker() {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.plainText, .text, .epub], asCopy: true)
-        picker.allowsMultipleSelection = true
-        picker.delegate = self
-        present(picker, animated: true)
-    }
-
-    func documentPicker(_: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        uploadLocalBooks(from: urls)
+        guard path == nil else { return }
+        operation.chooseUploads()
     }
 
     private func loadRemoteBooks() {
-        showLoading(message: L10n.Bookshelf.remoteLoading)
+        guard operation.canStart else { return }
         tableView.isHidden = remoteBooks.isEmpty
         stateView.apply(.loading(L10n.Bookshelf.remoteLoading))
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let books = try await self.screen.loadRemoteBooks(path: self.path)
-                await MainActor.run {
-                    self.remoteBooks = books.sorted { lhs, rhs in
-                        if lhs.isDir != rhs.isDir { return lhs.isDir && !rhs.isDir }
-                        return lhs.filename.localizedCaseInsensitiveCompare(rhs.filename) == .orderedAscending
-                    }
-                    self.hideLoading()
-                    self.tableView.reloadData()
-                    if self.remoteBooks.isEmpty {
-                        self.tableView.isHidden = true
-                        self.stateView.apply(.empty(L10n.Bookshelf.remoteEmpty))
-                    } else {
-                        self.tableView.isHidden = false
-                        self.stateView.apply(.hidden)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.hideLoading()
-                    self.tableView.isHidden = self.remoteBooks.isEmpty
-                    self.stateView.apply(self.remoteBooks.isEmpty ? .error(error.userFacingMessage) : .hidden)
-                    self.showMessage(error.userFacingMessage)
-                }
-            }
-        }
+        operation.load(path: path)
     }
 
     private func downloadAndImport(_ remoteBook: RemoteBook) {
-        showLoading(message: L10n.Bookshelf.remoteDownloading)
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                _ = try await self.screen.downloadAndImportRemoteBook(remoteBook)
-                await MainActor.run {
-                    self.hideLoading()
-                    self.showMessage(String(format: L10n.Bookshelf.remoteImported, remoteBook.filename))
-                }
-            } catch {
-                await MainActor.run {
-                    self.hideLoading()
-                    self.showMessage(error.userFacingMessage)
-                }
-            }
-        }
-    }
-
-    private func uploadLocalBooks(from urls: [URL]) {
-        guard urls.isEmpty == false else { return }
-        showLoading(message: L10n.Bookshelf.remoteUploading)
-        Task { [weak self] in
-            guard let self else { return }
-            var successCount = 0
-            var failedCount = 0
-            for url in urls {
-                do {
-                    let uploaded = try await self.screen.uploadRemoteBook(path: url.path)
-                    successCount += 1
-                    await MainActor.run {
-                        self.remoteBooks.removeAll { $0.path == uploaded.path || $0.filename == uploaded.filename }
-                        self.remoteBooks.append(uploaded)
-                    }
-                } catch {
-                    failedCount += 1
-                }
-            }
-            await MainActor.run {
-                self.hideLoading()
-                self.loadRemoteBooks()
-                if urls.count == 1, failedCount == 0, let filename = urls.first?.lastPathComponent {
-                    self.showMessage(String(format: L10n.Bookshelf.remoteUploaded, filename))
-                } else {
-                    self.showMessage(L10n.Bookshelf.batchResult(successCount: successCount, failedCount: failedCount))
-                }
-            }
-        }
+        operation.downloadAndImport(remoteBook, groupID: max(0, screen.currentSelectedGroupId))
     }
 
     private func confirmDelete(_ remoteBook: RemoteBook) {
+        guard operation.canStart else { return }
+        let generation = operation.interactionGeneration
         let controller = AndroidReplicaRemoteBookConfirmSheetViewController(
             titleText: L10n.Bookshelf.remoteDeleteTitle,
             messageText: String(format: L10n.Bookshelf.remoteDeleteMessage, remoteBook.filename),
             confirmTitle: L10n.Common.delete
         ) { [weak self] in
-            self?.deleteRemoteBook(remoteBook)
+            guard let self, self.operation.acceptsInteraction(generation) else { return }
+            self.operation.delete(remoteBook)
         }
         present(
             controller.wrappedInReaderBottomSheet(fixedHeight: 300),
@@ -342,52 +334,26 @@ final class RemoteBookViewController: UIViewController, NavigationCustomToolbarP
         )
     }
 
-    private func deleteRemoteBook(_ remoteBook: RemoteBook) {
-        showLoading()
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await self.screen.deleteRemoteBook(remoteBook)
-                await MainActor.run {
-                    self.remoteBooks.removeAll { $0.path == remoteBook.path }
-                    self.hideLoading()
-                    self.tableView.reloadData()
-                    if self.remoteBooks.isEmpty {
-                        self.tableView.isHidden = true
-                        self.stateView.apply(.empty(L10n.Bookshelf.remoteEmpty))
-                    } else {
-                        self.tableView.isHidden = false
-                        self.stateView.apply(.hidden)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.hideLoading()
-                    self.showMessage(error.userFacingMessage)
-                }
-            }
-        }
+    private func renderOperation(message: String?, canCancel: Bool) {
+        let wasBusy = loadingIndicator.isAnimating
+        if message != nil { loadingIndicator.startAnimating() } else { loadingIndicator.stopAnimating() }
+        titleLabel.text = message ?? headerTitleText
+        refreshButton.setImage(UIImage(systemName: message == nil ? "arrow.clockwise" : "stop.fill"), for: .normal)
+        refreshButton.accessibilityLabel = message == nil ? L10n.Common.refresh : L10n.Common.cancel
+        refreshButton.isEnabled = message == nil || canCancel
+        refreshButton.alpha = refreshButton.isEnabled ? 1 : 0.45
+        uploadButton.isEnabled = message == nil
+        uploadButton.alpha = message == nil ? 1 : 0.45
+        tableView.isUserInteractionEnabled = message == nil
+        tableView.accessibilityElementsHidden = message != nil
+        stateView.isUserInteractionEnabled = message == nil
+        if wasBusy != (message != nil) { tableView.reloadData() }
+        if message == nil { renderBooks() }
     }
 
-    private func showLoading(message: String = L10n.Bookshelf.remoteLoading) {
-        loadingIndicator.startAnimating()
-        titleLabel.text = message
-        refreshButton.isEnabled = false
-        uploadButton.isEnabled = false
-        refreshButton.alpha = 0.45
-        uploadButton.alpha = 0.45
-    }
-
-    private func hideLoading() {
-        loadingIndicator.stopAnimating()
-        titleLabel.text = headerTitleText
-        refreshButton.isEnabled = true
-        uploadButton.isEnabled = true
-        refreshButton.alpha = 1
-        uploadButton.alpha = path == nil ? 1 : 0
-    }
-
-    private func showMessage(_ message: String) {
-        showTransientMessage(message)
+    private func renderBooks() {
+        tableView.reloadData()
+        tableView.isHidden = remoteBooks.isEmpty
+        stateView.apply(remoteBooks.isEmpty ? .empty(L10n.Bookshelf.remoteEmpty) : .hidden)
     }
 }

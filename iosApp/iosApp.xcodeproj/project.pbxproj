@@ -317,6 +317,8 @@
 		B100000000000000000000A2 /* LocalBookFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000A2 /* LocalBookFileStore.swift */; };
 		B100000000000000000000A3 /* ReaderPaginationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000A3 /* ReaderPaginationCoordinator.swift */; };
 		A10000000000000000000062 /* RemoteBookViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* RemoteBookViewController.swift */; };
+		F02A48010000000000000001 /* RemoteBookBrowserClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A48020000000000000001; };
+		F02A48010000000000000002 /* RemoteBookOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A48020000000000000002; };
 		A10000000000000000000074 /* AndroidReplicaRemoteBookViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000074 /* AndroidReplicaRemoteBookViews.swift */; };
 		A10000000000000000000006 /* DiscoveryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* DiscoveryViewController.swift */; };
 		A10000000000000000000061 /* ExploreShowViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* ExploreShowViewController.swift */; };
@@ -1036,6 +1038,8 @@
 		E2000000000000000000000C /* ReaderSourceChangeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSourceChangeClient.swift; sourceTree = "<group>"; };
 		DA9EFB55242844DD8E22B8E2 /* ReaderLoadFailureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLoadFailureView.swift; sourceTree = "<group>"; };
 		A20000000000000000000062 /* RemoteBookViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookViewController.swift; sourceTree = "<group>"; };
+		F02A48020000000000000001 /* RemoteBookBrowserClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookBrowserClient.swift; sourceTree = "<group>"; };
+		F02A48020000000000000002 /* RemoteBookOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookOperation.swift; sourceTree = "<group>"; };
 		A20000000000000000000074 /* AndroidReplicaRemoteBookViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidReplicaRemoteBookViews.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* DiscoveryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryViewController.swift; sourceTree = "<group>"; };
 		A20000000000000000000061 /* ExploreShowViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreShowViewController.swift; sourceTree = "<group>"; };
@@ -1789,6 +1793,8 @@
 				B200000000000000000000A1 /* BookshelfLocalImport.swift */,
 				B200000000000000000000A2 /* LocalBookFileStore.swift */,
 				A20000000000000000000062 /* RemoteBookViewController.swift */,
+				F02A48020000000000000001 /* RemoteBookBrowserClient.swift */,
+				F02A48020000000000000002 /* RemoteBookOperation.swift */,
 				A20000000000000000000074 /* AndroidReplicaRemoteBookViews.swift */,
 				A20000000000000000000020 /* BookshelfRootView.swift */,
 				BF0190020000000000000001 /* BookshelfFolderGroupCell.swift */,
@@ -2761,6 +2767,8 @@
 				B100000000000000000000A1 /* BookshelfLocalImport.swift in Sources */,
 				B100000000000000000000A2 /* LocalBookFileStore.swift in Sources */,
 				A10000000000000000000062 /* RemoteBookViewController.swift in Sources */,
+				F02A48010000000000000001 /* RemoteBookBrowserClient.swift in Sources */,
+				F02A48010000000000000002 /* RemoteBookOperation.swift in Sources */,
 				A10000000000000000000074 /* AndroidReplicaRemoteBookViews.swift in Sources */,
 				A10000000000000000000006 /* DiscoveryViewController.swift in Sources */,
 				A10000000000000000000061 /* ExploreShowViewController.swift in Sources */,

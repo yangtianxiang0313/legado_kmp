@@ -148,6 +148,11 @@ AND cover_url IS :expected_cover_url AND intro IS :expected_intro;
 updateVariable:
 UPDATE books SET variable = ? WHERE book_url = ?;
 
+associateRemoteOriginIfUnchanged:
+UPDATE books SET origin = :origin, variable = :variable
+WHERE book_url = :book_url AND origin = :expected_origin AND type = :expected_type
+AND variable IS :expected_variable;
+
 updateShelfType:
 UPDATE books SET type = ? WHERE book_url = ?;
 

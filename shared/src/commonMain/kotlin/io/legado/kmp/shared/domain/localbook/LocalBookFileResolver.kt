@@ -69,12 +69,12 @@ class LocalBookFileResolver(
             return archiveRecovered
         }
 
-        val remoteRecovered = if (book.remoteUrl != null) {
+        val remoteRecovered = if (book.archiveContainerName == null && book.origin.startsWith(BookType.WEBDAV_TAG, true)) {
             remoteBookDownloader.download(book)
         } else {
             null
         }
-        if (remoteRecovered != null && fileStore.lastModified(remoteRecovered.bookUrl) != null) {
+        if (remoteRecovered != null) {
             return remoteRecovered
         }
 
@@ -97,9 +97,4 @@ val Book.archiveContainerName: String?
     }?.takeIf { it.isNotBlank() }
 
 val Book.remoteUrl: String?
-    get() = when {
-        origin.startsWith(BookType.WEBDAV_TAG) -> origin.removePrefix(BookType.WEBDAV_TAG)
-        origin.startsWith("webDav::") -> origin.removePrefix("webDav::")
-        origin.startsWith("webdav::") -> origin.removePrefix("webdav::")
-        else -> null
-    }?.takeIf { it.isNotBlank() }
+    get() = if (archiveContainerName == null && type and BookType.ARCHIVE == 0) RemoteBookOrigin.parseOrNull(origin)?.url else null

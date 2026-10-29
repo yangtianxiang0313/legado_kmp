@@ -1,11 +1,16 @@
 package io.legado.kmp.shared.facade
 
 import io.legado.kmp.shared.domain.repository.BookRepository
+import io.legado.kmp.shared.domain.localbook.remoteBookOrigins
 import io.legado.kmp.shared.model.Book
-import io.legado.kmp.shared.model.BookType
 import io.legado.kmp.shared.model.RemoteBook
 import io.legado.kmp.shared.platform.AppFilesDirectory
+import io.legado.kmp.shared.platform.DownloadFileStore
 import io.legado.kmp.shared.platform.FileAccess
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 
 class RemoteBookFacade(
     private val settingsFacade: SettingsFacade,
@@ -16,43 +21,58 @@ class RemoteBookFacade(
 ) {
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun list(path: String? = null): List<RemoteBook> =
-        runRecoverable("RemoteBookFacade.list") {
-            val shelfKeys = bookRepository.getAllBooks()
-                .map { it.bookUrl to it.origin }
-                .toSet()
-            settingsFacade.getRemoteBookList(path).map { remoteBook ->
+        remoteBookOperation("LIST_FAILED", "无法读取远程书籍列表，请检查服务器配置") {
+            val access = settingsFacade.currentRemoteBookAccess()
+                ?: throw RecoverableSharedException("REMOTE_BOOK_SERVER_UNAVAILABLE", "远程书籍服务器未配置")
+            val books = bookRepository.getAllBooks().filterNot { it.isNotShelf }
+            val shelfUrls = books.map { it.bookUrl }.toSet()
+            val origins = books.flatMap { it.remoteBookOrigins }.toSet()
+            access.manager.getRemoteBookList(path ?: access.root).map { remoteBook ->
                 remoteBook.copy(
-                    isOnBookShelf = shelfKeys.any { (bookUrl, origin) ->
-                        bookUrl == remoteBook.path || origin == BookType.WEBDAV_TAG + remoteBook.path
-                    }
+                    isOnBookShelf = remoteBook.path in shelfUrls || origins.any {
+                        it.url == remoteBook.path && (it.serverID == null || it.serverID == access.serverID)
+                    },
                 )
             }
         }
 
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun download(remoteBook: RemoteBook): ByteArray =
-        runRecoverable("RemoteBookFacade.download") {
+        remoteBookOperation("DOWNLOAD_FAILED", "无法下载远程书籍，请检查原服务器配置") {
             require(!remoteBook.isDir) { "Cannot download a directory" }
-            settingsFacade.downloadRemoteBook(remoteBook)
+            val access = settingsFacade.currentRemoteBookAccess()
+                ?: throw RecoverableSharedException("REMOTE_BOOK_SERVER_UNAVAILABLE", "远程书籍服务器未配置")
+            access.manager.downloadRemoteBook(remoteBook)
         }
 
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun downloadAndImport(remoteBook: RemoteBook, groupId: Long = 0): Book =
-        runRecoverable("RemoteBookFacade.downloadAndImport") {
+        remoteBookOperation("IMPORT_FAILED", "远程书籍导入未完成，请重试；已有书籍未被覆盖") {
+            val context = currentCoroutineContext()
+            context.ensureActive()
             require(!remoteBook.isDir) { "Cannot download a directory" }
-            val access = requireNotNull(fileAccess) { "File access is unavailable" }
-            val appDir = requireNotNull(appFilesDirectory) { "App files directory is unavailable" }
-            val bytes = settingsFacade.downloadRemoteBook(remoteBook)
-            val directory = appDir.path().trimEnd('/', '\\') + "/RemoteBooks"
-            require(access.createDirectory(directory)) { "Failed to create remote book directory" }
-            val targetPath = "$directory/${remoteBook.filename.sanitizedFileName()}"
-            require(access.write(targetPath, bytes)) { "Failed to write remote book file" }
-            val imported = bookshelfFacade.importLocalBook(targetPath, groupId).copy(
-                origin = BookType.WEBDAV_TAG + remoteBook.path,
-                originName = remoteBook.filename,
-            )
-            bookRepository.update(imported)
-            imported
+            requireSingleRemoteBook(remoteBook.filename, remoteBook.contentType)
+            val access = settingsFacade.currentRemoteBookAccess()
+                ?: throw RecoverableSharedException("REMOTE_BOOK_SERVER_UNAVAILABLE", "远程书籍服务器未配置")
+            val remoteOrigin = access.origin(remoteBook.path)
+            val bytes = access.manager.downloadRemoteBook(remoteBook)
+            context.ensureActive()
+            val filename = remoteBook.filename.sanitizedFileName()
+            validateRemoteBookBytes(bytes, filename) { context.ensureActive() }
+            val store = DownloadFileStore()
+            val temporary = stageRemoteBookBytes(store, bytes)
+            try {
+                context.ensureActive()
+                // Finish the original pipeline after publication; a late cancel cannot disguise a commit.
+                withContext(NonCancellable) {
+                    context.ensureActive()
+                    val completed = store.commit(temporary, filename)
+                    val imported = bookshelfFacade.importLocalBook(completed.path, groupId)
+                    RemoteBookImportFacade(bookRepository).associateImportedBook(remoteOrigin, imported)
+                }
+            } finally {
+                try { store.removeTemporary(temporary) } catch (_: Exception) { }
+            }
         }
 
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)

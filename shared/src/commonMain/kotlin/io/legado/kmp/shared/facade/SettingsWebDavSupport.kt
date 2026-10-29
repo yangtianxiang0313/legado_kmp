@@ -3,6 +3,8 @@ package io.legado.kmp.shared.facade
 import io.legado.kmp.shared.domain.repository.BookRepository
 import io.legado.kmp.shared.domain.remote.RemoteBookManager
 import io.legado.kmp.shared.domain.remote.RemoteBookWebDav
+import io.legado.kmp.shared.domain.localbook.RemoteBookOrigin
+import io.legado.kmp.shared.domain.localbook.requireRemoteBookWithinRoot
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.Server
 import io.legado.kmp.shared.domain.repository.ServerRepository
@@ -378,6 +380,55 @@ open class SettingsWebDavSupport(
 
     // MARK: - Remote Book Management (W-08, RB-01..RB-06)
 
+    /** Explicit identity: zero is the default account, positive IDs are named servers. No network I/O. */
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun getBookWebDav(serverID: Long): RemoteBookManager? =
+        remoteBookOperation("CONFIGURATION_INVALID", "远程书籍服务器配置无效，请检查原服务器设置") {
+            remoteBookAccess(serverID)?.manager
+        }
+
+    internal suspend fun currentRemoteBookAccess(): RemoteBookAccess? =
+        remoteBookAccess(preferencesStore.runtimeConfig.first().remoteServerId.coerceAtLeast(0))
+
+    internal suspend fun remoteBookAccess(serverID: Long): RemoteBookAccess? {
+        require(serverID >= 0) { "远程书籍服务器标识无效" }
+        val root: String
+        val username: String
+        val password: String
+        if (serverID == 0L) {
+            // Read the default account once. Never consult remoteServerId in this branch.
+            val config = preferencesStore.runtimeConfig.first()
+            username = config.webDavAccount?.takeIf { it.isNotBlank() } ?: return null
+            password = config.webDavPassword?.takeIf { it.isNotBlank() } ?: return null
+            val base = config.webDavUrl?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_WEBDAV_URL
+            val directory = config.webDavDir.trim().trim('/')
+            root = base.trimEnd('/') + "/" + (directory.takeIf { it.isNotEmpty() }?.plus("/") ?: "") + "books/"
+        } else {
+            val server = serverRepository?.get(serverID) ?: return null
+            require(server.id == serverID && server.type == io.legado.kmp.shared.model.ServerType.WEBDAV) {
+                "原远程书籍服务器不可用"
+            }
+            val config = server.config?.let { progressJson.decodeFromString(Server.WebDavConfig.serializer(), it) }
+                ?: return null
+            root = config.url.trim().trimEnd('/') + "/"
+            username = config.username
+            password = config.password
+        }
+        requireRemoteBookWithinRoot(root, root)
+        return RemoteBookAccess(serverID, root, username, password, webDavClient)
+    }
+
+    internal suspend fun remoteBookAccessForOrigin(origin: RemoteBookOrigin): RemoteBookAccess {
+        val id = origin.serverID ?: throw RecoverableSharedException(
+            "REMOTE_BOOK_LEGACY_SERVER_UNKNOWN", "旧远程书籍来源未保存服务器标识，请从原服务器重新下载并关联",
+        )
+        val access = remoteBookAccess(id) ?: throw RecoverableSharedException(
+            "REMOTE_BOOK_SERVER_UNAVAILABLE", "原远程书籍服务器未配置或已删除，请恢复原服务器配置",
+        )
+        access.requirePath(origin.url)
+        return access
+    }
+
     /**
      * Create a default RemoteBookWebDav instance based on current WebDAV configuration.
      * Returns null if WebDAV is not configured.
@@ -409,7 +460,7 @@ open class SettingsWebDavSupport(
                 username = account,
                 password = password,
                 webDavClient = webDavClient,
-                serverID = config.remoteServerId.takeIf { it > 0 }
+                serverID = 0L
             )
             manager.initDir()
             manager
