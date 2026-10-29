@@ -5,7 +5,11 @@ import okio.Inflater
 import okio.InflaterSource
 
 /** In-memory ZIP reader: never extracts untrusted paths onto the file system. */
-internal class BackupZipReader(private val bytes: ByteArray, private val limits: Limits? = null) {
+internal class BackupZipReader(
+    private val bytes: ByteArray,
+    private val limits: Limits? = null,
+    private val checkActive: () -> Unit = {},
+) {
     internal data class Limits(
         val maxArchiveBytes: Int,
         val maxEntries: Int,
@@ -20,11 +24,14 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
     private val directoryOffset: Int
 
     init {
+        checkActive()
         require(bytes.size <= MAX_ARCHIVE_BYTES) { "备份 ZIP 超过 128 MB" }
         limits?.let { require(bytes.size <= it.maxArchiveBytes) { "ZIP 超过允许大小" } }
         val end = (bytes.size - 22 downTo (bytes.size - 65557).coerceAtLeast(0)).firstOrNull {
+            if (it % CHECK_INTERVAL == 0) checkActive()
             int(it) == 0x06054b50 && it + 22 + short(it + 20) == bytes.size
         } ?: error("备份 ZIP 目录损坏")
+        checkActive()
         require(short(end + 4) == 0 && short(end + 6) == 0 && short(end + 8) == short(end + 10)) {
             "不支持分卷备份 ZIP"
         }
@@ -36,6 +43,7 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
         require(cursor >= 0 && cursor.toLong() + int(end + 12) == end.toLong()) { "备份 ZIP 目录偏移无效" }
         var declaredSize = 0L
         repeat(count) {
+            checkActive()
             require(cursor >= 0 && cursor.toLong() + 46 <= end && int(cursor) == 0x02014b50) { "备份 ZIP 文件目录损坏" }
             val flags = short(cursor + 8)
             require(flags and 1 == 0) { "不支持加密 ZIP 容器，请先解压再导入" }
@@ -45,6 +53,7 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
             val fullName = bytes.copyOfRange(cursor + 46, cursor + 46 + nameLength)
                 .decodeToString(throwOnInvalidSequence = limits != null)
             limits?.validateName?.invoke(fullName)
+            checkActive()
             if (!fullName.endsWith('/')) {
                 val name = fullName.replace('\\', '/').substringAfterLast('/')
                 require(name !in entries) { "备份 ZIP 包含重名文件：$name" }
@@ -62,13 +71,24 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
             cursor = next.toInt()
         }
         require(cursor == end) { "备份 ZIP 目录长度无效" }
+        checkActive()
     }
 
-    fun names(): Set<String> = entries.keys
+    fun names(): Set<String> {
+        checkActive()
+        return entries.keys
+    }
 
-    fun text(name: String): String? = raw(name)?.decodeToString(throwOnInvalidSequence = true)
+    fun text(name: String): String? {
+        val data = raw(name) ?: return null
+        checkActive()
+        val text = data.decodeToString(throwOnInvalidSequence = true)
+        checkActive()
+        return text
+    }
 
     fun raw(name: String, maxBytes: Int = MAX_ENTRY_BYTES): ByteArray? {
+        checkActive()
         val entry = entries[name] ?: return null
         require(entry.size <= MAX_ENTRY_BYTES) { "备份文件过大：$name" }
         require(entry.size <= maxBytes) { "ZIP 单文件超过读取上限：$name" }
@@ -79,26 +99,34 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
         val end = start + entry.packed
         require(start >= 0 && end <= bytes.size && end >= start) { "备份 ZIP 文件数据损坏：$name" }
         val compressed = bytes.copyOfRange(start.toInt(), end.toInt())
+        checkActive()
         val result = when (entry.method) {
             0 -> compressed
             8 -> {
                 val source = InflaterSource(Buffer().write(compressed), Inflater(true))
                 val buffer = Buffer()
                 try {
-                    while (source.read(buffer, 8192) != -1L) {
+                    while (true) {
+                        checkActive()
+                        val read = source.read(buffer, CHECK_INTERVAL.toLong())
+                        checkActive()
+                        if (read == -1L) break
                         require(buffer.size <= entry.size.toLong() && buffer.size <= MAX_ENTRY_BYTES &&
                             (limits == null || buffer.size <= limits.maxEntryBytes)) { "备份 ZIP 解压长度异常：$name" }
                     }
-                    buffer.readByteArray()
+                    buffer.readByteArray().also { checkActive() }
                 } finally { source.close() }
             }
             else -> error("不支持的 ZIP 压缩方式：${entry.method}")
         }
+        checkActive()
         require(result.size == entry.size && crc32(result) == entry.crc) { "备份 ZIP 校验失败：$name" }
+        checkActive()
         return result
     }
 
     private fun dataStart(name: String, entry: Entry): Long {
+        checkActive()
         val local = entry.offset
         limits?.let { require(local.toLong() + 30 <= directoryOffset) { "ZIP 文件头偏移无效：$name" } }
         require(int(local) == 0x04034b50 && short(local + 8) == entry.method) { "备份 ZIP 文件头无效：$name" }
@@ -110,6 +138,7 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
             val localName = bytes.copyOfRange(local + 30, local + 30 + nameLength)
                 .decodeToString(throwOnInvalidSequence = true)
             it.validateName(localName)
+            checkActive()
             require(localName == name) { "ZIP 文件名与目录不一致：$name" }
             if (entry.flags and 8 == 0) {
                 require(int(local + 18) == entry.packed && int(local + 22) == entry.size && uint(local + 14) == entry.crc) {
@@ -118,6 +147,7 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
             }
             require(entry.method != 0 || entry.packed == entry.size) { "ZIP 未压缩文件长度无效：$name" }
         }
+        checkActive()
         return start
     }
 
@@ -130,9 +160,16 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
 
     private fun crc32(data: ByteArray): Long {
         var crc = -1
-        data.forEach { byte ->
-            crc = (crc ushr 8) xor CRC_TABLE[(crc xor byte.toInt()) and 255]
+        var offset = 0
+        while (offset < data.size) {
+            checkActive()
+            val end = (offset + CHECK_INTERVAL).coerceAtMost(data.size)
+            while (offset < end) {
+                crc = (crc ushr 8) xor CRC_TABLE[(crc xor data[offset].toInt()) and 255]
+                offset++
+            }
         }
+        checkActive()
         return crc.inv().toLong() and 0xffffffffL
     }
 
@@ -144,5 +181,6 @@ internal class BackupZipReader(private val bytes: ByteArray, private val limits:
         }
         const val MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
         const val MAX_ENTRY_BYTES = 64 * 1024 * 1024
+        const val CHECK_INTERVAL = 8192
     }
 }

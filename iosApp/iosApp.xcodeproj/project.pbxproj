@@ -689,6 +689,10 @@
 		A1000000000000000000003B /* CrashHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003B /* CrashHook.swift */; };
 		D10000000000000000000001 /* UIIdentifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* UIIdentifiers.swift */; };
 		BA1100000000000000000001 /* SettingsBackupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1100000000000000000002 /* SettingsBackupCoordinator.swift */; };
+		F02A4A010000000000000001 /* SettingsBackupFilePreparation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A4A020000000000000001; };
+		F02A4A010000000000000002 /* SettingsBackupRestoreCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A4A020000000000000002; };
+		F02A4A010000000000000003 /* SettingsBackupPreparationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A4A020000000000000003; };
+		F02A4A010000000000000004 /* BackupRestoreTerminalRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A4A020000000000000004; };
 		BA1200000000000000000001 /* SettingsMenuModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1200000000000000000002 /* SettingsMenuModels.swift */; };
 		BC1200000000000000000001 /* BackupCapabilitiesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1200000000000000000002 /* BackupCapabilitiesViewController.swift */; };
 		BC1200000000000000000003 /* RestoredKeyboardAccessory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1200000000000000000004 /* RestoredKeyboardAccessory.swift */; };
@@ -1417,6 +1421,10 @@
 		B09B0A541F4B8B0C56C4E2AC /* Pods_iosApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_iosApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D20000000000000000000001 /* UIIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIIdentifiers.swift; sourceTree = "<group>"; };
 		BA1100000000000000000002 /* SettingsBackupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsBackupCoordinator.swift; sourceTree = "<group>"; };
+		F02A4A020000000000000001 /* SettingsBackupFilePreparation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsBackupFilePreparation.swift; sourceTree = "<group>"; };
+		F02A4A020000000000000002 /* SettingsBackupRestoreCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsBackupRestoreCoordinator.swift; sourceTree = "<group>"; };
+		F02A4A020000000000000003 /* SettingsBackupPreparationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsBackupPreparationClient.swift; sourceTree = "<group>"; };
+		F02A4A020000000000000004 /* BackupRestoreTerminalRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupRestoreTerminalRequest.swift; sourceTree = "<group>"; };
 		BA1200000000000000000002 /* SettingsMenuModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsMenuModels.swift; sourceTree = "<group>"; };
 		BC1200000000000000000002 /* BackupCapabilitiesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupCapabilitiesViewController.swift; sourceTree = "<group>"; };
 		BC1200000000000000000004 /* RestoredKeyboardAccessory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoredKeyboardAccessory.swift; sourceTree = "<group>"; };
@@ -1890,6 +1898,10 @@
 				A20000000000000000000052 /* SettingsScreenAdapter.swift */,
 				BA1200000000000000000002 /* SettingsMenuModels.swift */,
 				BA1100000000000000000002 /* SettingsBackupCoordinator.swift */,
+				F02A4A020000000000000001 /* SettingsBackupFilePreparation.swift */,
+				F02A4A020000000000000002 /* SettingsBackupRestoreCoordinator.swift */,
+				F02A4A020000000000000003 /* SettingsBackupPreparationClient.swift */,
+				F02A4A020000000000000004 /* BackupRestoreTerminalRequest.swift */,
 				BA1600000000000000000002 /* RestoredAppPreferences.swift */,
 				BA1400000000000000000002 /* SubscriptionStartupUpdater.swift */,
 				BC1200000000000000000004 /* RestoredKeyboardAccessory.swift */,
@@ -2811,6 +2823,10 @@
 				A10000000000000000000052 /* SettingsScreenAdapter.swift in Sources */,
 				BA1200000000000000000001 /* SettingsMenuModels.swift in Sources */,
 				BA1100000000000000000001 /* SettingsBackupCoordinator.swift in Sources */,
+				F02A4A010000000000000001 /* SettingsBackupFilePreparation.swift in Sources */,
+				F02A4A010000000000000002 /* SettingsBackupRestoreCoordinator.swift in Sources */,
+				F02A4A010000000000000003 /* SettingsBackupPreparationClient.swift in Sources */,
+				F02A4A010000000000000004 /* BackupRestoreTerminalRequest.swift in Sources */,
 				BA1600000000000000000001 /* RestoredAppPreferences.swift in Sources */,
 				BA1400000000000000000001 /* SubscriptionStartupUpdater.swift in Sources */,
 				BC1200000000000000000003 /* RestoredKeyboardAccessory.swift in Sources */,
