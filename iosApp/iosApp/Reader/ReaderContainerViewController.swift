@@ -4,10 +4,20 @@ import shared
 final class ReaderContainerViewController: UIViewController, NavigationContentChromeProviding {
     var isInBookshelf: Bool = true
     private(set) var bookURL: String {
-        didSet { if oldValue != bookURL { exitCoordinator.readerContextDidChange(resetProgress: true) } }
+        didSet {
+            if oldValue != bookURL {
+                exitCoordinator.readerContextDidChange(resetProgress: true)
+                chapterPrefetchCoordinator.contextDidChange()
+            }
+        }
     }
     var chapterIndex: Int {
-        didSet { if oldValue != chapterIndex { exitCoordinator.readerContextDidChange() } }
+        didSet {
+            if oldValue != chapterIndex {
+                exitCoordinator.readerContextDidChange()
+                chapterPrefetchCoordinator.contextDidChange()
+            }
+        }
     }
     let screen: ReaderScreenAdapter
     let chapterLoadCoordinator = ReaderChapterLoadCoordinator()
@@ -26,6 +36,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     let jumpNavigationCoordinator = ReaderJumpNavigationCoordinator()
     lazy var exitCoordinator = ReaderExitCoordinator(reader: self)
     lazy var progressSyncCoordinator = ReaderProgressSyncCoordinator(reader: self)
+    lazy var chapterPrefetchCoordinator = ReaderChapterPrefetchCoordinator(reader: self)
     private let paginationCoordinator = ReaderPaginationCoordinator()
     let renderView = ReaderRenderView()
     let scrollPagerView = ReaderScrollPagerView()
@@ -42,9 +53,12 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
             isInBookshelf = book.map { !$0.isNotShelf } ?? false
             exitCoordinator.bookDidChange(from: oldValue)
             progressSyncCoordinator.contextDidChange()
+            chapterPrefetchCoordinator.contextDidChange()
         }
     }
-    var chapters: [BookChapter] = []
+    var chapters: [BookChapter] = [] {
+        didSet { chapterPrefetchCoordinator.catalogDidChange() }
+    }
     var chapterTitle = ""
     var chapterContent = ""
     var currentChapterSameTitleRemoved = false
@@ -91,7 +105,12 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     var pendingReadAloudShouldPauseAfterRestart = false
     var pendingReadAloudBackgroundPlayback = false
     var currentChapterURL: String? {
-        didSet { if oldValue != currentChapterURL { exitCoordinator.readerContextDidChange() } }
+        didSet {
+            if oldValue != currentChapterURL {
+                exitCoordinator.readerContextDidChange()
+                chapterPrefetchCoordinator.contextDidChange()
+            }
+        }
     }
     var selectedTextRange: NSRange?
     var textSelectionMenu: AndroidReaderTextActionMenuView?
@@ -109,8 +128,12 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     lazy var readAloudService = ReaderReadAloudService(
         callbacks: .init(
             advanceToNextBlock: { [weak self] in try? await self?.screen.advanceReadAloudToNextBlock() },
-            updateCurrentRange: { [weak self] start, end in try? await self?.screen.updateReadAloudCurrentRange(start: start, end: end) },
-            updatePlaybackState: { [weak self] isInBackground in try? await self?.screen.updateReadAloudPlaybackState(isInBackground: isInBackground) },
+            updateCurrentRange: { [weak self] start, end in
+                try? await self?.screen.updateReadAloudCurrentRange(start: start, end: end)
+            },
+            updatePlaybackState: { [weak self] isInBackground in
+                try? await self?.screen.updateReadAloudPlaybackState(isInBackground: isInBackground)
+            },
             pausePlayback: { [weak self] in try? await self?.screen.pauseReadAloud() },
             fail: { [weak self] message in
                 guard let controller = self else { return }
@@ -178,6 +201,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
         exitCoordinator.readerDidAppear()
         readingSession.resume()
         progressSyncCoordinator.resume()
+        chapterPrefetchCoordinator.resume()
         searchMenu.setInteractionActive(true)
         replaceRuleCoordinator.resume()
         bookSettingsCoordinator.resume()
@@ -193,7 +217,10 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
         chapterMessageCoordinator.updateGeometry()
         guard renderView.bounds.size.width > 0, renderView.bounds.size.height > 0 else { return }
         let policy = currentReaderSafeAreaPolicy()
-        guard renderView.bounds.size != lastRenderSize || policy != lastReaderSafeAreaPolicy || paginationCoordinator.needsPagination else { return }
+        guard
+            renderView.bounds.size != lastRenderSize || policy != lastReaderSafeAreaPolicy
+                || paginationCoordinator.needsPagination
+        else { return }
         lastRenderSize = renderView.bounds.size
         lastReaderSafeAreaPolicy = policy
         repaginate(restoreLocation: currentCharacterOffset())
@@ -218,6 +245,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        chapterPrefetchCoordinator.suspend()
         progressSyncCoordinator.suspend()
         exitCoordinator.readerWillDisappear()
         readingSession.suspend()
@@ -383,6 +411,9 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     }
 
     private func bindScreen() {
+        screen.onChapterLoadingActivityChange = { [weak self] interrupted in
+            self?.chapterPrefetchCoordinator.chapterLoadingActivityDidChange(interrupted: interrupted)
+        }
         screen.onBookChange = { [weak self] book in
             guard let self else { return }
             self.book = book
@@ -411,9 +442,11 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
         }
         screen.onRuntimeConfigChange = { [weak self] runtimeConfig in
             guard let self else { return }
-            let needsPagination = ReaderPaginationCoordinator.runtimeRequiresPagination(previous: self.runtimeConfig, updated: runtimeConfig)
+            let needsPagination = ReaderPaginationCoordinator.runtimeRequiresPagination(
+                previous: self.runtimeConfig, updated: runtimeConfig)
             self.tapZoneActionsOverride = nil
             self.runtimeConfig = runtimeConfig
+            self.chapterPrefetchCoordinator.contextDidChange()
             self.progressSyncCoordinator.configurationDidChange()
             if self.autoReadSpeedOverride == Int(runtimeConfig.reader.autoReadSpeed) {
                 self.autoReadSpeedOverride = nil
@@ -663,7 +696,8 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
             return
         }
         chapterIndex = Int(chapter.index)
-        paginationCoordinator.beginChapter(bookURL: bookURL, index: chapterIndex, url: currentChapterURL, restoreLocation: restorePosition)
+        paginationCoordinator.beginChapter(
+            bookURL: bookURL, index: chapterIndex, url: currentChapterURL, restoreLocation: restorePosition)
         screen.markLoadedProgress(book: result.book)
         refreshChromeSnapshot(force: true)
         updateMenuState()
@@ -677,7 +711,8 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
                 displayTitle: chapter.title.nilIfEmpty ?? String(format: L10n.Reader.chapterLabel, Int(chapter.index) + 1),
                 isCurrent: Int(chapter.index) == chapterIndex,
                 isCached: book?.isLocal == true || chapter.isVolume
-                    || (Int(chapter.index) == chapterIndex && chapterContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+                    || (Int(chapter.index) == chapterIndex
+                        && chapterContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
             )
         }
     }
@@ -698,6 +733,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
         readMenu.setProgressAvailability(page: hasContent && canNavigateReaderPages, chapter: readableCount > 0)
         readMenu.setChapterLoading(chapterLoadCoordinator.isLoading || loadFailureView.isShowingLoading)
         readMenu.setAutoPageRunning(isAutoPageRunning)
+        chapterPrefetchCoordinator.refresh()
     }
 
     func pageIndex(for characterOffset: Int) -> Int {

@@ -1,39 +1,50 @@
 package io.legado.kmp.shared.facade
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.getAndUpdate
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 
 /** Owns only the existing loader's prefetch Job; it never loads a display payload or saves progress. */
 internal class ReaderChapterPreload(private val loader: ReaderChapterLoader) {
-    private data class Request(val bookUrl: String, val index: Int, val count: Int, val job: Job)
+    private data class Request(
+        val bookUrl: String,
+        val index: Int,
+        val count: Int,
+        val job: Deferred<Unit>,
+        val settled: CompletableDeferred<Unit> = CompletableDeferred(),
+    )
     private val current = MutableStateFlow<Request?>(null)
 
     fun cancel() {
-        current.getAndUpdate { null }?.job?.cancel()
+        // Keep the identity until the owning run has finished cleaning its loading guards.
+        current.value?.job?.cancel()
     }
 
-    suspend fun run(bookUrl: String, index: Int, count: Int) = coroutineScope {
+    suspend fun run(bookUrl: String, index: Int, count: Int) = supervisorScope {
         val boundedCount = count.coerceIn(0, 100)
         if (boundedCount == 0) {
-            cancel()
-            return@coroutineScope
+            val previous = current.value
+            previous?.job?.cancel()
+            withContext(NonCancellable) { previous?.settled?.await() }
+            return@supervisorScope
         }
         while (true) {
             val previous = current.value
             if (previous != null && previous.bookUrl == bookUrl && previous.index == index &&
                 previous.count == boundedCount && previous.job.isActive
             ) {
-                previous.job.join()
-                return@coroutineScope
+                previous.job.await()
+                return@supervisorScope
             }
-            val job = launch(start = CoroutineStart.LAZY) {
-                // Let the prior window unwind its loading guards before reusing any index.
-                previous?.job?.cancelAndJoin()
+            val job = async(start = CoroutineStart.LAZY) {
+                // Also wait for ancestors if an intermediate lazy window never started.
+                previous?.settled?.await()
                 loader.preloadAdjacentChapters(bookUrl, index, boundedCount)
             }
             val request = Request(bookUrl, index, boundedCount, job)
@@ -44,12 +55,16 @@ internal class ReaderChapterPreload(private val loader: ReaderChapterLoader) {
             previous?.job?.cancel()
             try {
                 job.start()
-                job.join()
+                job.await()
             } finally {
-                current.compareAndSet(request, null)
-                job.cancel()
+                withContext(NonCancellable) {
+                    job.cancelAndJoin()
+                    previous?.settled?.await()
+                    current.compareAndSet(request, null)
+                    request.settled.complete(Unit)
+                }
             }
-            return@coroutineScope
+            return@supervisorScope
         }
     }
 }

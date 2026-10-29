@@ -316,6 +316,7 @@
 		B100000000000000000000A1 /* BookshelfLocalImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000A1 /* BookshelfLocalImport.swift */; };
 		B100000000000000000000A2 /* LocalBookFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000A2 /* LocalBookFileStore.swift */; };
 		B100000000000000000000A3 /* ReaderPaginationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000A3 /* ReaderPaginationCoordinator.swift */; };
+		F02A4B010000000000000001 /* ReaderChapterPrefetchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A4B020000000000000001; };
 		A10000000000000000000062 /* RemoteBookViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* RemoteBookViewController.swift */; };
 		F02A48010000000000000001 /* RemoteBookBrowserClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A48020000000000000001; };
 		F02A48010000000000000002 /* RemoteBookOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A48020000000000000002; };
@@ -1034,6 +1035,7 @@
 		B200000000000000000000A1 /* BookshelfLocalImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfLocalImport.swift; sourceTree = "<group>"; };
 		B200000000000000000000A2 /* LocalBookFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookFileStore.swift; sourceTree = "<group>"; };
 		B200000000000000000000A3 /* ReaderPaginationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaginationCoordinator.swift; sourceTree = "<group>"; };
+		F02A4B020000000000000001 /* ReaderChapterPrefetchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderChapterPrefetchCoordinator.swift; sourceTree = "<group>"; };
 		E20000000000000000000004 /* ReaderReadAloudStateSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderReadAloudStateSupport.swift; sourceTree = "<group>"; };
 		E20000000000000000000005 /* ReaderProgressQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderProgressQueue.swift; sourceTree = "<group>"; };
 		E20000000000000000000006 /* ReaderReadAloudContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderReadAloudContent.swift; sourceTree = "<group>"; };
@@ -2076,6 +2078,7 @@
 				A2000000000000000000000E /* ReaderPageViewController.swift */,
 				A2000000000000000000000F /* ReaderContainerViewController.swift */,
 				B200000000000000000000A3 /* ReaderPaginationCoordinator.swift */,
+				F02A4B020000000000000001 /* ReaderChapterPrefetchCoordinator.swift */,
 				E20000000000000000000004 /* ReaderReadAloudStateSupport.swift */,
 				E20000000000000000000005 /* ReaderProgressQueue.swift */,
 				F027D2000000000000000006 /* ReaderProgressSyncCoordinator.swift */,
@@ -2880,6 +2883,7 @@
 				A1000000000000000000000E /* ReaderPageViewController.swift in Sources */,
 				A1000000000000000000000F /* ReaderContainerViewController.swift in Sources */,
 				B100000000000000000000A3 /* ReaderPaginationCoordinator.swift in Sources */,
+				F02A4B010000000000000001 /* ReaderChapterPrefetchCoordinator.swift in Sources */,
 				E10000000000000000000004 /* ReaderReadAloudStateSupport.swift in Sources */,
 				E10000000000000000000005 /* ReaderProgressQueue.swift in Sources */,
 				F027D1000000000000000006 /* ReaderProgressSyncCoordinator.swift in Sources */,

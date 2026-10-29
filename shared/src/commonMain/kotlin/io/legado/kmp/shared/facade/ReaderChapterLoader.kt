@@ -27,16 +27,25 @@ import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.BookChapter
 import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.model.ReadSimulationSchedule
+import io.legado.kmp.shared.model.getCacheFolderName
 import io.legado.kmp.shared.model.isTxtLocalBook
+import io.legado.kmp.shared.model.rule.ContentRule
+import io.legado.kmp.shared.model.rule.TocRule
 import io.legado.kmp.shared.preferences.AppPreferencesStore
 import io.legado.kmp.shared.util.currentTimeMillis
 import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -448,7 +457,10 @@ internal class ReaderChapterLoader(
             val chapter = chapters[chapterIndex]
             if (chapterIndex >= ReadSimulationSchedule.count(book.readConfig, chapters.size)) return
             val source = getBookSourcesUseCase.getByUrl(book.origin) ?: return
-            preloadChapter(book, source, chapter, chapterIndex, state)
+            val snapshot = PreloadSnapshot(book, source, chapters)
+            withPreloadSnapshot(snapshot, state) {
+                preloadChapter(book, source, chapter, chapterIndex, state, snapshot)
+            }
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -470,21 +482,26 @@ internal class ReaderChapterLoader(
             // Prefetch is cache-only: directory refreshes can update book metadata/progress separately.
             val readableLast = ReadSimulationSchedule.count(book.readConfig, chapters.size) - 1
             if (chapterIndex > readableLast) return
-            val maxForward = min(chapterIndex.toLong() + window, readableLast.toLong()).toInt()
-            for (idx in (chapterIndex + 1)..maxForward) {
-                coroutineContext.ensureActive()
-                preloadChapter(book, source, chapters[idx], idx, state)
-            }
-            val backwardRange = min(window, 5)
-            val minBackward = max(chapterIndex - backwardRange, 0)
-            for (idx in (chapterIndex - 1) downTo minBackward) {
-                coroutineContext.ensureActive()
-                preloadChapter(book, source, chapters[idx], idx, state)
+            val snapshot = PreloadSnapshot(book, source, chapters)
+            withPreloadSnapshot(snapshot, state) {
+                val maxForward = min(chapterIndex.toLong() + window, readableLast.toLong()).toInt()
+                for (idx in (chapterIndex + 1)..maxForward) {
+                    coroutineContext.ensureActive()
+                    preloadChapter(book, source, chapters[idx], idx, state, snapshot)
+                }
+                val backwardRange = min(window, 5)
+                val minBackward = max(chapterIndex - backwardRange, 0)
+                for (idx in (chapterIndex - 1) downTo minBackward) {
+                    coroutineContext.ensureActive()
+                    preloadChapter(book, source, chapters[idx], idx, state, snapshot)
+                }
             }
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (e: Throwable) {
+            findFacadeRequestCancellation(e)?.let { throw it }
             CrashCollector.record("ReaderFacade", "preloadAdjacentChapters", error = e)
+            throw e
         }
     }
 
@@ -494,6 +511,7 @@ internal class ReaderChapterLoader(
         chapter: BookChapter,
         index: Int,
         state: ChapterLoadingState,
+        snapshot: PreloadSnapshot,
     ) {
         coroutineContext.ensureActive()
         if (chapter.isVolume) return
@@ -503,36 +521,145 @@ internal class ReaderChapterLoader(
             // Hold the chapter permit through image work, including repairs to cached bodies.
             downloadSemaphore.withPermit {
                 coroutineContext.ensureActive()
-                withLoadingState(book.bookUrl, state) {}
+                requirePreloadSnapshot(snapshot, state)
                 val cached = chapterContentRepository.getContent(book, chapter)
                 coroutineContext.ensureActive()
                 var currentChapter = chapter
                 val content = cached ?: run {
                     val loaded = loadChapterContentUseCase.loadWithChapter(source, book, chapter).getOrThrow()
                     coroutineContext.ensureActive()
-                    withLoadingState(book.bookUrl, state) {}
+                    requirePreloadSnapshot(snapshot, state)
                     currentChapter = loaded.chapter
+                    if (!snapshot.matchesChapter(index, currentChapter)) {
+                        throw CancellationException("Preload chapter changed")
+                    }
                     check(chapterContentRepository.saveContent(book, currentChapter, loaded.content)) {
                         "Failed to save prefetched chapter: $index"
                     }
                     loaded.content
                 }
                 coroutineContext.ensureActive()
-                withLoadingState(book.bookUrl, state) {}
+                requirePreloadSnapshot(snapshot, state)
                 // Body persistence alone is not success when any chapter image is still missing.
                 chapterImages?.save(book, source, currentChapter, content)
                 coroutineContext.ensureActive()
+                requirePreloadSnapshot(snapshot, state)
                 withLoadingState(book.bookUrl, state) { it.failures.remove(index) }
             }
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (error: Exception) {
             coroutineContext.ensureActive()
+            findFacadeRequestCancellation(error)?.let { throw it }
             withLoadingState(book.bookUrl, state) { it.failures[index] = (it.failures[index] ?: 0) + 1 }
             CrashCollector.record("ReaderFacade", "preloadChapter", mapOf("index" to index.toString()), error)
         } finally {
             withContext(NonCancellable) { removeLoading(state, index) }
         }
+    }
+
+    private suspend fun withPreloadSnapshot(
+        snapshot: PreloadSnapshot,
+        state: ChapterLoadingState,
+        block: suspend () -> Unit,
+    ) = coroutineScope {
+        val windowJob = coroutineContext.job
+        fun invalidate() {
+            windowJob.cancel(CancellationException("Preload target changed"))
+        }
+        // Keep image downloads cancellable too, including a late response after a source/TOC change.
+        val observers = listOf(
+            launch(start = CoroutineStart.UNDISPATCHED) {
+                getBookUseCase(snapshot.bookUrl).collect { book ->
+                    if (!snapshot.matchesBook(book)) invalidate()
+                }
+            },
+            launch(start = CoroutineStart.UNDISPATCHED) {
+                observeBookChaptersUseCase(snapshot.bookUrl).collect { chapters ->
+                    if (!snapshot.matchesChapters(chapters)) invalidate()
+                }
+            },
+            launch(start = CoroutineStart.UNDISPATCHED) {
+                getBookSourcesUseCase().collect { sources ->
+                    if (!snapshot.matchesSource(sources.firstOrNull { it.bookSourceUrl == snapshot.origin })) invalidate()
+                }
+            },
+        )
+        try {
+            requirePreloadSnapshot(snapshot, state)
+            block()
+        } finally {
+            observers.forEach { it.cancel() }
+            withContext(NonCancellable) { observers.forEach { it.cancelAndJoin() } }
+        }
+    }
+
+    private suspend fun requirePreloadSnapshot(snapshot: PreloadSnapshot, state: ChapterLoadingState) {
+        coroutineContext.ensureActive()
+        withLoadingState(snapshot.bookUrl, state) {}
+        if (!snapshot.matchesBook(getBookUseCase.get(snapshot.bookUrl)) ||
+            !snapshot.matchesChapters(observeBookChaptersUseCase(snapshot.bookUrl).first()) ||
+            !snapshot.matchesSource(getBookSourcesUseCase.getByUrl(snapshot.origin))
+        ) {
+            throw CancellationException("Preload target changed")
+        }
+        coroutineContext.ensureActive()
+        withLoadingState(snapshot.bookUrl, state) {}
+    }
+
+    private class PreloadSnapshot(book: Book, source: BookSource, private val chapters: List<BookChapter>) {
+        val bookUrl = book.bookUrl
+        val origin = book.origin
+        private val tocUrl = book.tocUrl
+        private val reverseToc = book.config.reverseToc
+        private val cacheFolder = book.getCacheFolderName()
+        private val isImage = book.isImage
+        private val sourceRules = PreloadSourceRules(source)
+
+        // Page position, timestamps and display settings do not change the prefetch target.
+        fun matchesBook(book: Book?): Boolean = book != null && book.bookUrl == bookUrl &&
+            book.origin == origin && book.tocUrl == tocUrl && book.config.reverseToc == reverseToc &&
+            book.getCacheFolderName() == cacheFolder && book.isImage == isImage && !book.isLocal
+
+        fun matchesSource(source: BookSource?): Boolean = source != null && PreloadSourceRules(source) == sourceRules
+
+        fun matchesChapters(latest: List<BookChapter>): Boolean = latest.size == chapters.size &&
+            latest.indices.all { index -> matchesChapter(index, latest[index]) }
+
+        fun matchesChapter(index: Int, current: BookChapter): Boolean {
+            val expected = chapters.getOrNull(index) ?: return false
+            // Content rules may update title/variables, and cache writes update wordCount.
+            return current.bookUrl == expected.bookUrl && current.index == expected.index &&
+                current.url == expected.url && current.baseUrl == expected.baseUrl &&
+                current.isVolume == expected.isVolume && current.resourceUrl == expected.resourceUrl &&
+                current.isVip == expected.isVip && current.isPay == expected.isPay
+        }
+    }
+
+    private data class PreloadSourceRules(
+        val url: String,
+        val type: Int,
+        val jsLib: String?,
+        val header: String?,
+        val loginUrl: String?,
+        val loginCheckJs: String?,
+        val cookieJar: Boolean,
+        val concurrentRate: String?,
+        val toc: TocRule?,
+        val content: ContentRule?,
+    ) {
+        constructor(source: BookSource) : this(
+            url = source.bookSourceUrl,
+            type = source.bookSourceType,
+            jsLib = source.jsLib,
+            header = source.header,
+            loginUrl = source.loginUrl,
+            loginCheckJs = source.loginCheckJs,
+            cookieJar = source.enabledCookieJar,
+            concurrentRate = source.concurrentRate,
+            toc = source.ruleToc?.copy(),
+            content = source.ruleContent?.copy(imageStyle = null),
+        )
     }
 
     suspend fun refreshTocIfNeeded(bookUrl: String): Boolean {

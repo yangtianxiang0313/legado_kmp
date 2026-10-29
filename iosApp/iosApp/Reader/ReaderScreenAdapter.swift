@@ -64,6 +64,7 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
     var onPreferencesChange: ((AppUiPreferences) -> Void)?
     var onRuntimeConfigChange: ((AppRuntimeConfig) -> Void)?
     var onReadAloudStateChange: ((ReadAloudState) -> Void)?
+    var onChapterLoadingActivityChange: ((Bool) -> Void)?
 
     init(bookURL: String) {
         self.bookURL = bookURL
@@ -150,6 +151,7 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
     func rebindBookURL(_ newBookURL: String, book: Book?, chapters: [BookChapter]) {
         let normalized = newBookURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalized.isEmpty == false else { return }
+        onChapterLoadingActivityChange?(true)
         let bindingID = UUID()
         bookBindingID = bindingID
         chapterRequestGate.bind(bookURL: normalized, facade: facade)
@@ -216,13 +218,16 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
 
     func resumeChapterLoading() {
         chapterRequestGate.resume()
+        onChapterLoadingActivityChange?(false)
     }
 
     func suspendChapterLoading() {
+        onChapterLoadingActivityChange?(true)
         chapterRequestGate.suspend()
     }
 
     func cancelChapterLoading() {
+        onChapterLoadingActivityChange?(true)
         chapterRequestGate.cancel()
     }
 
@@ -317,14 +322,16 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
         )
     }
 
-    func preloadAdjacentChapters(index: Int) async throws {
-        guard let facade else { return }
-        try await facade.preloadAdjacentChaptersAsync(bookUrl: bookURL, chapterIndex: Int32(index))
+    @MainActor
+    func preloadDisplayedChapter(index: Int) async throws -> Bool {
+        guard let facade else { return false }
+        return try await ReaderChapterPrefetchRequest.run(facade: facade, bookURL: bookURL, index: index)
     }
 
     func onPageChanged() async throws {
         guard let facade else { return }
-        try await facade.onPageChangedAsync(bookUrl: bookURL)
+        // The visible reader owns prefetch cancellation; this callback only records reading time.
+        try await facade.updateReadTime(bookUrl: bookURL)
     }
 
     func moveToPreviousChapter(toLastPage: Bool) async throws -> ChapterNavigationResult {
@@ -1104,6 +1111,7 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
     private func handleRuntimeConfig(_ runtimeConfig: AppRuntimeConfig) {
         let signature = [
             "\(runtimeConfig.threadCount)",
+            "\(runtimeConfig.preDownloadNum)",
             "\(runtimeConfig.syncBookProgress)", "\(runtimeConfig.syncBookProgressPlus)",
             runtimeConfig.webDavUrl ?? "", runtimeConfig.webDavAccount ?? "", runtimeConfig.webDavDir,
             runtimeConfig.webDavPassword ?? "",

@@ -430,6 +430,7 @@ class ReaderFacade(
      *
      * @param preDownloadNum number of chapters to preload in each direction
      */
+    @Throws(Exception::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun preloadAdjacentChapters(bookUrl: String, chapterIndex: Int, preDownloadNum: Int = -1) {
         val count = if (preDownloadNum < 0) preferencesStore.runtimeConfig.first().preDownloadNum else preDownloadNum
         chapterPreload.run(bookUrl, chapterIndex, count)

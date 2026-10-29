@@ -42,9 +42,11 @@ final class RestoredAppPreferences {
                 do {
                     let facade = try BootstrapApiKt.sharedSettingsFacade()
                     switch pair.0 {
-                    case "show_discovery": try await SharedAsync.void { facade.setShowDiscovery(enabled: enabled, completionHandler: $0) }
+                    case "show_discovery":
+                        try await SharedAsync.void { facade.setShowDiscovery(enabled: enabled, completionHandler: $0) }
                     case "show_rss": try await SharedAsync.void { facade.setShowRSS(enabled: enabled, completionHandler: $0) }
-                    case "auto_refresh_book": try await SharedAsync.void { facade.setAutoRefreshBook(enabled: enabled, completionHandler: $0) }
+                    case "auto_refresh_book":
+                        try await SharedAsync.void { facade.setAutoRefreshBook(enabled: enabled, completionHandler: $0) }
                     default: break
                     }
                 } catch { SharedRuntime.log("应用偏好同步失败，请重新打开设置后重试") }
@@ -68,16 +70,18 @@ final class RestoredAppPreferences {
 
     func start() {
         synchronize()
-        observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+        observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main)
+        { [weak self] _ in
             DispatchQueue.main.async { self?.synchronize() }
         }
         guard !Self.didRunStartupRefresh else { return }
         Self.didRunStartupRefresh = true
         guard UserDefaults.standard.bool(forKey: "auto_refresh_book") else { return }
-        Task {
+        Task { @MainActor in
             do {
                 let facade = try BootstrapApiKt.sharedBookshelfFacade()
-                let _: BookshelfBatchUpdateResult = try await SharedAsync.value { facade.updateToc(groupId: -1, completionHandler: $0) }
+                let books = try await facade.loadBooksAsync(groupId: -1)
+                try BookshelfUpdateCoordinator.shared.enqueue(books: books)
             } catch { SharedRuntime.log("启动书架更新失败，请在书架下拉重试") }
         }
     }
@@ -95,18 +99,28 @@ final class RestoredAppPreferences {
         for (canonical, alias, fallback) in Self.booleanPairs {
             let key = useAlias(canonical, alias) ? alias : canonical
             let value = defaults.object(forKey: key).map { _ in defaults.bool(forKey: key) } ?? fallback
-            if defaults.object(forKey: canonical) == nil || defaults.bool(forKey: canonical) != value { defaults.set(value, forKey: canonical) }
-            if defaults.object(forKey: alias) == nil || defaults.bool(forKey: alias) != value { defaults.set(value, forKey: alias) }
+            if defaults.object(forKey: canonical) == nil || defaults.bool(forKey: canonical) != value {
+                defaults.set(value, forKey: canonical)
+            }
+            if defaults.object(forKey: alias) == nil || defaults.bool(forKey: alias) != value {
+                defaults.set(value, forKey: alias)
+            }
         }
         let homeKey = useAlias("default_home_page", "defaultHomePage") ? "defaultHomePage" : "default_home_page"
         let home = Self.homeIndex(defaults.object(forKey: homeKey))
         let homeName = ["bookshelf", "discovery", "rss", "settings"][home]
         if defaults.string(forKey: "default_home_page") != homeName { defaults.set(homeName, forKey: "default_home_page") }
-        if defaults.object(forKey: "defaultHomePage") == nil || defaults.integer(forKey: "defaultHomePage") != home { defaults.set(home, forKey: "defaultHomePage") }
+        if defaults.object(forKey: "defaultHomePage") == nil || defaults.integer(forKey: "defaultHomePage") != home {
+            defaults.set(home, forKey: "defaultHomePage")
+        }
         let keys = Self.booleanPairs.flatMap { [$0.0, $0.1] } + ["default_home_page", "defaultHomePage"]
         previousValues = Dictionary(uniqueKeysWithValues: keys.compactMap { key in raw(key).map { (key, $0) } })
-        let snapshot = Snapshot(showDiscovery: defaults.bool(forKey: "show_discovery"), showRss: defaults.bool(forKey: "show_rss"), homePage: home, keepScreenOn: Self.keepScreenOn)
-        if lastSnapshot?.keepScreenOn != snapshot.keepScreenOn { UIApplication.shared.isIdleTimerDisabled = snapshot.keepScreenOn }
+        let snapshot = Snapshot(
+            showDiscovery: defaults.bool(forKey: "show_discovery"), showRss: defaults.bool(forKey: "show_rss"), homePage: home,
+            keepScreenOn: Self.keepScreenOn)
+        if lastSnapshot?.keepScreenOn != snapshot.keepScreenOn {
+            UIApplication.shared.isIdleTimerDisabled = snapshot.keepScreenOn
+        }
         guard snapshot != lastSnapshot else { return }
         lastSnapshot = snapshot
         onChange(snapshot)

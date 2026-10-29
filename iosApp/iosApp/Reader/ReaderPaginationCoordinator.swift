@@ -131,6 +131,7 @@ final class ReaderPaginationCoordinator {
 
         controller.textSelectionCoordinator.dismiss(clearSelection: true)
         let chapter = self.chapter
+        let chapterOrigin = controller.book?.origin
         let chapterTitle = controller.chapterTitle
         let chapterContent = controller.chapterContent
         let imageStyle = controller.book?.config.imageStyle
@@ -208,6 +209,8 @@ final class ReaderPaginationCoordinator {
                 self.isApplyingPagination = false
                 controller.chapterMessageCoordinator.finishLoading(afterRendering: true)
                 controller.chapterLoadCoordinator.didRenderChapter(in: controller)
+                controller.chapterPrefetchCoordinator.didRenderChapter(
+                    bookURL: chapter.bookURL, origin: chapterOrigin, index: chapter.index, url: chapter.url)
                 controller.updateMenuState()
                 ReaderReadAloudStateSupport.applyPlayback(in: controller)
                 controller.stageProgress(immediate: false)
