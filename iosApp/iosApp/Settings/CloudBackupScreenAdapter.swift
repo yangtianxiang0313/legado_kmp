@@ -20,8 +20,28 @@ final class CloudBackupScreenAdapter {
     }
 
     func restore(file: CloudBackupFile, password: String) async throws -> CloudBackupRestore {
+        let prepared = try await prepareRestore(file: file, password: password)
+        defer { prepared.discard() }
+        return try await restore(prepared: prepared)
+    }
+
+    func prepareRestore(file: CloudBackupFile, password: String) async throws -> PreparedCloudBackup {
         let facade = try resolve()
-        let result = try await request { facade.restoreBackupFileRequest(file: file, password: password, onResult: $0) }
+        let result = try await terminalRequest {
+            facade.prepareRestoreBackupFileRequest(file: file, password: password, onResult: $0)
+        }
+        guard let prepared = result.prepared else { throw Self.invalidResult() }
+        if Task.isCancelled {
+            prepared.discard()
+            throw CancellationError()
+        }
+        return prepared
+    }
+
+    func restore(prepared: PreparedCloudBackup) async throws -> CloudBackupRestore {
+        try Task.checkCancellation()
+        let facade = try resolve()
+        let result = try await terminalRequest { facade.restorePreparedBackupRequest(prepared: prepared, onResult: $0) }
         guard let restored = result.restored else { throw Self.invalidResult() }
         return restored
     }
@@ -64,6 +84,32 @@ final class CloudBackupScreenAdapter {
         }
         try Task.checkCancellation()
         return result
+    }
+
+    private func terminalRequest(
+        _ start: (@escaping (CloudBackupRequestResult) -> Void) -> FlowSubscription
+    ) async throws -> CloudBackupRequestResult {
+        let terminal = BackupRestoreTerminalRequest()
+        // A cancelled Swift task must still observe the real shared terminal result.
+        return try await withTaskCancellationHandler {
+            try await SharedAsync.value { completion in
+                terminal.install(
+                    start { result in
+                        terminal.finish()
+                        if result.completed, result.errorMessage == nil {
+                            completion(result, nil)
+                        } else if result.isCancelled {
+                            result.prepared?.discard()
+                            completion(nil, CancellationError())
+                        } else {
+                            result.prepared?.discard()
+                            completion(nil, Self.invalidResult(result.errorMessage))
+                        }
+                    })
+            }
+        } onCancel: {
+            terminal.cancel()
+        }
     }
 
     private static func invalidResult(_ message: String? = nil) -> NSError {

@@ -6,10 +6,12 @@ import io.legado.kmp.shared.util.currentTimeMillis
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 
 /** Explicit cloud operations only. A check never restores data or acknowledges a hidden prompt. */
 class CloudBackupFacade(
@@ -18,6 +20,7 @@ class CloudBackupFacade(
 ) {
     private val state = CloudBackupState(preferencesStore)
     private val listed = MutableStateFlow<Map<String, CloudBackupFile>>(emptyMap())
+    private val preparationOwner = Any()
 
     fun isBusy(): Boolean = operations.isLocked
 
@@ -42,8 +45,8 @@ class CloudBackupFacade(
     ): FlowSubscription {
         val snapshot = snapshot()
         val selection = listed.value[name]
-        return CloudBackupRequest.start("restoreBackupRequest", {
-            CloudBackupRequestResult(restored = restore(snapshot, name, password, selection), completed = true)
+        return CloudBackupRequest.startSettled("restoreBackupRequest", { terminal ->
+            CloudBackupRequestResult(restored = restore(snapshot, name, password, selection, terminal), completed = true)
         }, onResult)
     }
 
@@ -52,10 +55,27 @@ class CloudBackupFacade(
         file: CloudBackupFile, password: String?, onResult: (CloudBackupRequestResult) -> Unit,
     ): FlowSubscription {
         val snapshot = snapshot()
-        return CloudBackupRequest.start("restoreBackupFileRequest", {
-            CloudBackupRequestResult(restored = restore(snapshot, file.name, password, file), completed = true)
+        return CloudBackupRequest.startSettled("restoreBackupFileRequest", { terminal ->
+            CloudBackupRequestResult(restored = restore(snapshot, file.name, password, file, terminal), completed = true)
         }, onResult)
     }
+
+    /** Download, decrypt and validate without any local persistence or watermark acknowledgement. */
+    fun prepareRestoreBackupFileRequest(
+        file: CloudBackupFile, password: String?, onResult: (CloudBackupRequestResult) -> Unit,
+    ): FlowSubscription {
+        val snapshot = snapshot()
+        return CloudBackupRequest.startSettled("prepareRestoreBackupFileRequest", {
+            CloudBackupRequestResult(prepared = prepare(snapshot, file, password), completed = true)
+        }, onResult)
+    }
+
+    /** Pass the exact facade-issued object displayed in the native confirmation UI. */
+    fun restorePreparedBackupRequest(
+        prepared: PreparedCloudBackup, onResult: (CloudBackupRequestResult) -> Unit,
+    ): FlowSubscription = CloudBackupRequest.startSettled("restorePreparedBackupRequest", { terminal ->
+        CloudBackupRequestResult(restored = restorePrepared(prepared, terminal), completed = true)
+    }, onResult)
 
     fun checkNewBackupRequest(onResult: (CloudBackupRequestResult) -> Unit): FlowSubscription {
         val snapshot = snapshot()
@@ -78,6 +98,14 @@ class CloudBackupFacade(
     @Throws(RecoverableSharedException::class, CancellationException::class)
     suspend fun restoreBackupFile(file: CloudBackupFile, password: String? = null): CloudBackupRestore =
         restore(snapshot(), file.name, password, file)
+
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun prepareRestoreBackupFile(file: CloudBackupFile, password: String? = null): PreparedCloudBackup =
+        prepare(snapshot(), file, password)
+
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun restorePreparedBackup(prepared: PreparedCloudBackup): CloudBackupRestore =
+        restorePrepared(prepared)
 
     @Throws(RecoverableSharedException::class, CancellationException::class)
     suspend fun checkNewBackup(): CloudBackupFile? = checkNew(snapshot())
@@ -160,10 +188,30 @@ class CloudBackupFacade(
 
     private suspend fun restore(
         snapshot: AppRuntimeConfig, name: String, password: String?, selection: CloudBackupFile?,
+        terminal: (CloudBackupRequestResult) -> Unit = {},
     ): CloudBackupRestore = operation(snapshot) { config ->
+        val prepared = prepareRestore(config, name, password, selection)
+        try {
+            commitPrepared(prepared, terminal)
+        } finally {
+            prepared.discard()
+        }
+    }.getOrThrow()
+
+    private suspend fun prepare(
+        snapshot: AppRuntimeConfig, file: CloudBackupFile, password: String?,
+    ): PreparedCloudBackup = operation(snapshot) { config ->
+        prepareRestore(config, file.name, password, file)
+    }
+
+    /** The caller owns the global gate: legacy one-step restore must not enter it a second time. */
+    private suspend fun prepareRestore(
+        config: CloudBackupConfiguration, name: String, password: String?, selection: CloudBackupFile?,
+    ): PreparedCloudBackup {
         cloudBackupName(name)
         requireSelection(name, selection, config)
-        val scopes = state.read()
+        // Preflight marker storage too, but never write it in the preparation phase.
+        state.read()
         val downloaded = withStore(config) { store ->
             val metadata = store.metadata(name)
             requireUnchanged(requireNotNull(selection), metadata)
@@ -178,18 +226,81 @@ class CloudBackupFacade(
             requireUnchanged(metadata, store.metadata(name))
             bytes
         }
-        val payload = decodeCloudBackup(downloaded, password)
+        val payload = decodeCloudBackup(downloaded, password, config.snapshot.backupRestoreIgnoredKeys)
         currentCoroutineContext().ensureActive()
         requireCurrent(config)
-        // Explicit user action reaches this point only after complete download and payload validation.
-        // Repository persistence retains SettingsFacade's established merge/ignored-key behavior.
-        val result = settingsFacade.restoreFromBackup(payload.payload, password)
-        val prior = scopes[config.scope] ?: CloudBackupWatermark()
-        // Restored preferences may intentionally change WebDAV accounts. Record against the OLD scope.
-        state.save(scopes + (config.scope to prior.copy(restoredTime = maxOf(
-            prior.restoredTime, currentTimeMillis(), requireNotNull(selection).lastModified,
-        ))))
-        CloudBackupRestore(result, payload.warnings)
+        return PreparedCloudBackup.create(preparationOwner, config, requireNotNull(selection), payload)
+    }
+
+    private suspend fun restorePrepared(
+        prepared: PreparedCloudBackup,
+        terminal: (CloudBackupRequestResult) -> Unit = {},
+    ): CloudBackupRestore = automaticOperation { commitPrepared(prepared, terminal) }.getOrThrow()
+
+    /** Everything before claim is cancellable and read-only. A claimed commit always settles. */
+    private suspend fun commitPrepared(
+        prepared: PreparedCloudBackup,
+        terminal: (CloudBackupRequestResult) -> Unit,
+    ): Result<CloudBackupRestore> {
+        val context = currentCoroutineContext()
+        context.ensureActive()
+        val config = prepared.configuration(preparationOwner, preferencesStore.runtimeConfig.value)
+        val scopes = state.read()
+        context.ensureActive()
+        return withContext(NonCancellable) {
+            context.ensureActive()
+            // Check configuration/ignore keys again at the single-use acceptance point, after all reads.
+            val claimed = prepared.claim(preparationOwner, preferencesStore.runtimeConfig.value)
+            val outcome = try {
+                // Canonical decrypted JSON is private to the claimed object; native cannot inject it.
+                val result = settingsFacade.restoreFromBackup(claimed.payload.payload)
+                val prior = scopes[config.scope] ?: CloudBackupWatermark()
+                try {
+                    // Restored settings may change accounts; mark only the original cloud scope.
+                    state.save(scopes + (config.scope to prior.copy(restoredTime = maxOf(
+                        prior.restoredTime, currentTimeMillis(), claimed.file.lastModified,
+                    ))))
+                } catch (_: Exception) {
+                    cloudBackupError(
+                        "CLOUD_BACKUP_RESTORE_STATE_FAILED",
+                        "备份数据已恢复，但云备份恢复记录保存失败，请检查本地数据后再操作",
+                    )
+                }
+                Result.success(CloudBackupRestore(result, claimed.payload.warnings.toList()))
+            } catch (error: Exception) {
+                Result.failure<CloudBackupRestore>(safeCommitError(error))
+            }
+            // Publish inside NonCancellable: a later job cancellation cannot replace the real outcome.
+            terminal(outcome.fold(
+                onSuccess = { CloudBackupRequestResult(restored = it, completed = true) },
+                onFailure = {
+                    val safe = it as RecoverableSharedException
+                    CloudBackupRequestResult(errorCode = safe.code, errorMessage = safe.message)
+                },
+            ))
+            // Unwrap only outside the gate, where its cancellation sanitizer cannot mask a commit error.
+            outcome
+        }
+    }
+
+    private fun safeCommitError(error: Exception): RecoverableSharedException = when (
+        (error as? RecoverableSharedException)?.code
+    ) {
+        "BACKUP_PREFERENCES_RESTORE_FAILED" -> RecoverableSharedException(
+            "BACKUP_PREFERENCES_RESTORE_FAILED", "数据库已恢复，但设置恢复失败，请重新应用设置",
+        )
+        "BACKUP_DATABASE_RESTORE_FAILED" -> RecoverableSharedException(
+            "BACKUP_DATABASE_RESTORE_FAILED", "数据库恢复失败，本次数据库写入已回滚，设置未应用",
+        )
+        "BACKUP_DATABASE_UNAVAILABLE", "BACKUP_REPOSITORY_UNAVAILABLE" -> RecoverableSharedException(
+            "CLOUD_BACKUP_RESTORE_UNAVAILABLE", "备份数据库或恢复依赖尚未就绪，未恢复任何数据",
+        )
+        "CLOUD_BACKUP_RESTORE_STATE_FAILED" -> RecoverableSharedException(
+            "CLOUD_BACKUP_RESTORE_STATE_FAILED", "备份数据已恢复，但云备份恢复记录保存失败，请检查本地数据后再操作",
+        )
+        else -> RecoverableSharedException(
+            "CLOUD_BACKUP_RESTORE_FAILED", "备份恢复未能完整完成，请检查本地数据和设置后重试",
+        )
     }
 
     private suspend fun checkNew(snapshot: AppRuntimeConfig): CloudBackupFile? {
