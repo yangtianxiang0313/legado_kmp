@@ -67,7 +67,8 @@ final class BookshelfUpdateCoordinator {
             do {
                 try backend.prepare { [weak self] count in
                     guard let self else { return }
-                    self.concurrencyLimit = min(64, max(1, count))
+                    self.concurrencyLimit = Int(
+                        ConsumerConcurrencyPolicy.shared.configuredLimit(configured: Int32(clamping: count)))
                     self.pump()
                 }
             } catch {

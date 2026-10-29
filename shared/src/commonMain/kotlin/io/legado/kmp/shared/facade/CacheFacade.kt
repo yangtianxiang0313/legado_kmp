@@ -21,6 +21,7 @@ import io.legado.kmp.shared.platform.AppFilesDirectory
 import io.legado.kmp.shared.platform.FileAccess
 import io.legado.kmp.shared.preferences.AppPreferencesStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -283,6 +284,13 @@ class CacheFacade(
 
         private fun onCancel(index: Int) = queue.finish(index, retry = true)
 
+        internal fun claimNext(): Int? = queue.claimNext()
+
+        internal fun cancelClaim(index: Int) {
+            onCancel(index)
+            onFinally()
+        }
+
         private fun onFinally() {
             if (!queue.isRunning) {
                 cacheBookMap.update { if (it[book.bookUrl] === this) it - book.bookUrl else it }
@@ -297,17 +305,23 @@ class CacheFacade(
          * For chapters without content, fetches via WebBook.getContent.
          */
         suspend fun download(): Boolean {
-            val chapterIndex = queue.claimNext() ?: return false
+            val chapterIndex = claimNext() ?: return false
+            downloadClaimed(chapterIndex)
+            return true
+        }
+
+        internal suspend fun downloadClaimed(chapterIndex: Int) {
             var downloadingChapter: BookChapter? = null
             var released = false
             try {
+                coroutineContext.ensureActive()
                 val chapter = bookChapterRepository.getChapter(book.bookUrl, chapterIndex)
                 downloadingChapter = chapter
                 checkNotNull(chapter) { "Chapter disappeared during download: ${book.bookUrl}, $chapterIndex" }
                 if (chapter.isVolume) {
                     queue.finish(chapterIndex)
                     released = true
-                    return true
+                    return
                 }
                 downloadAndCache(chapter)
                 onSuccess(chapter)
@@ -334,7 +348,6 @@ class CacheFacade(
                 if (!released) queue.finish(chapterIndex)
                 onFinally()
             }
-            return true
         }
 
         private suspend fun saveDownloadedContent(chapter: BookChapter, content: String) {
@@ -580,22 +593,33 @@ class CacheFacade(
         session.model.value = model
         coroutineContext.ensureActive()
         model.addDownload(effectiveStart, effectiveEnd)
-        val workers = (preferencesStore?.runtimeConfig?.first()?.threadCount ?: threadCount).coerceIn(1, 64)
-        downloadLimiter.configure(workers)
+        downloadLimiter.configure(preferencesStore?.runtimeConfig?.first()?.threadCount ?: threadCount)
         val progressMutex = Mutex()
         coroutineScope {
-            repeat(workers.coerceAtMost((effectiveEnd - effectiveStart + 1).coerceAtLeast(1))) {
-                launch {
-                    while (model.awaitPending()) {
-                        ensureActive()
-                        val processed = downloadLimiter.withPermit {
-                            ensureActive()
-                            if (model.awaitPending()) model.download() else false
+            while (model.awaitPending()) {
+                val permit = downloadLimiter.acquire()
+                var handedOff = false
+                try {
+                    ensureActive()
+                    // Pausing never holds a global slot while waiting to resume.
+                    if (!workingState.value) continue
+                    val chapterIndex = model.claimNext() ?: continue
+                    try {
+                        // Enter cleanup even if cancellation races with the launch.
+                        launch(start = CoroutineStart.UNDISPATCHED) {
+                            try {
+                                model.downloadClaimed(chapterIndex)
+                                progressMutex.withLock { emitProgress(true) }
+                            } finally {
+                                permit.release()
+                            }
                         }
-                        if (processed) {
-                            progressMutex.withLock { emitProgress(true) }
-                        }
+                        handedOff = true
+                    } finally {
+                        if (!handedOff) model.cancelClaim(chapterIndex)
                     }
+                } finally {
+                    if (!handedOff) permit.release()
                 }
             }
         }

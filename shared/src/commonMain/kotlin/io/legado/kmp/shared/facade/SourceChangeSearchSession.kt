@@ -13,7 +13,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
@@ -21,9 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -129,36 +126,29 @@ class SourceChangeSearchSession internal constructor(
             val work = refreshCandidates?.mapNotNull { candidate ->
                 sources.firstOrNull { it.bookSourceUrl == candidate.sourceUrl }?.let { it to candidate }
             } ?: sources.map { it to null }
-            val searchSemaphore = Semaphore(config.threadCount.coerceIn(1, 9))
             total = work.size
 
-            coroutineScope {
-                for ((source, refreshCandidate) in work) {
-                    launch {
-                        searchSemaphore.withPermit {
-                            callbackMutex.withLock {
-                                callback(generation, "onProgress") {
-                                    onProgress(SourceChangeSearchProgress(searched, total, source.bookSourceName))
-                                }
-                            }
-                            ensureCurrent(generation)
-                            val enriched = loadCandidates(generation, source, keyword, author, refreshCandidate)
-                            callbackMutex.withLock {
-                                ensureCurrent(generation)
-                                for (result in enriched) {
-                                    if (found.add(result.sourceUrl to result.bookUrl)) {
-                                        callback(generation, "onCandidate") {
-                                            onCandidate(result)
-                                        }
-                                    }
-                                }
-                                searched += 1
-                                lastSourceName = source.bookSourceName
-                                callback(generation, "onProgress") {
-                                    onProgress(SourceChangeSearchProgress(searched, total, source.bookSourceName))
-                                }
+            forEachSourceWithWorkers(work, config.threadCount) { (source, refreshCandidate) ->
+                callbackMutex.withLock {
+                    callback(generation, "onProgress") {
+                        onProgress(SourceChangeSearchProgress(searched, total, source.bookSourceName))
+                    }
+                }
+                ensureCurrent(generation)
+                val enriched = loadCandidates(generation, source, keyword, author, refreshCandidate)
+                callbackMutex.withLock {
+                    ensureCurrent(generation)
+                    for (result in enriched) {
+                        if (found.add(result.sourceUrl to result.bookUrl)) {
+                            callback(generation, "onCandidate") {
+                                onCandidate(result)
                             }
                         }
+                    }
+                    searched += 1
+                    lastSourceName = source.bookSourceName
+                    callback(generation, "onProgress") {
+                        onProgress(SourceChangeSearchProgress(searched, total, source.bookSourceName))
                     }
                 }
             }

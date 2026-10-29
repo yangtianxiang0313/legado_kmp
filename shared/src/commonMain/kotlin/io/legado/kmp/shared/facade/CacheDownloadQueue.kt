@@ -1,5 +1,8 @@
 package io.legado.kmp.shared.facade
 
+import io.legado.kmp.shared.platform.ConsumerConcurrencyPolicy
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -87,17 +90,29 @@ internal class CacheDownloadLimiter {
     private data class State(val limit: Int = 3, val active: Int = 0)
     private val state = MutableStateFlow(State())
 
-    fun configure(limit: Int) = state.update { it.copy(limit = limit.coerceIn(1, 64)) }
+    class Permit internal constructor(private val limiter: CacheDownloadLimiter) {
+        private val released = MutableStateFlow(false)
 
-    suspend fun <T> withPermit(block: suspend () -> T): T {
-        while (true) {
-            val available = state.first { it.active < it.limit }
-            if (state.compareAndSet(available, available.copy(active = available.active + 1))) break
+        fun release() {
+            if (released.compareAndSet(false, true)) {
+                limiter.state.update { it.copy(active = it.active - 1) }
+            }
         }
-        try {
-            return block()
-        } finally {
-            state.update { it.copy(active = it.active - 1) }
+    }
+
+    fun configure(limit: Int) = state.update {
+        it.copy(limit = ConsumerConcurrencyPolicy.configuredLimit(limit))
+    }
+
+    // Only book dispatchers wait here; a chapter task is created after admission.
+    suspend fun acquire(): Permit {
+        while (true) {
+            coroutineContext.ensureActive()
+            val available = state.first { it.active < it.limit }
+            coroutineContext.ensureActive()
+            if (state.compareAndSet(available, available.copy(active = available.active + 1))) {
+                return Permit(this)
+            }
         }
     }
 }

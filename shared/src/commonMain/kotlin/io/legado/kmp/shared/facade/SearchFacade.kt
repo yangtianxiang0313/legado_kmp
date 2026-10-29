@@ -16,17 +16,14 @@ import io.legado.kmp.shared.model.SearchBook
 import io.legado.kmp.shared.model.SearchKeyword
 import io.legado.kmp.shared.model.SearchScope
 import io.legado.kmp.shared.model.SearchSessionState
-import io.legado.kmp.shared.platform.SearchExecutionPolicy
 import io.legado.kmp.shared.preferences.AppPreferencesStore
 import io.legado.kmp.shared.util.currentTimeMillis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,9 +31,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 
@@ -227,73 +222,64 @@ class SearchFacade(
             var lastPublishedResults = visibleResults
             var lastPublishAt = 0L
             val guard = Mutex()
-            val semaphore = Semaphore(SearchExecutionPolicy.effectiveSourceConcurrency(runtime.threadCount))
             publishIfCurrent(generation, session.value.copy(
                 sourceTotalCount = checkpoint.sourceTotalCount,
                 completedSourceCount = checkpoint.completedSourceCount,
                 failedSourceCount = checkpoint.failedSourceCount,
             ))
 
-            coroutineScope {
-                pendingSources.map { source ->
-                    launch {
-                        awaitResume()
-                        semaphore.withPermit {
-                            if (!isCurrentGeneration(generation)) return@withPermit
-                            awaitResume()
+            forEachSourceWithWorkers(pendingSources, runtime.threadCount) { source ->
+                awaitResume()
+                kotlin.coroutines.coroutineContext.ensureActive()
+                if (!isCurrentGeneration(generation)) return@forEachSourceWithWorkers
+                runCatching {
+                    withTimeout(SOURCE_SEARCH_TIMEOUT_MS) {
+                        searchWebBooksUseCase.searchFromSource(source, normalizedKeyword, requestedPage).getOrThrow()
+                    }
+                }.recoverCatching { throwable ->
+                    if (throwable is TimeoutCancellationException) {
+                        throw IllegalStateException("搜索超时: ${source.bookSourceName.ifBlank { source.bookSourceUrl }}", throwable)
+                    }
+                    throw throwable
+                }
+                    .onSuccess { books ->
+                        var partialState: SearchSessionState? = null
+                        guard.withLock {
                             kotlin.coroutines.coroutineContext.ensureActive()
-                            if (!isCurrentGeneration(generation)) return@withPermit
-                            runCatching {
-                                withTimeout(SOURCE_SEARCH_TIMEOUT_MS) {
-                                    searchWebBooksUseCase.searchFromSource(source, normalizedKeyword, requestedPage).getOrThrow()
-                                }
-                            }.recoverCatching { throwable ->
-                                if (throwable is TimeoutCancellationException) {
-                                    throw IllegalStateException("搜索超时: ${source.bookSourceName.ifBlank { source.bookSourceUrl }}", throwable)
-                                }
-                                throw throwable
+                            if (!isCurrentGeneration(generation)) return@withLock
+                            checkpoint.recordSuccess(source.bookSourceUrl, books)
+                            aggregated = mergeResults(
+                                existing = seedResults,
+                                incoming = checkpoint.books,
+                                keyword = normalizedKeyword,
+                                precision = runtime.precisionSearch,
+                            )
+                            val now = currentTimeMillis()
+                            val shouldPublish = aggregated != lastPublishedResults &&
+                                (checkpoint.completedSourceCount == checkpoint.sourceTotalCount ||
+                                    now - lastPublishAt >= PARTIAL_PUBLISH_INTERVAL_MS)
+                            if (shouldPublish) {
+                                lastPublishedResults = aggregated
+                                lastPublishAt = now
+                                partialState = session.value.copy(
+                                    results = aggregated,
+                                    sourceTotalCount = checkpoint.sourceTotalCount,
+                                    completedSourceCount = checkpoint.completedSourceCount,
+                                    failedSourceCount = checkpoint.failedSourceCount,
+                                    error = null,
+                                )
                             }
-                                .onSuccess { books ->
-                                    var partialState: SearchSessionState? = null
-                                    guard.withLock {
-                                        kotlin.coroutines.coroutineContext.ensureActive()
-                                        if (!isCurrentGeneration(generation)) return@withLock
-                                        checkpoint.recordSuccess(source.bookSourceUrl, books)
-                                        aggregated = mergeResults(
-                                            existing = seedResults,
-                                            incoming = checkpoint.books,
-                                            keyword = normalizedKeyword,
-                                            precision = runtime.precisionSearch,
-                                        )
-                                        val now = currentTimeMillis()
-                                        val shouldPublish = aggregated != lastPublishedResults &&
-                                            (checkpoint.completedSourceCount == checkpoint.sourceTotalCount ||
-                                                now - lastPublishAt >= PARTIAL_PUBLISH_INTERVAL_MS)
-                                        if (shouldPublish) {
-                                            lastPublishedResults = aggregated
-                                            lastPublishAt = now
-                                            partialState = session.value.copy(
-                                                results = aggregated,
-                                                sourceTotalCount = checkpoint.sourceTotalCount,
-                                                completedSourceCount = checkpoint.completedSourceCount,
-                                                failedSourceCount = checkpoint.failedSourceCount,
-                                                error = null,
-                                            )
-                                        }
-                                    }
-                                    partialState?.let { publishIfCurrent(generation, it) }
-                                }
-                                .onFailure { throwable ->
-                                    if (throwable is CancellationException) throw throwable
-                                    guard.withLock {
-                                        kotlin.coroutines.coroutineContext.ensureActive()
-                                        if (!isCurrentGeneration(generation)) return@withLock
-                                        checkpoint.recordFailure(source.bookSourceUrl, throwable.message ?: "搜索失败")
-                                    }
-                                }
+                        }
+                        partialState?.let { publishIfCurrent(generation, it) }
+                    }
+                    .onFailure { throwable ->
+                        guard.withLock {
+                            // A source-local cancellation must not retire a worker or abandon queued sources.
+                            kotlin.coroutines.coroutineContext.ensureActive()
+                            if (!isCurrentGeneration(generation)) return@withLock
+                            checkpoint.recordFailure(source.bookSourceUrl, throwable.message ?: "搜索失败")
                         }
                     }
-                }.forEach { it.join() }
             }
 
             kotlin.coroutines.coroutineContext.ensureActive()
