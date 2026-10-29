@@ -5,6 +5,7 @@ import io.legado.kmp.shared.domain.repository.BookSourceRepository
 import io.legado.kmp.shared.domain.repository.CookieRepository
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.BookSource
+import io.legado.kmp.shared.network.ConcurrentRateLimiter
 import io.legado.kmp.shared.network.JsExecutor
 import io.legado.kmp.shared.network.SourceHeaderResolver
 import io.legado.kmp.shared.network.SourceRequestExecutor
@@ -97,8 +98,20 @@ class WebBookFileFacade(
         }
     }
 
+    /** Starts once before returning a cancellation handle; the session owns the shared rate limit. */
+    @Throws(RecoverableSharedException::class)
+    fun beginDownload(bookUrl: String, urlRule: String): WebBookFileTransferSession = try {
+        WebBookFileTransferSession { prepareDownloadIntent(bookUrl, urlRule) }
+    } catch (_: Exception) {
+        throw RecoverableSharedException("WebBookFileFacade.beginDownload", "文件下载会话无法启动，请重试")
+    }
+
+    /** Compatibility intent only: no rate-limit lease. HTTP consumers must use beginDownload. */
     @Throws(RecoverableSharedException::class, CancellationException::class)
-    suspend fun prepareDownload(bookUrl: String, urlRule: String): WebBookFileRequest = recoverWebBookFile("prepareDownload") {
+    suspend fun prepareDownload(bookUrl: String, urlRule: String): WebBookFileRequest =
+        recoverWebBookFile("prepareDownload") { prepareDownloadIntent(bookUrl, urlRule).request }
+
+    private suspend fun prepareDownloadIntent(bookUrl: String, urlRule: String): WebBookFilePreparedDownload =
         preparationMutex.withLock {
             requireWebBookFileRule(bookUrl)
             requireWebBookFile(!isWebBookFileInlineRule(urlRule),
@@ -119,9 +132,18 @@ class WebBookFileFacade(
                 "inlineRequiresPreparation", "HTTP 规则不能下载 DataURL，请刷新为静态内联文件选项")
             val latestBook = requireBook(bookUrl)
             requireIssuedBook(latestBook, requireSource(latestBook), issued)
-            prepareWebBookFileHttp(context, source, book, option!!)
+            WebBookFilePreparedDownload(
+                request = prepareWebBookFileHttp(context, source, book, option!!),
+                limiter = ConcurrentRateLimiter(source),
+                revalidate = {
+                    // Waiting must not switch to a newer source or re-evaluate this signed intent.
+                    // Do not take preparationMutex while holding a permit: detail refresh may
+                    // already hold that mutex while waiting for the same source's rate limit.
+                    val current = requireBook(bookUrl)
+                    requireIssuedBook(current, requireSource(current), issued)
+                },
+            )
         }
-    }
 
     /** Static DataURL only: no AnalyzeUrl, source JS, headers, cookies, or HTTP request. */
     @Throws(RecoverableSharedException::class, CancellationException::class)

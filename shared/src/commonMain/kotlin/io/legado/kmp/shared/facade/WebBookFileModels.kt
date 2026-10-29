@@ -29,7 +29,10 @@ data class WebBookFileInlineResult(
     override fun toString(): String = "WebBookFileInlineResult(redacted)"
 }
 
-/** Sensitive HTTP intent. The loader must disable automatic redirects and automatic cookie injection. */
+/**
+ * Sensitive HTTP intent. The loader must disable automatic redirects and automatic cookie injection.
+ * retryCount retries non-2xx responses only, reusing this intent without re-evaluating URL/source JS.
+ */
 data class WebBookFileRequest(
     val url: String,
     val method: String,
@@ -41,6 +44,7 @@ data class WebBookFileRequest(
     val headerOriginUrl: String,
     val explicitCookie: String?,
     val enabledCookieJar: Boolean,
+    val retryCount: Int = 0,
 ) {
     override fun toString(): String = "WebBookFileRequest(redacted)"
 }

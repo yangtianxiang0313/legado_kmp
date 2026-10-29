@@ -1,9 +1,11 @@
 package io.legado.kmp.shared.network
 
 import io.legado.kmp.shared.model.BookSource
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal class ConcurrentRateLimiter(
     source: BookSource?,
@@ -18,7 +20,9 @@ internal class ConcurrentRateLimiter(
         try {
             return block()
         } finally {
-            releaseRecord(record)
+            withContext(NonCancellable) {
+                releaseRecord(record)
+            }
         }
     }
 

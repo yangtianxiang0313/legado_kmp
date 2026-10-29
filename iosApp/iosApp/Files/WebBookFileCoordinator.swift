@@ -177,32 +177,36 @@ final class WebBookFileCoordinator {
             try checkOwner(token)
             return try await loader.loadInline(data, onProgress: progress)
         }
-        let prepared: WebBookFileRequest = try await SharedCancellableAsync.value { completion in
-            facade.prepareDownloadRequest(bookUrl: book.bookUrl, urlRule: option.urlRule) { result in
-                if result.isCancelled {
-                    completion(nil, CancellationError())
-                } else if let request = result.request {
-                    completion(request, nil)
-                } else {
-                    completion(nil, Self.failure(result.errorMessage ?? "下载请求准备失败"))
-                }
+        let session = try facade.beginDownload(bookUrl: book.bookUrl, urlRule: option.urlRule)
+        return try await withTaskCancellationHandler {
+            do {
+                let prepared = try await session.request()
+                try Task.checkCancellation()
+                try checkOwner(token)
+                let file = try await loader.load(
+                    prepared,
+                    prepareRedirect: { [weak self] current, target in
+                        guard let self else { throw CancellationError() }
+                        try self.checkOwner(token)
+                        return try await facade.prepareRedirect(request: current, targetUrl: target.absoluteString)
+                    },
+                    recordResponseCookies: { [weak self] current, responseURL, fields in
+                        guard let self else { throw CancellationError() }
+                        try self.checkOwner(token)
+                        try await facade.recordResponseCookies(
+                            request: current, responseUrl: responseURL.absoluteString, setCookieHeaders: fields)
+                    },
+                    onResponseHeaders: { session.headersReceived() },
+                    onProgress: progress)
+                try? await session.finish()
+                return file
+            } catch {
+                try? await session.finish()
+                throw error
             }
+        } onCancel: {
+            session.cancel()
         }
-        try checkOwner(token)
-        return try await loader.load(
-            prepared,
-            prepareRedirect: { [weak self] current, target in
-                guard let self else { throw CancellationError() }
-                try self.checkOwner(token)
-                return try await facade.prepareRedirect(request: current, targetUrl: target.absoluteString)
-            },
-            recordResponseCookies: { [weak self] current, responseURL, fields in
-                guard let self else { throw CancellationError() }
-                try self.checkOwner(token)
-                try await facade.recordResponseCookies(
-                    request: current, responseUrl: responseURL.absoluteString, setCookieHeaders: fields)
-            },
-            onProgress: progress)
     }
 
     private func startImport(_ file: URL, onlineBook: Book, openAfterImport: Bool, token: UUID) {

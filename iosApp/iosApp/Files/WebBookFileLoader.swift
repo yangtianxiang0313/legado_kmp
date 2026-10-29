@@ -22,20 +22,61 @@ final class WebBookFileLoader {
         _ prepared: WebBookFileRequest,
         prepareRedirect: @escaping @MainActor (WebBookFileRequest, URL) async throws -> [String: String],
         recordResponseCookies: (@MainActor (WebBookFileRequest, URL, [String]) async throws -> Void)? = nil,
+        onResponseHeaders: (@MainActor () -> Void)? = nil,
         onProgress: @escaping @MainActor (Int64, Int64?) -> Void
     ) async throws -> URL {
         guard active == nil else { throw WebBookFilePolicy.failure("文件下载已经开始") }
         try Task.checkCancellation()
         let input = try WebBookFilePolicy.Input(prepared)
         let progress = WebBookFileProgress(onProgress)
-        let transfer = WebBookFileTransfer(
-            input: input, prepareRedirect: prepareRedirect, recordResponseCookies: recordResponseCookies, progress: progress)
-        active = transfer
+        let operation = WebBookFileHTTPOperation()
+        active = operation
         defer {
             progress.stop()
-            if active === transfer { active = nil }
+            operation.finish { [weak self, weak operation] in
+                guard let self, let operation, self.active === operation else { return }
+                self.active = nil
+            }
         }
-        let receipt = try await transfer.load()
+        let receipt = try await withTaskCancellationHandler {
+            do {
+                var request = input.request
+                var retriesRemaining = input.retryCount
+                while true {
+                    try operation.check()
+                    let transfer = WebBookFileTransfer(
+                        input: input, request: request, gate: operation.gate,
+                        remainingDuration: operation.remainingDuration,
+                        prepareRedirect: prepareRedirect, recordResponseCookies: recordResponseCookies,
+                        onResponseHeaders: onResponseHeaders, progress: progress)
+                    try operation.attach(transfer)
+                    do {
+                        let receipt = try await transfer.load()
+                        operation.detach(transfer)
+                        return receipt
+                    } catch {
+                        operation.detach(transfer)
+                        try operation.check()
+                        // Only an actual final non-2xx response permits replay, including an explicit POST retry.
+                        guard error is WebBookFileHTTPFailure, retriesRemaining > 0 else { throw error }
+                        retriesRemaining -= 1
+                        let headers = try await operation.refreshHeaders {
+                            // Always scope the original prepared intent, never the failed redirect's private headers.
+                            try await prepareRedirect(prepared, input.initialURL)
+                        }
+                        try operation.check()
+                        request = try WebBookFilePolicy.request(
+                            url: input.initialURL, method: input.request.httpMethod ?? "GET", body: input.request.httpBody,
+                            headers: headers, timeout: input.request.timeoutInterval,
+                            allowsPrivate: WebBookFilePolicy.sameOrigin(input.headerOrigin, input.initialURL))
+                    }
+                }
+            } catch {
+                throw operation.failure(or: error)
+            }
+        } onCancel: {
+            operation.cancel()
+        }
         // Publication is the cancellation linearization point. Never throw after a successful commit.
         progress.report(receipt.bytes, receipt.total)
         return receipt.url
@@ -80,6 +121,144 @@ final class WebBookFileProgress {
     func stop() { stopped = true }
 }
 
+private struct WebBookFileHTTPFailure: LocalizedError, Sendable {
+    let statusCode: Int
+
+    var errorDescription: String? { "文件下载失败：HTTP \(statusCode)" }
+}
+
+/// One reservation, publication gate and monotonic deadline cover every transfer and header refresh.
+private final class WebBookFileHTTPOperation: WebBookFileLoading, @unchecked Sendable {
+    let gate = WebBookFileCancellation()
+    private let lock = NSLock()
+    private let deadline = DispatchTime.now() + WebBookFilePolicy.maximumDuration
+    private let timer: DispatchSourceTimer
+    private var terminalError: Error?
+    private var transfer: WebBookFileTransfer?
+    private var preparation:
+        (
+            id: UUID, task: Task<Void, Never>, continuation: CheckedContinuation<[String: String], Error>?
+        )?
+    private var releaseReservation: (@MainActor () -> Void)?
+
+    init() {
+        timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: deadline)
+        timer.setEventHandler { [weak self] in
+            self?.stop(WebBookFilePolicy.failure("文件下载超过 24 小时"))
+        }
+        timer.resume()
+    }
+
+    deinit { timer.cancel() }
+
+    var remainingDuration: TimeInterval {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let end = deadline.uptimeNanoseconds
+        return end > now ? Double(end - now) / 1_000_000_000 : 0.001
+    }
+
+    func check() throws {
+        if DispatchTime.now().uptimeNanoseconds >= deadline.uptimeNanoseconds {
+            stop(WebBookFilePolicy.failure("文件下载超过 24 小时"))
+        }
+        lock.lock()
+        let error = terminalError
+        lock.unlock()
+        if let error { throw error }
+        try gate.check()
+    }
+
+    func failure(or error: Error) -> Error {
+        lock.lock()
+        defer { lock.unlock() }
+        return terminalError ?? error
+    }
+
+    func attach(_ transfer: WebBookFileTransfer) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        if let terminalError { throw terminalError }
+        self.transfer = transfer
+    }
+
+    func detach(_ transfer: WebBookFileTransfer) {
+        lock.lock()
+        defer { lock.unlock() }
+        if self.transfer === transfer { self.transfer = nil }
+    }
+
+    @MainActor
+    func refreshHeaders(
+        _ callback: @escaping @MainActor () async throws -> [String: String]
+    ) async throws -> [String: String] {
+        try check()
+        return try await withCheckedThrowingContinuation { continuation in
+            let id = UUID()
+            let task = Task { @MainActor [weak self] in
+                do {
+                    try Task.checkCancellation()
+                    let headers = try await callback()
+                    try Task.checkCancellation()
+                    self?.completePreparation(id, result: .success(headers))
+                } catch {
+                    self?.completePreparation(id, result: .failure(error))
+                }
+            }
+            lock.lock()
+            if let terminalError {
+                lock.unlock()
+                task.cancel()
+                continuation.resume(throwing: terminalError)
+            } else {
+                preparation = (id, task, continuation)
+                lock.unlock()
+            }
+        }
+    }
+
+    @MainActor
+    private func completePreparation(_ id: UUID, result: Result<[String: String], Error>) {
+        lock.lock()
+        guard let pending = preparation, pending.id == id else { lock.unlock(); return }
+        preparation = nil
+        let error = terminalError
+        let release = releaseReservation
+        releaseReservation = nil
+        lock.unlock()
+        pending.continuation?.resume(with: error.map { .failure($0) } ?? result)
+        release?()
+    }
+
+    func cancel() { stop(CancellationError()) }
+
+    private func stop(_ error: Error) {
+        lock.lock()
+        // The same gate protects the atomic file rename; a late cancel cannot overwrite success.
+        guard terminalError == nil, gate.cancel() else { lock.unlock(); return }
+        terminalError = error
+        let transfer = transfer
+        let pending = preparation
+        // Resume cancellation promptly, but reserve the loader until the callback actually exits.
+        preparation?.continuation = nil
+        lock.unlock()
+        transfer?.cancel()
+        pending?.task.cancel()
+        pending?.continuation?.resume(throwing: error)
+    }
+
+    @MainActor
+    func finish(release: @escaping @MainActor () -> Void) {
+        timer.cancel()
+        lock.lock()
+        transfer = nil
+        let pending = preparation != nil
+        if pending { releaseReservation = release }
+        lock.unlock()
+        if !pending { release() }
+    }
+}
+
 /// A fresh session and a serial writer per invocation; only the cancellation gate crosses queues.
 private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBookFileLoading, @unchecked Sendable {
     private struct RedirectPlan: Sendable {
@@ -92,11 +271,13 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
     }
 
     private let queue = DispatchQueue(label: "io.legado.web-book.file", qos: .userInitiated)
-    private let gate = WebBookFileCancellation()
+    private let gate: WebBookFileCancellation
     private let input: WebBookFilePolicy.Input
+    private let remainingDuration: TimeInterval
     private let progress: WebBookFileProgress
     private var prepareRedirect: (@MainActor (WebBookFileRequest, URL) async throws -> [String: String])?
     private var recordResponseCookies: (@MainActor (WebBookFileRequest, URL, [String]) async throws -> Void)?
+    private var onResponseHeaders: (@MainActor () -> Void)?
 
     // Confined to queue, including all URLSession delegate callbacks and disk operations.
     private var continuation: CheckedContinuation<WebBookFileReceipt, Error>?
@@ -113,7 +294,6 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
     private var result: Result<WebBookFileReceipt, Error>?
     private var invalidating = false
     private var started = false
-    private var deadline: DispatchSourceTimer?
     private var lastProgressTime: TimeInterval = 0
     private var redirectID: UUID?
     private var redirectTask: Task<Void, Never>?
@@ -124,16 +304,23 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
 
     init(
         input: WebBookFilePolicy.Input,
+        request: URLRequest,
+        gate: WebBookFileCancellation,
+        remainingDuration: TimeInterval,
         prepareRedirect: @escaping @MainActor (WebBookFileRequest, URL) async throws -> [String: String],
         recordResponseCookies: (@MainActor (WebBookFileRequest, URL, [String]) async throws -> Void)?,
+        onResponseHeaders: (@MainActor () -> Void)?,
         progress: WebBookFileProgress
     ) {
         self.input = input
+        self.gate = gate
+        self.remainingDuration = remainingDuration
         self.prepareRedirect = prepareRedirect
         self.recordResponseCookies = recordResponseCookies
+        self.onResponseHeaders = onResponseHeaders
         self.progress = progress
-        currentRequest = input.request
-        currentPrepared = input.snapshot(url: input.initialURL, request: input.request, explicitCookie: input.explicitCookie)
+        currentRequest = request
+        currentPrepared = input.snapshot(url: input.initialURL, request: request, explicitCookie: input.explicitCookie)
         super.init()
     }
 
@@ -172,7 +359,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
             configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
             // URLSession resets the request's idle timeout when data arrives, not at file-size intervals.
             configuration.timeoutIntervalForRequest = input.request.timeoutInterval
-            configuration.timeoutIntervalForResource = WebBookFilePolicy.maximumDuration
+            configuration.timeoutIntervalForResource = remainingDuration
             configuration.waitsForConnectivity = false
             configuration.httpMaximumConnectionsPerHost = 1
             let delegateQueue = OperationQueue()
@@ -180,11 +367,6 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
             delegateQueue.underlyingQueue = queue
             let session = URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
             self.session = session
-            let timer = DispatchSource.makeTimerSource(queue: queue)
-            timer.schedule(deadline: .now() + WebBookFilePolicy.maximumDuration)
-            timer.setEventHandler { [weak self] in self?.stop(WebBookFilePolicy.failure("文件下载超过 24 小时")) }
-            deadline = timer
-            timer.resume()
             let task = session.dataTask(with: currentRequest)
             self.task = task
             task.resume()
@@ -223,19 +405,27 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
             let cookies = try WebBookFilePolicy.setCookieHeaders(response)
             let recorder = try cookieRecorder(for: cookies)
             let current = currentPrepared
+            let onResponseHeaders = onResponseHeaders
             let id = UUID()
             responsePreparationID = id
             responseCompletion = completionHandler
-            responsePreparationTask = Task { [weak self] in
+            responsePreparationTask = Task { @MainActor [weak self] in
                 do {
                     if let recorder { try await recorder(current, url, cookies) }
                     try Task.checkCancellation()
+                    let expectedBytes = try Self.validateFinalResponse(response)
                     guard let self else { return }
+                    try self.gate.check()
+                    onResponseHeaders?()
+                    try Task.checkCancellation()
+                    try self.gate.check()
                     self.queue.async {
                         guard self.responsePreparationID == id, self.failure == nil, self.result == nil else { return }
                         do {
                             try self.gate.check()
-                            try self.acceptFinalResponse(response)
+                            self.expectedBytes = expectedBytes
+                            self.response = response
+                            self.publishProgress(force: true)
                             self.endResponsePreparation(.allow)
                         } catch {
                             self.endResponsePreparation(.cancel)
@@ -257,8 +447,11 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
         }
     }
 
-    private func acceptFinalResponse(_ response: HTTPURLResponse) throws {
+    private static func validateFinalResponse(_ response: HTTPURLResponse) throws -> Int64? {
         // Record cookies even on an error response, but never publish a partial/conditional file.
+        guard (200..<300).contains(response.statusCode) else {
+            throw WebBookFileHTTPFailure(statusCode: response.statusCode)
+        }
         guard response.statusCode == 200 else {
             throw WebBookFilePolicy.failure("文件下载失败：HTTP \(response.statusCode)")
         }
@@ -273,9 +466,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
         let length = response.expectedContentLength
         guard length <= WebBookFilePolicy.maximumBytes else { throw WebBookFilePolicy.failure("文件超过 2 GiB 下载上限") }
         guard length != 0 else { throw WebBookFilePolicy.failure("服务器返回了空文件") }
-        expectedBytes = length >= 0 ? length : nil
-        self.response = response
-        publishProgress(force: true)
+        return length >= 0 ? length : nil
     }
 
     func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
@@ -321,8 +512,6 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
         }
         file?.cleanup()
         file = nil
-        deadline?.cancel()
-        deadline = nil
         if !invalidating {
             invalidating = true
             session?.finishTasksAndInvalidate()
@@ -497,12 +686,11 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
     private func resolve() {
         endRedirect(nil)
         endResponsePreparation(.cancel)
-        deadline?.cancel()
-        deadline = nil
         file?.cleanup()
         file = nil
         prepareRedirect = nil
         recordResponseCookies = nil
+        onResponseHeaders = nil
         task = nil
         session = nil
         let continuation = continuation
@@ -533,11 +721,14 @@ enum WebBookFilePolicy {
         let fileName: String
         let bodyBase64: String?
         let explicitCookie: String?
+        let retryCount: Int32
         private let sourceURL: String
         private let headerOriginURL: String
         private let enabledCookieJar: Bool
 
         init(_ prepared: WebBookFileRequest) throws {
+            guard prepared.retryCount >= 0 else { throw failure("文件请求重试次数不能为负数") }
+            retryCount = prepared.retryCount
             let url = try WebBookFilePolicy.url(prepared.url)
             initialURL = url
             headerOrigin = try WebBookFilePolicy.url(prepared.headerOriginUrl)
@@ -577,7 +768,8 @@ enum WebBookFilePolicy {
                 url: url.absoluteString, method: request.httpMethod ?? "GET",
                 headers: request.allHTTPHeaderFields ?? [:], bodyBase64: request.httpBody == nil ? nil : bodyBase64,
                 fileName: fileName, timeoutMillis: Int64(request.timeoutInterval * 1000), sourceUrl: sourceURL,
-                headerOriginUrl: headerOriginURL, explicitCookie: explicitCookie, enabledCookieJar: enabledCookieJar)
+                headerOriginUrl: headerOriginURL, explicitCookie: explicitCookie, enabledCookieJar: enabledCookieJar,
+                retryCount: retryCount)
         }
     }
 
