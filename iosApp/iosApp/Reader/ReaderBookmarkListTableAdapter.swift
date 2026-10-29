@@ -157,6 +157,21 @@ final class ReaderBookmarkListTableAdapter: NSObject, UITableViewDataSource, UIT
         cell.configure(with: bookmark, palette: palette())
         cell.accessibilityIdentifier = UIIdentifiers.ReaderBookmarkList.cell
         let generation = snapshotGeneration
+        let bookmarkTime = bookmark.time
+        cell.setCanActivate { [weak self, weak cell, weak tableView] in
+            guard let self, let cell, let tableView,
+                self.tableView === tableView,
+                tableView.dataSource === self, tableView.delegate === self,
+                self.snapshotGeneration == generation,
+                !self.isEmbedded() || self.canPerformEmbeddedActions(),
+                cell.window != nil, cell.window === tableView.window,
+                cell.window?.windowScene?.activationState == .foregroundActive,
+                tableView.visibleCells.contains(where: { $0 === cell }),
+                let currentPath = tableView.indexPath(for: cell), currentPath.section == 0,
+                let current = self.bookmarkAtRow(currentPath.row), current.time == bookmarkTime
+            else { return false }
+            return true
+        }
         cell.accessibilityCustomActions = [
             UIAccessibilityCustomAction(name: L10n.Common.edit) { [weak self, weak cell] action in
                 guard let self, let cell, let tableView = self.tableView,
@@ -176,8 +191,14 @@ final class ReaderBookmarkListTableAdapter: NSObject, UITableViewDataSource, UIT
         return cell
     }
 
+    func tableView(_: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
+        guard !isEmbedded() || canPerformEmbeddedActions() else { return nil }
+        return indexPath
+    }
+
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard !isEmbedded() || canPerformEmbeddedActions() else { return }
         guard let bookmark = bookmarkAtRow(indexPath.row) else {
             onStaleBookmark()
             return

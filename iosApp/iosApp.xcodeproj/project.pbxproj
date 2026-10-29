@@ -526,6 +526,7 @@
 		E10000000000000000000033 /* ReaderMenuAndroidIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000033 /* ReaderMenuAndroidIcon.swift */; };
 		E10000000000000000000036 /* ReaderOverflowMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000036 /* ReaderOverflowMenuView.swift */; };
 		E10000000000000000000037 /* ReaderTocChapterCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000037 /* ReaderTocChapterCell.swift */; };
+		F029A0010000000000000001 /* ReaderTableAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = F029A0020000000000000001 /* ReaderTableAccessibility.swift */; };
 		E10000000000000000000038 /* ReaderTocPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000038 /* ReaderTocPalette.swift */; };
 		E10000000000000000000039 /* ReaderTocAndroidIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000039 /* ReaderTocAndroidIcon.swift */; };
 		E1000000000000000000003A /* ReaderChapterListPresentationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000000000000000000003A /* ReaderChapterListPresentationCoordinator.swift */; };
@@ -1242,6 +1243,7 @@
 		E20000000000000000000033 /* ReaderMenuAndroidIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderMenuAndroidIcon.swift; sourceTree = "<group>"; };
 		E20000000000000000000036 /* ReaderOverflowMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderOverflowMenuView.swift; sourceTree = "<group>"; };
 		E20000000000000000000037 /* ReaderTocChapterCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTocChapterCell.swift; sourceTree = "<group>"; };
+		F029A0020000000000000001 /* ReaderTableAccessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTableAccessibility.swift; sourceTree = "<group>"; };
 		E20000000000000000000038 /* ReaderTocPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTocPalette.swift; sourceTree = "<group>"; };
 		E20000000000000000000039 /* ReaderTocAndroidIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTocAndroidIcon.swift; sourceTree = "<group>"; };
 		E2000000000000000000003A /* ReaderChapterListPresentationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderChapterListPresentationCoordinator.swift; sourceTree = "<group>"; };
@@ -2160,6 +2162,7 @@
 				E20000000000000000000033 /* ReaderMenuAndroidIcon.swift */,
 				E20000000000000000000036 /* ReaderOverflowMenuView.swift */,
 				E20000000000000000000037 /* ReaderTocChapterCell.swift */,
+				F029A0020000000000000001 /* ReaderTableAccessibility.swift */,
 				D81B60020000000000000003 /* ReaderTocToolbarView.swift */,
 				D81B70020000000000000001 /* ReaderConfigURLDialogContentView.swift */,
 				D81B70020000000000000002 /* ReaderConfigURLDialogViewController.swift */,
@@ -2980,6 +2983,7 @@
 				E10000000000000000000033 /* ReaderMenuAndroidIcon.swift in Sources */,
 				E10000000000000000000036 /* ReaderOverflowMenuView.swift in Sources */,
 				E10000000000000000000037 /* ReaderTocChapterCell.swift in Sources */,
+				F029A0010000000000000001 /* ReaderTableAccessibility.swift in Sources */,
 				A417C0354A12456F9A91D301 /* ReaderTocTabPagerViewController.swift in Sources */,
 				E10000000000000000000038 /* ReaderTocPalette.swift in Sources */,
 				E10000000000000000000039 /* ReaderTocAndroidIcon.swift in Sources */,

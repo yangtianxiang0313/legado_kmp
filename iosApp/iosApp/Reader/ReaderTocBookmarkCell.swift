@@ -13,6 +13,7 @@ final class ReaderTocBookmarkCell: UITableViewCell {
     private var bookTextRow: UIView!
     private var noteRow: UIView!
     private var dividerHeight: NSLayoutConstraint!
+    private var canActivate: (() -> Bool)?
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -54,8 +55,18 @@ final class ReaderTocBookmarkCell: UITableViewCell {
         accessibilityTraits = .button
     }
 
+    func setCanActivate(_ canActivate: (() -> Bool)?) {
+        self.canActivate = canActivate
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard canActivate?() == true else { return false }
+        return ReaderTableAccessibility.activate(self)
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
+        canActivate = nil
         for label in [chapterLabel, bookTextLabel, noteLabel] {
             label.text = nil
         }

@@ -16,6 +16,7 @@ final class ReaderTocChapterCell: UITableViewCell {
     private let statusSlot = UIView()
     private let statusImageView = UIImageView()
     private let dividerView = UIView()
+    private var canActivate: (() -> Bool)?
     private lazy var lockWidth = lockSlot.widthAnchor.constraint(equalToConstant: 0)
     private lazy var dividerHeight = dividerView.heightAnchor.constraint(equalToConstant: 1)
 
@@ -31,8 +32,10 @@ final class ReaderTocChapterCell: UITableViewCell {
 
     func configure(
         item: ReaderChapterListItem, palette: ReaderTocPalette, showWordCount: Bool = true,
+        canActivate: (() -> Bool)? = nil,
         onShowFullTitle: (() -> Bool)? = nil
     ) {
+        self.canActivate = canActivate
         let wordCount = showWordCount && !item.chapter.isVolume ? Self.metadata(item.chapter.wordCount) : nil
         let tag = item.chapter.isVolume ? nil : Self.metadata(item.chapter.tag)
         let isLocked = item.chapter.isVip && !item.chapter.isPay
@@ -95,6 +98,11 @@ final class ReaderTocChapterCell: UITableViewCell {
         }
     }
 
+    override func accessibilityActivate() -> Bool {
+        guard canActivate?() == true else { return false }
+        return ReaderTableAccessibility.activate(self)
+    }
+
     override func didMoveToWindow() {
         super.didMoveToWindow()
         updateDividerHeight()
@@ -108,6 +116,7 @@ final class ReaderTocChapterCell: UITableViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        canActivate = nil
         for label in [titleLabel, wordCountLabel, tagLabel] { label.text = nil }
         accessibilityLabel = nil
         accessibilityValue = nil

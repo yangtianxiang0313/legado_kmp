@@ -481,6 +481,7 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
         let request = ChapterTitleRequest(cell: cell, item: item, revision: itemsRevision)
         cell.configure(
             item: item, palette: palette, showWordCount: menuCoordinator.showWordCount,
+            canActivate: { [weak self] in self?.isCurrentChapterTitleRequest(request) ?? false },
             onShowFullTitle: { [weak self] in self?.showFullChapterTitle(request) ?? false })
         cell.accessibilityIdentifier = UIIdentifiers.ReaderChapterList.cell
     }
