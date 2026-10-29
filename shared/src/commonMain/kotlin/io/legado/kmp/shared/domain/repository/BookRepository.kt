@@ -4,6 +4,13 @@ import io.legado.kmp.shared.domain.localbook.EpubCatalogReflowPlan
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.BookChapter
 import kotlinx.coroutines.flow.Flow
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+
+/** Keep the caller's cancellation checks while a cache move/commit is being finalized. */
+internal class WebFileMetadataMergeContext(val callerContext: CoroutineContext) : AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<WebFileMetadataMergeContext>
+}
 
 /** The transaction's latest snapshot; persisted is false for conflicts, no-ops and missing books. */
 data class ReadingProgressUpdateResult(
@@ -89,6 +96,23 @@ interface BookRepository {
      */
     @Throws(Exception::class)
     suspend fun insertLocalBookIfAbsent(book: Book, chapters: List<BookChapter>): Book
+
+    /**
+     * Merge web-file metadata into an imported local book in one synchronous database transaction.
+     * Recheck the online book's URL, origin, isWebFile and original name/author/coverUrl/intro
+     * against expectedOnlineBook, and require its source to still have the FILE type.
+     * Recheck the local book's URL, isLocal, origin, type and the same four original fields
+     * against expectedLocalBook. Prefer nonblank online name/author/intro and assign the raw
+     * online coverUrl, including null. Update only these four columns, preserving every other
+     * latest stored value, including raw config, custom fields and reading progress. Rename
+     * uniquely local-owned bookmarks in the same transaction; the target domain may contain
+     * only the explicit online counterpart and must have no existing bookmarks.
+     * Missing/changed state, ambiguous bookmark ownership or a target identity collision returns
+     * null without writes, preserving the local import. Check cancellation before writes and
+     * before commit; cancellation/failure before commit rolls back every write. Return the
+     * committed local book without any post-commit query or cancellation check.
+     */
+    suspend fun mergeWebFileMetadataIfUnchanged(expectedOnlineBook: Book, expectedLocalBook: Book): Book?
 
     /**
      * Explicitly prepare a NOT_SHELF book only if its URL is absent, in one transaction.

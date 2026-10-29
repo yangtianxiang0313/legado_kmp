@@ -49,6 +49,7 @@ class WebBookFileFacade(
             requireWebBookFileRule(bookUrl)
             issuedOptions.remove(bookUrl)
             val initialBook = requireBook(bookUrl)
+            val initialBookSnapshot = webBookFileBookSnapshot(initialBook)
             val source = requireSource(initialBook)
             val snapshot = webBookFileSourceSnapshot(source)
             // downloadUrls is transient. Refresh detail only, without persisting or loading a TOC.
@@ -58,24 +59,41 @@ class WebBookFileFacade(
             } else initialBook
             requireWebBookFile(book.bookUrl == initialBook.bookUrl && book.origin == initialBook.origin && !book.isLocal,
                 "bookChanged", "书籍或书源已变化，请刷新文件列表")
-            val rules = book.downloadUrls.orEmpty()
-            requireWebBookFile(rules.size <= WebBookFileLimits.OPTIONS, "optionsTooLarge", "文件下载选项数量超过限制")
+            val downloadRules = book.downloadUrls.orEmpty()
+            requireWebBookFile(downloadRules.size <= WebBookFileLimits.OPTIONS, "optionsTooLarge", "文件下载选项数量超过限制")
+            val rules = downloadRules.toList()
             var bytes = 0
-            val options = rules.map { rule ->
+            var inlineBytes = 0
+            val options = mutableListOf<WebBookFileOption>()
+            for (rule in rules) {
                 currentCoroutineContext().ensureActive()
-                requireWebBookFileRule(rule)
-                bytes += rule.encodeToByteArray().size
-                requireWebBookFile(bytes <= WebBookFileLimits.OPTIONS_BYTES, "optionsTooLarge", "文件下载选项总大小超过限制")
-                webBookFileOption(book, rule)
-            }.distinctBy { it.urlRule }
+                if (isWebBookFileInlineRule(rule)) {
+                    webBookFileInlineHeader(rule)
+                    if (options.any { sameWebBookFileRule(it.urlRule, rule) }) continue
+                    requireWebBookFile(rule.length <= WebBookFileLimits.INLINE_CACHE_BYTES - inlineBytes,
+                        "inlineTooLarge", "DataURL 选项总大小超过 96 MiB 限制")
+                    validateWebBookFileInline(rule)
+                    inlineBytes += rule.length
+                } else {
+                    requireWebBookFileRule(rule)
+                    bytes += webBookFileBoundedByteSize(rule, WebBookFileLimits.RULE_BYTES)!!
+                    requireWebBookFile(bytes <= WebBookFileLimits.OPTIONS_BYTES, "optionsTooLarge", "文件下载选项总大小超过限制")
+                    if (options.any { sameWebBookFileRule(it.urlRule, rule) }) continue
+                }
+                options.add(webBookFileOption(book, rule))
+            }
             val currentBook = requireBook(bookUrl)
             requireWebBookFile(currentBook.origin == book.origin &&
                 (currentBook.variable == initialBook.variable || currentBook.variable == book.variable) &&
+                webBookFileBookSnapshot(currentBook.copy(variable = initialBook.variable)) == initialBookSnapshot &&
                 webBookFileSourceSnapshot(requireSource(currentBook)) == snapshot,
                 "bookChanged", "书籍或书源配置已变化，请刷新文件列表")
+            requireCurrentOptions(currentBook, options)
             currentCoroutineContext().ensureActive()
-            issuedOptions.put(bookUrl, WebBookFileIssued(book.copy(), currentBook.variable, snapshot, options))
-            options
+            val immutableOptions = options.toList()
+            issuedOptions.put(bookUrl, WebBookFileIssued(book.copy(), currentBook.variable, snapshot,
+                immutableOptions, webBookFileBookSnapshot(currentBook)))
+            immutableOptions
         }
     }
 
@@ -83,6 +101,8 @@ class WebBookFileFacade(
     suspend fun prepareDownload(bookUrl: String, urlRule: String): WebBookFileRequest = recoverWebBookFile("prepareDownload") {
         preparationMutex.withLock {
             requireWebBookFileRule(bookUrl)
+            requireWebBookFile(!isWebBookFileInlineRule(urlRule),
+                "inlineRequiresPreparation", "DataURL 文件请使用内联文件准备接口")
             requireWebBookFileRule(urlRule)
             val issued = issuedOptions.get(bookUrl)
             val option = issued?.options?.firstOrNull { it.urlRule == urlRule }
@@ -95,11 +115,34 @@ class WebBookFileFacade(
             // Exactly one AnalyzeUrl build for this user intent; no re-fetch or signed-URL comparison.
             val context = executor.prepareFileRequest(urlRule, source, book.bookUrl, ruleData)
             currentCoroutineContext().ensureActive()
+            requireWebBookFile(!isWebBookFileInlineRule(context.requestConfig.url),
+                "inlineRequiresPreparation", "HTTP 规则不能下载 DataURL，请刷新为静态内联文件选项")
             val latestBook = requireBook(bookUrl)
             requireIssuedBook(latestBook, requireSource(latestBook), issued)
             prepareWebBookFileHttp(context, source, book, option!!)
         }
     }
+
+    /** Static DataURL only: no AnalyzeUrl, source JS, headers, cookies, or HTTP request. */
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun prepareInlineDownload(bookUrl: String, urlRule: String): WebBookFileInlineData =
+        recoverWebBookFile("prepareInlineDownload") {
+            preparationMutex.withLock {
+                requireWebBookFileRule(bookUrl)
+                webBookFileInlineHeader(urlRule)
+                val issued = issuedOptions.get(bookUrl)
+                val option = issued?.options?.firstOrNull { it.isInlineData && sameWebBookFileRule(it.urlRule, urlRule) }
+                requireWebBookFile(issued != null && option != null,
+                    "optionExpired", "文件选项已失效，请刷新列表后重新选择")
+                val currentBook = requireBook(bookUrl)
+                requireIssuedBook(currentBook, requireSource(currentBook), issued!!)
+                val data = prepareWebBookFileInline(option!!)
+                currentCoroutineContext().ensureActive()
+                val latestBook = requireBook(bookUrl)
+                requireIssuedBook(latestBook, requireSource(latestBook), issued)
+                data
+            }
+        }
 
     /**
      * targetUrl must be absolute. After every hop, the loader must retain the new URL and returned
@@ -147,6 +190,19 @@ class WebBookFileFacade(
             missingResultMessage = "File download intent unavailable",
         )
 
+    fun prepareInlineDownloadRequest(bookUrl: String, urlRule: String, onResult: (WebBookFileInlineResult) -> Unit): FlowSubscription =
+        CancellableFacadeRequest.start(
+            prepare = { WebBookFileInlineResult(data = prepareInlineDownload(bookUrl, urlRule)) },
+            cancelledResult = WebBookFileInlineResult(isCancelled = true),
+            failureResult = { error -> webBookFileCallbackError(error).let {
+                WebBookFileInlineResult(errorCode = it.code, errorMessage = it.message)
+            } },
+            onResult = { deliverWebBookFileResult(it, onResult) },
+            facade = "WebBookFileFacade",
+            callbackMethod = "prepareInlineDownloadRequest.onResult",
+            missingResultMessage = "Inline file intent unavailable",
+        )
+
     private suspend fun requireBook(bookUrl: String): Book {
         val book = details.resolveBook(bookUrl)
         requireWebBookFile(book != null && !book.isLocal && book.bookUrl == bookUrl,
@@ -157,13 +213,24 @@ class WebBookFileFacade(
     private suspend fun requireSource(book: Book): BookSource {
         requireWebBookFile(webBookFileBounded(book.origin, WebBookFileLimits.URL_BYTES), "invalidSource", "文件书源标识超过大小限制")
         val source = sources.getBookSource(book.origin)
-        requireWebBookFile(source != null && source.isFile, "sourceUnavailable", "文件书源不存在或类型已变化")
+        requireWebBookFile(source != null && source.isFile && source.bookSourceUrl == book.origin,
+            "sourceUnavailable", "文件书源不存在或类型已变化")
         return source!!
     }
 
-    private fun requireIssuedBook(book: Book, source: BookSource, issued: WebBookFileIssued) {
+    private suspend fun requireIssuedBook(book: Book, source: BookSource, issued: WebBookFileIssued) {
         requireWebBookFile(book.bookUrl == issued.book.bookUrl && book.origin == issued.book.origin &&
-            book.variable == issued.baselineVariable && webBookFileSourceSnapshot(source) == issued.sourceSnapshot,
+            book.variable == issued.baselineVariable && webBookFileBookSnapshot(book) == issued.baselineBookSnapshot &&
+            webBookFileSourceSnapshot(source) == issued.sourceSnapshot,
             "bookChanged", "书籍或书源配置已变化，请刷新文件列表")
+        requireCurrentOptions(book, issued.options)
+    }
+
+    private suspend fun requireCurrentOptions(book: Book, options: List<WebBookFileOption>) {
+        val rules = book.downloadUrls ?: return
+        requireWebBookFile(rules.size <= WebBookFileLimits.OPTIONS &&
+            rules.all { rule -> options.any { sameWebBookFileRule(it.urlRule, rule) } } &&
+            options.all { option -> rules.any { sameWebBookFileRule(option.urlRule, it) } },
+            "bookChanged", "书籍文件选项已变化，请刷新文件列表")
     }
 }

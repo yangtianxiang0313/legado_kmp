@@ -16,11 +16,18 @@ internal object WebBookFileLimits {
     const val SNAPSHOT_BYTES = 512 * 1024
     const val CACHE_BOOKS = 4
     const val CACHE_BYTES = 4 * 1024 * 1024
+    const val INLINE_HEADER_BYTES = 1024
+    const val INLINE_DECODED_BYTES = 64L * 1024 * 1024
+    // Includes the ASCII DataURL header and all base64 whitespace, not just significant symbols.
+    const val INLINE_ENCODED_BYTES = 96 * 1024 * 1024
+    const val INLINE_CACHE_BYTES = 96 * 1024 * 1024
     const val HEADERS = 128
     const val HEADER_BYTES = 64 * 1024
     const val HEADER_VALUE_BYTES = 16 * 1024
     const val BODY_BYTES = 1024 * 1024
     const val DETAIL_BYTES = 8 * 1024 * 1024
+    // FILE details only: a full inline option plus the original surrounding HTML/JSON allowance.
+    const val INLINE_DETAIL_BYTES = INLINE_ENCODED_BYTES + DETAIL_BYTES
     const val SET_COOKIES = 128
 }
 
@@ -31,10 +38,31 @@ internal fun requireWebBookFile(value: Boolean, reason: String, message: String)
 }
 
 internal fun webBookFileBounded(value: String, limit: Int): Boolean =
-    value.length <= limit && value.encodeToByteArray().size <= limit
+    webBookFileBoundedByteSize(value, limit) != null
+
+/** UTF-8 accounting without allocating a byte array for a potentially large detail response. */
+internal fun webBookFileBoundedByteSize(value: String, limit: Int): Int? {
+    if (value.length > limit) return null
+    var bytes = 0
+    var index = 0
+    while (index < value.length) {
+        val char = value[index]
+        val paired = char.isHighSurrogate() && value.getOrNull(index + 1)?.isLowSurrogate() == true
+        val size = when {
+            char.code < 0x80 -> 1
+            char.code < 0x800 -> 2
+            paired -> 4
+            else -> 3
+        }
+        if (bytes > limit - size) return null
+        bytes += size
+        index += if (paired) 2 else 1
+    }
+    return bytes
+}
 
 internal fun requireWebBookFileRule(rule: String) {
-    requireWebBookFile(rule.isNotBlank() && '\u0000' !in rule && webBookFileBounded(rule, WebBookFileLimits.RULE_BYTES),
+    requireWebBookFile(webBookFileBounded(rule, WebBookFileLimits.RULE_BYTES) && rule.isNotBlank() && '\u0000' !in rule,
         "invalidRule", "文件下载规则为空或超过大小限制")
 }
 
@@ -69,6 +97,17 @@ internal fun webBookFileSourceSnapshot(source: BookSource): String = Json.encode
     requireWebBookFile(webBookFileBounded(it, WebBookFileLimits.SNAPSHOT_BYTES), "sourceTooLarge", "文件书源配置超过大小限制")
 }
 
+// SearchBook.toBook regenerates these bookkeeping timestamps on every resolution.
+// They are not rule inputs; every other persisted field (including variable/readConfig) is compared.
+private val webBookFileBookJson = Json { encodeDefaults = true }
+
+internal fun webBookFileBookSnapshot(book: Book): String = webBookFileBookJson.encodeToString(
+    Book.serializer(), book.copy(latestChapterTime = 0, lastCheckTime = 0, durChapterTime = 0),
+).also {
+    requireWebBookFile(webBookFileBounded(it, WebBookFileLimits.SNAPSHOT_BYTES),
+        "bookTooLarge", "文件书籍上下文超过大小限制")
+}
+
 internal fun webBookFileRuleData(book: Book): Map<String, Any?> = linkedMapOf<String, Any?>(
     "book" to linkedMapOf(
         "bookUrl" to book.bookUrl,
@@ -98,16 +137,26 @@ internal class WebBookFileIssued(
     val baselineVariable: String?,
     val sourceSnapshot: String,
     val options: List<WebBookFileOption>,
+    val baselineBookSnapshot: String,
 ) {
     val byteSize: Int
+    val inlineByteSize: Int
 
     init {
-        val bookJson = Json.encodeToString(Book.serializer(), book)
+        val bookJson = webBookFileBookJson.encodeToString(Book.serializer(), book)
         requireWebBookFile(webBookFileBounded(bookJson, WebBookFileLimits.SNAPSHOT_BYTES) &&
-            webBookFileBounded(baselineVariable.orEmpty(), WebBookFileLimits.SNAPSHOT_BYTES),
+            webBookFileBounded(baselineVariable.orEmpty(), WebBookFileLimits.SNAPSHOT_BYTES) &&
+            webBookFileBounded(baselineBookSnapshot, WebBookFileLimits.SNAPSHOT_BYTES),
             "bookTooLarge", "文件书籍上下文超过大小限制")
-        byteSize = bookJson.encodeToByteArray().size + baselineVariable.orEmpty().encodeToByteArray().size +
-            sourceSnapshot.encodeToByteArray().size + options.sumOf { it.urlRule.encodeToByteArray().size + it.fileName.encodeToByteArray().size }
+        fun bytes(value: String): Int = webBookFileBoundedByteSize(value, WebBookFileLimits.CACHE_BYTES)
+            ?: throw WebBookFileFailure("optionsTooLarge", "文件选项上下文超过大小限制")
+        byteSize = bytes(bookJson) + bytes(baselineVariable.orEmpty()) + bytes(sourceSnapshot) + bytes(baselineBookSnapshot) +
+            options.sumOf { bytes(it.fileName) + if (it.isInlineData) 0 else bytes(it.urlRule) }
+        // Validated inline rules are ASCII. Keep them out of the HTTP metadata budget entirely.
+        val inlineBytes = options.filter { it.isInlineData }.sumOf { it.urlRule.length.toLong() }
+        requireWebBookFile(inlineBytes <= WebBookFileLimits.INLINE_CACHE_BYTES,
+            "inlineTooLarge", "DataURL 选项缓存总大小超过 96 MiB 限制")
+        inlineByteSize = inlineBytes.toInt()
     }
 
     override fun toString(): String = "WebBookFileIssued(redacted)"
@@ -116,17 +165,32 @@ internal class WebBookFileIssued(
 // Accessed only under the owning facade's mutex; no source script executes during lookup.
 internal class WebBookFileIssuedOptions {
     private val books = LinkedHashMap<String, WebBookFileIssued>()
+    private var metadataBytes = 0
+    private var inlineBytes = 0
 
-    fun remove(bookUrl: String) { books.remove(bookUrl) }
+    fun remove(bookUrl: String) {
+        val removed = books.remove(bookUrl) ?: return
+        metadataBytes -= removed.byteSize
+        inlineBytes -= removed.inlineByteSize
+    }
 
-    fun get(bookUrl: String): WebBookFileIssued? = books[bookUrl]
+    fun get(bookUrl: String): WebBookFileIssued? {
+        val issued = books.remove(bookUrl) ?: return null
+        books[bookUrl] = issued
+        return issued
+    }
 
     fun put(bookUrl: String, issued: WebBookFileIssued) {
         requireWebBookFile(issued.byteSize <= WebBookFileLimits.CACHE_BYTES, "optionsTooLarge", "文件选项上下文超过大小限制")
-        books.remove(bookUrl)
+        requireWebBookFile(issued.inlineByteSize <= WebBookFileLimits.INLINE_CACHE_BYTES,
+            "inlineTooLarge", "DataURL 选项缓存总大小超过 96 MiB 限制")
+        remove(bookUrl)
         books[bookUrl] = issued
-        while (books.size > WebBookFileLimits.CACHE_BOOKS || books.values.sumOf { it.byteSize } > WebBookFileLimits.CACHE_BYTES) {
-            books.remove(books.keys.first())
+        metadataBytes += issued.byteSize
+        inlineBytes += issued.inlineByteSize
+        while (books.size > WebBookFileLimits.CACHE_BOOKS || metadataBytes > WebBookFileLimits.CACHE_BYTES ||
+            inlineBytes > WebBookFileLimits.INLINE_CACHE_BYTES) {
+            remove(books.keys.first())
         }
     }
 }

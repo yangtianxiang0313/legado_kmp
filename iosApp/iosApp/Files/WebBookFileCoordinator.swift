@@ -130,46 +130,14 @@ final class WebBookFileCoordinator {
                     guard await confirmDownloadOnly(option, token: token) else { throw CancellationError() }
                     try checkOwner(token)
                 }
-                try showBusy("正在下载书籍", token: token)
-                let prepared: WebBookFileRequest = try await SharedCancellableAsync.value { completion in
-                    facade.prepareDownloadRequest(bookUrl: book.bookUrl, urlRule: option.urlRule) { result in
-                        if result.isCancelled {
-                            completion(nil, CancellationError())
-                        } else if let request = result.request {
-                            completion(request, nil)
-                        } else {
-                            completion(nil, Self.failure(result.errorMessage ?? "下载请求准备失败"))
-                        }
-                    }
-                }
-                try checkOwner(token)
-                let loader = WebBookFileLoader()
-                self.loader = loader
-                let file = try await loader.load(
-                    prepared,
-                    prepareRedirect: { [weak self] current, target in
-                        guard let self else { throw CancellationError() }
-                        try self.checkOwner(token)
-                        return try await facade.prepareRedirect(request: current, targetUrl: target.absoluteString)
-                    },
-                    recordResponseCookies: { [weak self] current, responseURL, fields in
-                        guard let self else { throw CancellationError() }
-                        try self.checkOwner(token)
-                        try await facade.recordResponseCookies(
-                            request: current, responseUrl: responseURL.absoluteString, setCookieHeaders: fields)
-                    },
-                    onProgress: { [weak self] received, total in
-                        guard let self, self.isCurrent(token) else { return }
-                        let size = ByteCountFormatter.string(fromByteCount: received, countStyle: .file)
-                        let expected = total.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
-                        self.busy?.message = expected.map { "\(size) / \($0)" } ?? size
-                    })
+                try showBusy(option.isInlineData ? "正在读取内嵌书籍" : "正在下载书籍", token: token)
+                let file = try await loadFile(option, book: book, facade: facade, token: token)
                 try Task.checkCancellation()
                 try checkOwner(token)
                 await closeBusy()
                 try checkOwner(token)
                 if LocalBookFormats.importExtensions.contains(file.pathExtension.lowercased()) {
-                    startImport(file, groupID: book.group, openAfterImport: openAfterImport, token: token)
+                    startImport(file, onlineBook: book, openAfterImport: openAfterImport, token: token)
                 } else if let owner, owner.canPerformNavigationAction {
                     owner.navigationController?.pushViewController(FileDocumentViewController(url: file), animated: true)
                 }
@@ -183,7 +151,61 @@ final class WebBookFileCoordinator {
         onChange()
     }
 
-    private func startImport(_ file: URL, groupID: Int64, openAfterImport: Bool, token: UUID) {
+    private func loadFile(
+        _ option: WebBookFileOption, book: Book, facade: WebBookFileFacade, token: UUID
+    ) async throws -> URL {
+        let loader = WebBookFileLoader()
+        self.loader = loader
+        let progress: (Int64, Int64?) -> Void = { [weak self] received, total in
+            guard let self, self.isCurrent(token) else { return }
+            let size = ByteCountFormatter.string(fromByteCount: received, countStyle: .file)
+            let expected = total.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+            self.busy?.message = expected.map { "\(size) / \($0)" } ?? size
+        }
+        if option.isInlineData {
+            let data: WebBookFileInlineData = try await SharedCancellableAsync.value { completion in
+                facade.prepareInlineDownloadRequest(bookUrl: book.bookUrl, urlRule: option.urlRule) { result in
+                    if result.isCancelled {
+                        completion(nil, CancellationError())
+                    } else if let data = result.data {
+                        completion(data, nil)
+                    } else {
+                        completion(nil, Self.failure(result.errorMessage ?? "内嵌文件准备失败"))
+                    }
+                }
+            }
+            try checkOwner(token)
+            return try await loader.loadInline(data, onProgress: progress)
+        }
+        let prepared: WebBookFileRequest = try await SharedCancellableAsync.value { completion in
+            facade.prepareDownloadRequest(bookUrl: book.bookUrl, urlRule: option.urlRule) { result in
+                if result.isCancelled {
+                    completion(nil, CancellationError())
+                } else if let request = result.request {
+                    completion(request, nil)
+                } else {
+                    completion(nil, Self.failure(result.errorMessage ?? "下载请求准备失败"))
+                }
+            }
+        }
+        try checkOwner(token)
+        return try await loader.load(
+            prepared,
+            prepareRedirect: { [weak self] current, target in
+                guard let self else { throw CancellationError() }
+                try self.checkOwner(token)
+                return try await facade.prepareRedirect(request: current, targetUrl: target.absoluteString)
+            },
+            recordResponseCookies: { [weak self] current, responseURL, fields in
+                guard let self else { throw CancellationError() }
+                try self.checkOwner(token)
+                try await facade.recordResponseCookies(
+                    request: current, responseUrl: responseURL.absoluteString, setCookieHeaders: fields)
+            },
+            onProgress: progress)
+    }
+
+    private func startImport(_ file: URL, onlineBook: Book, openAfterImport: Bool, token: UUID) {
         guard let owner, owner.canPerformNavigationAction else { return }
         let importer = LocalBookImportCoordinator(presenter: owner) { _ in }
         var summary: LocalBookImportSummary?
@@ -197,20 +219,25 @@ final class WebBookFileCoordinator {
                 if let owner = self.owner { LocalBookImportResultViewController(summary: summary).present(from: owner) }
                 return
             }
-            self.prepareImportedBook(summary.books[0], openAfterImport: openAfterImport, token: token)
+            self.prepareImportedBook(summary.books[0], onlineBook: onlineBook, openAfterImport: openAfterImport, token: token)
         }
         self.importer = importer
-        importer.start(url: file, groupID: groupID)
+        importer.start(url: file, groupID: onlineBook.group)
         onChange()
     }
 
-    private func prepareImportedBook(_ book: Book, openAfterImport: Bool, token: UUID) {
+    private func prepareImportedBook(_ book: Book, onlineBook: Book, openAfterImport: Bool, token: UUID) {
         task = Task { @MainActor [self] in
             defer { finishTask(token) }
+            var merged = false
             do {
                 try checkOwner(token)
                 try showBusy("正在准备阅读", token: token)
-                let result = try await SharedRuntime.bookDetailFacade().get().preloadChapters(bookUrl: book.bookUrl)
+                let imported = try await WebBookFileImportFacade.companion.create().mergeImportedBook(
+                    expectedOnlineBook: onlineBook, expectedLocalBook: book)
+                merged = true
+                try checkOwner(token)
+                let result = try await SharedRuntime.bookDetailFacade().get().preloadChapters(bookUrl: imported.bookUrl)
                 try Task.checkCancellation()
                 await closeBusy()
                 try checkOwner(token)
@@ -220,7 +247,8 @@ final class WebBookFileCoordinator {
             } catch {
                 await closeBusy()
                 if !(error is CancellationError), isCurrent(token), let owner {
-                    owner.showTransientMessage("文件已导入，可从书架重试阅读：\(error.userFacingMessage)")
+                    let message = merged ? "文件已导入，可从书架重试阅读" : "文件已导入，但在线信息合并失败，可从书架打开"
+                    owner.showTransientMessage("\(message)：\(error.userFacingMessage)")
                 }
             }
         }

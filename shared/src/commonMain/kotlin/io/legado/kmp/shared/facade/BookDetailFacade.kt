@@ -325,6 +325,13 @@ class BookDetailFacade(
     suspend fun preloadChapters(bookUrl: String): BookDetailRefreshResult {
         return runRecoverable("BookDetailFacade.preloadChapters") {
             val (book, isPersistedBook) = resolveBookWithPersistenceState(bookUrl)
+            if (book.isLocal) {
+                val storedChapters = observeBookChaptersUseCase(book.bookUrl).first()
+                coroutineContext.ensureActive()
+                // Opening a local book must not re-import its embedded metadata over online or edited info.
+                // Explicit refresh still reparses the directory, including EPUB reflow preparation.
+                if (storedChapters.isNotEmpty()) return@runRecoverable BookDetailRefreshResult(book, storedChapters)
+            }
             val refreshed = parseLocalChapters(book) ?: run {
                 val source = requireSource(book)
                 val result = fetchChapterListUseCase(source, book, runPreUpdateJs = true).getOrThrow()

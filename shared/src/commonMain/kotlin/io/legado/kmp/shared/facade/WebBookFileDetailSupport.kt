@@ -42,8 +42,11 @@ internal class WebBookFileDetailLoader(
             ruleData = variables,
         ).getOrThrow()
         currentCoroutineContext().ensureActive()
-        requireWebBookFile(webBookFileBounded(response.bodyText, WebBookFileLimits.DETAIL_BYTES),
-            "detailTooLarge", "文件详情响应超过大小限制")
+        // executeText already buffers/decompresses the response. This bounds accepted UTF-8 text,
+        // not transport allocation; do not allocate another full byte array merely to count it.
+        val detailLimit = if (source.isFile) WebBookFileLimits.INLINE_DETAIL_BYTES else WebBookFileLimits.DETAIL_BYTES
+        requireWebBookFile(webBookFileBoundedByteSize(response.bodyText, detailLimit) != null,
+            "detailTooLarge", if (source.isFile) "FILE 详情响应超过 104 MiB 总大小限制" else "文件详情响应超过 8 MiB 限制")
         val bookWithVariables = if (written.isEmpty()) book.copy() else {
             book.copy(variable = serializeVariableMap(book.variableMap + written))
         }

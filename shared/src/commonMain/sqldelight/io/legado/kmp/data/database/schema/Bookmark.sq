@@ -53,6 +53,10 @@ SET book_name = ?, book_author = ?, chapter_index = ?, chapter_pos = ?,
     chapter_name = ?, book_text = ?, content = ?
 WHERE time = ?;
 
+renameBookIdentity:
+UPDATE bookmarks SET book_name = :book_name, book_author = :book_author
+WHERE book_name = :expected_book_name AND book_author = :expected_book_author;
+
 updateContent:
 UPDATE bookmarks SET content = ? WHERE time = ?;
 

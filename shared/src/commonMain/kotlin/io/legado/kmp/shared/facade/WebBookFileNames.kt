@@ -14,6 +14,11 @@ internal fun webBookFileOption(
     resolvedUrl: String? = null,
     resolvedType: String? = null,
 ): WebBookFileOption {
+    if (isWebBookFileInlineRule(urlRule)) {
+        val header = webBookFileInlineHeader(urlRule)
+        val suffix = webBookFileTypeSuffix(header.mime) ?: "bin"
+        return WebBookFileOption(urlRule, "${cleanWebBookFileStem(webBookFileFallbackName(book))}.$suffix", suffix)
+    }
     requireWebBookFileRule(urlRule)
     val delimiter = AnalyzeUrl.paramPattern.findAll(urlRule).take(16).firstOrNull {
         decodeLegacyUrlOptionObject(urlRule.substring(it.range.last + 1)) != null
@@ -24,11 +29,12 @@ internal fun webBookFileOption(
     }
     val knownName = knownWebBookFileName(rawUrl)
     val suffix = knownName?.substringAfterLast('.')?.lowercase() ?: webBookFileTypeSuffix(type) ?: "bin"
-    val fallback = book.name.take(1024).ifBlank { "download" } +
-        book.author.take(512).takeIf { it.isNotBlank() }?.let { " - $it" }.orEmpty()
-    val stem = knownName?.substringBeforeLast('.') ?: fallback
+    val stem = knownName?.substringBeforeLast('.') ?: webBookFileFallbackName(book)
     return WebBookFileOption(urlRule, "${cleanWebBookFileStem(stem)}.$suffix", suffix)
 }
+
+private fun webBookFileFallbackName(book: Book): String = book.name.take(1024).ifBlank { "download" } +
+    book.author.take(512).takeIf { it.isNotBlank() }?.let { " - $it" }.orEmpty()
 
 internal fun webBookFileTypeSuffix(type: String?): String? {
     val normalized = type?.trim()?.lowercase()?.removePrefix(".") ?: return null

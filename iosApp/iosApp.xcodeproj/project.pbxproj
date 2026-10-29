@@ -242,6 +242,8 @@
 		F02A36010000000000000001 /* BookDetailNavigationActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A36020000000000000001; };
 		F02A36010000000000000002 /* WebBookFileCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A36020000000000000002; };
 		F02A36010000000000000003 /* WebBookFileLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A36020000000000000003; };
+		F02A47010000000000000001 /* WebBookFileInlineLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A47020000000000000001; };
+		F02A47010000000000000002 /* WebBookFileStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A47020000000000000002; };
 		E83AC498B1C24A4D9045B201 /* AndroidReplicaDetailBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83AC498B1C24A4D9045B202 /* AndroidReplicaDetailBar.swift */; };
 		B1740A6DF5814CCFB460A101 /* BookDetailGroupActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1740A6DF5814CCFB460A102 /* BookDetailGroupActions.swift */; };
 		A28056F46F0E49D4AD07C101 /* AndroidReplicaExploreDetailAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28056F46F0E49D4AD07C102 /* AndroidReplicaExploreDetailAdapter.swift */; };
@@ -948,6 +950,8 @@
 		F02A36020000000000000001 /* BookDetailNavigationActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailNavigationActions.swift; sourceTree = "<group>"; };
 		F02A36020000000000000002 /* WebBookFileCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBookFileCoordinator.swift; sourceTree = "<group>"; };
 		F02A36020000000000000003 /* WebBookFileLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBookFileLoader.swift; sourceTree = "<group>"; };
+		F02A47020000000000000001 /* WebBookFileInlineLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBookFileInlineLoader.swift; sourceTree = "<group>"; };
+		F02A47020000000000000002 /* WebBookFileStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBookFileStorage.swift; sourceTree = "<group>"; };
 		E83AC498B1C24A4D9045B202 /* AndroidReplicaDetailBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidReplicaDetailBar.swift; sourceTree = "<group>"; };
 		B1740A6DF5814CCFB460A102 /* BookDetailGroupActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailGroupActions.swift; sourceTree = "<group>"; };
 		A28056F46F0E49D4AD07C102 /* AndroidReplicaExploreDetailAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidReplicaExploreDetailAdapter.swift; sourceTree = "<group>"; };
@@ -2331,6 +2335,8 @@
 				F027B200000000000000000A /* FileDocumentViewController.swift */,
 				F02A36020000000000000002,
 				F02A36020000000000000003,
+				F02A47020000000000000001 /* WebBookFileInlineLoader.swift */,
+				F02A47020000000000000002 /* WebBookFileStorage.swift */,
 				F027B200000000000000000B /* SandboxFileStore.swift */,
 				F027B200000000000000000C /* SandboxFilesViewController.swift */,
 			);
@@ -2681,6 +2687,8 @@
 				F02A36010000000000000001 /* BookDetailNavigationActions.swift in Sources */,
 				F02A36010000000000000002 /* WebBookFileCoordinator.swift in Sources */,
 				F02A36010000000000000003 /* WebBookFileLoader.swift in Sources */,
+				F02A47010000000000000001 /* WebBookFileInlineLoader.swift in Sources */,
+				F02A47010000000000000002 /* WebBookFileStorage.swift in Sources */,
 				E83AC498B1C24A4D9045B201 /* AndroidReplicaDetailBar.swift in Sources */,
 				B1740A6DF5814CCFB460A101 /* BookDetailGroupActions.swift in Sources */,
 				A28056F46F0E49D4AD07C101 /* AndroidReplicaExploreDetailAdapter.swift in Sources */,

@@ -1,11 +1,20 @@
-import Darwin
 import Foundation
 import UniformTypeIdentifiers
 import shared
 
+protocol WebBookFileLoading: AnyObject, Sendable {
+    func cancel()
+}
+
+struct WebBookFileReceipt: Sendable {
+    let url: URL
+    let bytes: Int64
+    let total: Int64?
+}
+
 @MainActor
 final class WebBookFileLoader {
-    private var active: WebBookFileTransfer?
+    private var active: (any WebBookFileLoading)?
 
     deinit { active?.cancel() }
 
@@ -32,11 +41,30 @@ final class WebBookFileLoader {
         return receipt.url
     }
 
+    func loadInline(
+        _ data: WebBookFileInlineData,
+        onProgress: @escaping @MainActor (Int64, Int64?) -> Void
+    ) async throws -> URL {
+        guard active == nil else { throw WebBookFilePolicy.failure("文件下载已经开始") }
+        try Task.checkCancellation()
+        let progress = WebBookFileProgress(onProgress)
+        let transfer = WebBookFileInlineLoader(data: data, progress: progress)
+        active = transfer
+        defer {
+            progress.stop()
+            if active === transfer { active = nil }
+        }
+        let receipt = try await transfer.load()
+        // As with HTTP, a late Task cancellation cannot undo successful publication.
+        progress.report(receipt.bytes, receipt.total)
+        return receipt.url
+    }
+
     func cancel() { active?.cancel() }
 }
 
 @MainActor
-private final class WebBookFileProgress {
+final class WebBookFileProgress {
     private let callback: @MainActor (Int64, Int64?) -> Void
     private var lastBytes: Int64 = -1
     private var stopped = false
@@ -53,13 +81,7 @@ private final class WebBookFileProgress {
 }
 
 /// A fresh session and a serial writer per invocation; only the cancellation gate crosses queues.
-private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    struct Receipt: Sendable {
-        let url: URL
-        let bytes: Int64
-        let total: Int64?
-    }
-
+private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBookFileLoading, @unchecked Sendable {
     private struct RedirectPlan: Sendable {
         let target: URL
         let method: String
@@ -77,7 +99,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, @unch
     private var recordResponseCookies: (@MainActor (WebBookFileRequest, URL, [String]) async throws -> Void)?
 
     // Confined to queue, including all URLSession delegate callbacks and disk operations.
-    private var continuation: CheckedContinuation<Receipt, Error>?
+    private var continuation: CheckedContinuation<WebBookFileReceipt, Error>?
     private var session: URLSession?
     private var task: URLSessionDataTask?
     private var currentRequest: URLRequest
@@ -88,7 +110,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, @unch
     private var receivedBytes: Int64 = 0
     private var redirects = 0
     private var failure: Error?
-    private var result: Result<Receipt, Error>?
+    private var result: Result<WebBookFileReceipt, Error>?
     private var invalidating = false
     private var started = false
     private var deadline: DispatchSourceTimer?
@@ -115,7 +137,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, @unch
         super.init()
     }
 
-    func load() async throws -> Receipt {
+    func load() async throws -> WebBookFileReceipt {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async { self.start(continuation) }
@@ -130,7 +152,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, @unch
         queue.async { self.stop(CancellationError()) }
     }
 
-    private func start(_ continuation: CheckedContinuation<Receipt, Error>) {
+    private func start(_ continuation: CheckedContinuation<WebBookFileReceipt, Error>) {
         guard !started else {
             continuation.resume(throwing: WebBookFilePolicy.failure("文件下载已经开始"))
             return
@@ -293,7 +315,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, @unch
             try file.synchronizeAndClose(bytes: receivedBytes)
             let name = WebBookFilePolicy.filename(response: response, fallback: input.fileName)
             let url = try file.commit(name: name, cancellation: gate)
-            result = .success(Receipt(url: url, bytes: receivedBytes, total: expectedBytes))
+            result = .success(WebBookFileReceipt(url: url, bytes: receivedBytes, total: expectedBytes))
         } catch {
             result = .failure(error)
         }
@@ -490,40 +512,7 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, @unch
     }
 }
 
-private final class WebBookFileCancellation: @unchecked Sendable {
-    private let lock = NSLock()
-    private var cancelled = false
-    private var committed = false
-
-    var isCancelled: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return cancelled
-    }
-
-    func cancel() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !committed else { return false }
-        cancelled = true
-        return true
-    }
-
-    func check() throws {
-        if isCancelled { throw CancellationError() }
-    }
-
-    func publishAttempt(_ operation: () throws -> URL?) throws -> URL? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !cancelled else { throw CancellationError() }
-        let url = try operation()
-        if url != nil { committed = true }
-        return url
-    }
-}
-
-private enum WebBookFilePolicy {
+enum WebBookFilePolicy {
     static let maximumBytes: Int64 = 2 * 1024 * 1024 * 1024
     static let maximumDuration: TimeInterval = 24 * 60 * 60
     private static let maximumBodyBytes = 1024 * 1024
@@ -697,6 +686,17 @@ private enum WebBookFilePolicy {
         let proposed =
             responseNames.compactMap { $0 }.first { usefulSuffix($0) != nil }
             ?? fallback ?? suggested ?? "download"
+        return filename(proposed: proposed, suffix: suffix)
+    }
+
+    static func filename(fallback: String?) -> String {
+        let fallback = basename(fallback)
+        let genericSuffix = safeSuffix(fallback).flatMap { ["bin", "dat"].contains($0) ? $0 : nil }
+        let suffix = usefulSuffix(fallback) ?? genericSuffix ?? "bin"
+        return filename(proposed: fallback ?? "download", suffix: suffix)
+    }
+
+    private static func filename(proposed: String, suffix: String) -> String {
         let stem = (proposed as NSString).deletingPathExtension
             .trimmingCharacters(in: CharacterSet(charactersIn: " ._-"))
         var shortStem = ""
@@ -737,175 +737,5 @@ private enum WebBookFilePolicy {
 
     static func failure(_ message: String) -> NSError {
         NSError(domain: "io.legado.web-book.file", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
-    }
-}
-
-/// Anchored directory descriptors prevent symlink traversal and no-replace rename prevents all name races.
-private final class WebBookFileOutput {
-    private var documentsFD: Int32 = -1
-    private var downloadsFD: Int32 = -1
-    private var stagingFD: Int32 = -1
-    private var outputFD: Int32 = -1
-    private var stagingName: String?
-    private var payloadIdentity: stat?
-    private var stagingIdentity: stat?
-    private var ownsPayload = false
-    private var root: URL = URL(fileURLWithPath: "/")
-    private var documents: URL = URL(fileURLWithPath: "/")
-
-    init() throws {
-        do {
-            documents = try FileManager.default.url(
-                for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-            ).resolvingSymlinksInPath().standardizedFileURL
-            root = documents.appendingPathComponent("Downloads", isDirectory: true)
-            documentsFD = Darwin.open(documents.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-            guard documentsFD >= 0 else { throw diskError("无法打开文稿目录") }
-            if mkdirat(documentsFD, "Downloads", 0o700) != 0 && errno != EEXIST {
-                throw diskError("无法创建下载目录")
-            }
-            downloadsFD = openat(documentsFD, "Downloads", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-            guard downloadsFD >= 0 else { throw diskError("下载目录不是安全文件夹") }
-            try validateDirectories()
-            let name = ".webbook-\(UUID().uuidString)"
-            guard mkdirat(downloadsFD, name, 0o700) == 0 else { throw diskError("无法创建下载暂存目录") }
-            stagingName = name
-            var identity = stat()
-            guard fstatat(downloadsFD, name, &identity, AT_SYMLINK_NOFOLLOW) == 0,
-                isDirectory(identity)
-            else { throw diskError("无法读取下载暂存目录") }
-            stagingIdentity = identity
-            stagingFD = openat(downloadsFD, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-            guard stagingFD >= 0 else { throw diskError("无法打开下载暂存目录") }
-            var openedDirectory = stat()
-            guard fstat(stagingFD, &openedDirectory) == 0, sameFile(openedDirectory, identity) else {
-                throw WebBookFilePolicy.failure("下载暂存目录位置已变更")
-            }
-            outputFD = openat(stagingFD, "payload", O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-            guard outputFD >= 0 else { throw diskError("无法创建下载临时文件") }
-            ownsPayload = true
-            var payload = stat()
-            guard fstat(outputFD, &payload) == 0, isRegular(payload) else { throw diskError("临时文件无效") }
-            payloadIdentity = payload
-        } catch {
-            cleanup()
-            throw error
-        }
-    }
-
-    deinit { cleanup() }
-
-    func write(_ data: Data, cancellation: WebBookFileCancellation) throws {
-        guard outputFD >= 0 else { throw WebBookFilePolicy.failure("文件写入已结束") }
-        try data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
-            guard let base = buffer.baseAddress else { return }
-            var offset = 0
-            while offset < buffer.count {
-                try cancellation.check()
-                let count = Darwin.write(outputFD, base.advanced(by: offset), min(64 * 1024, buffer.count - offset))
-                if count < 0 && errno == EINTR { continue }
-                guard count > 0 else { throw diskError("文件写入失败，请检查存储空间") }
-                offset += count
-            }
-        }
-    }
-
-    func synchronizeAndClose(bytes: Int64) throws {
-        var actual = stat()
-        guard outputFD >= 0, fstat(outputFD, &actual) == 0, isRegular(actual), actual.st_size == bytes,
-            let payloadIdentity, sameFile(actual, payloadIdentity), actual.st_nlink == 1
-        else { throw WebBookFilePolicy.failure("文件落盘长度或类型校验失败") }
-        while fsync(outputFD) != 0 {
-            if errno == EINTR { continue }
-            throw diskError("文件同步失败，请检查存储空间")
-        }
-        let descriptor = outputFD
-        outputFD = -1
-        guard Darwin.close(descriptor) == 0 else { throw diskError("文件关闭失败") }
-    }
-
-    func commit(name: String, cancellation: WebBookFileCancellation) throws -> URL {
-        try cancellation.check()
-        try validateDirectories()
-        guard outputFD < 0, let stagingName, let stagingIdentity, let payloadIdentity else {
-            throw WebBookFilePolicy.failure("下载临时文件尚未完成")
-        }
-        var directory = stat()
-        var payload = stat()
-        guard fstatat(downloadsFD, stagingName, &directory, AT_SYMLINK_NOFOLLOW) == 0,
-            isDirectory(directory), sameFile(directory, stagingIdentity),
-            fstatat(stagingFD, "payload", &payload, AT_SYMLINK_NOFOLLOW) == 0,
-            isRegular(payload), sameFile(payload, payloadIdentity), payload.st_nlink == 1
-        else { throw WebBookFilePolicy.failure("下载暂存文件位置已变更") }
-        let suffix = (name as NSString).pathExtension
-        let stem = (name as NSString).deletingPathExtension
-        for index in 0..<10_000 {
-            let candidate = index == 0 ? name : "\(stem) (\(index)).\(suffix)"
-            let destination = root.appendingPathComponent(candidate, isDirectory: false)
-            // Hold the cancellation gate for one atomic rename, never for the entire collision loop.
-            let published = try cancellation.publishAttempt {
-                // RENAME_EXCL rejects every existing directory entry, including dangling symlinks.
-                if renameatx_np(stagingFD, "payload", downloadsFD, candidate, UInt32(RENAME_EXCL)) == 0 {
-                    ownsPayload = false
-                    return destination
-                }
-                guard errno == EEXIST else { throw diskError("下载完成，但保存文件失败") }
-                return nil
-            }
-            // No throwing work or cancellation check is allowed after atomic publication.
-            if let published { return published }
-        }
-        throw WebBookFilePolicy.failure("同名文件过多，请更换文件名")
-    }
-
-    func cleanup() {
-        if outputFD >= 0 { _ = Darwin.close(outputFD); outputFD = -1 }
-        if ownsPayload, stagingFD >= 0, let payloadIdentity {
-            var current = stat()
-            if fstatat(stagingFD, "payload", &current, AT_SYMLINK_NOFOLLOW) == 0,
-                isRegular(current), sameFile(current, payloadIdentity)
-            {
-                _ = unlinkat(stagingFD, "payload", 0)
-            }
-        }
-        ownsPayload = false
-        if stagingFD >= 0 { _ = Darwin.close(stagingFD); stagingFD = -1 }
-        if downloadsFD >= 0, let stagingName, let stagingIdentity {
-            var current = stat()
-            if fstatat(downloadsFD, stagingName, &current, AT_SYMLINK_NOFOLLOW) == 0,
-                isDirectory(current), sameFile(current, stagingIdentity)
-            {
-                _ = unlinkat(downloadsFD, stagingName, AT_REMOVEDIR)
-            }
-        }
-        stagingName = nil
-        if downloadsFD >= 0 { _ = Darwin.close(downloadsFD); downloadsFD = -1 }
-        if documentsFD >= 0 { _ = Darwin.close(documentsFD); documentsFD = -1 }
-    }
-
-    private func validateDirectories() throws {
-        var documentsHandle = stat()
-        var documentsPath = stat()
-        var downloadsHandle = stat()
-        var downloadsPath = stat()
-        guard fstat(documentsFD, &documentsHandle) == 0, lstat(documents.path, &documentsPath) == 0,
-            isDirectory(documentsPath), sameFile(documentsHandle, documentsPath),
-            fstat(downloadsFD, &downloadsHandle) == 0,
-            fstatat(documentsFD, "Downloads", &downloadsPath, AT_SYMLINK_NOFOLLOW) == 0,
-            isDirectory(downloadsPath), sameFile(downloadsHandle, downloadsPath)
-        else { throw WebBookFilePolicy.failure("下载目录位置已变更或包含符号链接") }
-    }
-
-    private func isDirectory(_ value: stat) -> Bool { (value.st_mode & mode_t(S_IFMT)) == mode_t(S_IFDIR) }
-    private func isRegular(_ value: stat) -> Bool { (value.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) }
-    private func sameFile(_ left: stat, _ right: stat) -> Bool { left.st_dev == right.st_dev && left.st_ino == right.st_ino }
-
-    private func diskError(_ message: String) -> NSError {
-        let code = errno
-        return NSError(
-            domain: "io.legado.web-book.file.storage", code: Int(code),
-            userInfo: [
-                NSLocalizedDescriptionKey: message, NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(code)),
-            ])
     }
 }
