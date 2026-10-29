@@ -38,6 +38,7 @@ import io.legado.kmp.shared.model.ReadConfig
 import io.legado.kmp.shared.model.ReplaceRule
 import io.legado.kmp.shared.model.isTxtLocalBook
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ReaderFacade(
     private val getBookUseCase: GetBookUseCase,
@@ -514,13 +516,17 @@ class ReaderFacade(
         imageStyle: String? = null,
     ): ReaderChapterLayout {
         return runRecoverable("ReaderFacade.paginateChapter") {
-            paginationService.paginate(
-                chapterIndex = chapterIndex,
-                chapterTitle = chapterTitle,
-                content = content,
-                config = ReaderPaginationConfig.from(style, runtime, imageStyle),
-                viewport = viewport,
-            )
+            withContext(Dispatchers.Default) {
+                val capturedCoroutine = coroutineContext
+                paginationService.paginate(
+                    chapterIndex = chapterIndex,
+                    chapterTitle = chapterTitle,
+                    content = content,
+                    config = ReaderPaginationConfig.from(style, runtime, imageStyle),
+                    viewport = viewport,
+                    checkActive = { capturedCoroutine.ensureActive() },
+                )
+            }
         }
     }
 

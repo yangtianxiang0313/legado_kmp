@@ -158,18 +158,27 @@ class ReaderPaginationService {
         content: String,
         config: ReaderPaginationConfig,
         viewport: ReaderViewport,
+        checkActive: () -> Unit = {},
     ): ReaderChapterLayout {
-        val blocks = buildReaderContentBlocks(chapterTitle, content)
-            .withTitleVisibility(config, content)
+        checkActive()
+        val blocks = buildReaderContentBlocks(chapterTitle, content, checkActive)
+            .withTitleVisibility(config, content, checkActive)
         val metrics = PaginationMetrics(config, viewport)
         val pages = mutableListOf<ReaderPageSlice>()
         var current = PageAccumulator(index = 0)
         var chapterCursor = 0
 
         fun flushPage(force: Boolean = false) {
+            checkActive()
             if (!force && current.fragments.isEmpty()) return
-            val pageText = current.pageTextParts.joinToString("\n").trim()
-            val previewText = current.previewParts.joinToString(" ").trim()
+            val pageText = current.pageTextParts.joinToString("\n") {
+                checkActive()
+                it.withReaderCancellationChecks(checkActive)
+            }.withReaderCancellationChecks(checkActive).trim().toString()
+            val previewText = current.previewParts.joinToString(" ") {
+                checkActive()
+                it.withReaderCancellationChecks(checkActive)
+            }.withReaderCancellationChecks(checkActive).trim().toString()
             val leadingBlockIndex = current.fragments.firstOrNull()?.blockIndex ?: 0
             val startPosition = current.fragments.firstOrNull()?.chapterStartPosition ?: current.pageStartPosition
             val endPosition = current.fragments.lastOrNull()?.chapterEndPosition ?: startPosition
@@ -180,12 +189,16 @@ class ReaderPaginationService {
                 previewText = previewText.ifEmpty { chapterTitle },
                 pageText = pageText,
                 leadingBlockIndex = leadingBlockIndex,
-                fragments = current.fragments.toList(),
+                fragments = current.fragments.map {
+                    checkActive()
+                    it
+                },
             )
             current = PageAccumulator(index = pages.size, pageStartPosition = endPosition)
         }
 
         for (block in blocks) {
+            checkActive()
             when (block.type) {
                 ReaderContentBlockType.HEADING,
                 ReaderContentBlockType.PARAGRAPH,
@@ -198,7 +211,10 @@ class ReaderPaginationService {
                     if (config.normalizedImageStyle() == IMAGE_STYLE_SINGLE &&
                         kind != ReaderPageFragmentKind.HEADING &&
                         current.fragments.isNotEmpty() &&
-                        current.fragments.all { it.kind == ReaderPageFragmentKind.HEADING }
+                        current.fragments.all {
+                            checkActive()
+                            it.kind == ReaderPageFragmentKind.HEADING
+                        }
                     ) {
                         flushPage()
                     }
@@ -210,10 +226,12 @@ class ReaderPaginationService {
                         width = metrics.availableWidth,
                         metrics = textMetrics,
                         indentCount = if (kind == ReaderPageFragmentKind.PARAGRAPH) config.paragraphIndent else 0,
+                        checkActive = checkActive,
                     )
                     var consumedChars = 0
                     var lineIndex = 0
                     while (lineIndex < wrappedLines.size) {
+                        checkActive()
                         val lineHeight = textMetrics.lineHeight
                         val verticalBefore = when {
                             wrappedLines[lineIndex].isContinuationLine -> 0f
@@ -238,8 +256,14 @@ class ReaderPaginationService {
                         )
                         val takeCount = min(availableLines, wrappedLines.size - lineIndex)
                         val taken = wrappedLines.subList(lineIndex, lineIndex + takeCount)
-                        val fragmentText = taken.joinToString("\n") { it.text }
-                        val fragmentChars = taken.sumOf { it.length }
+                        val fragmentText = taken.joinToString("\n") {
+                            checkActive()
+                            it.text.withReaderCancellationChecks(checkActive)
+                        }
+                        val fragmentChars = taken.sumOf {
+                            checkActive()
+                            it.length
+                        }
                         val startPosition = chapterCursor + consumedChars
                         val endPosition = startPosition + fragmentChars
                         current.fragments += ReaderPageFragment(
@@ -318,6 +342,7 @@ class ReaderPaginationService {
             flushPage(force = true)
         }
 
+        checkActive()
         return ReaderChapterLayout(
             chapterIndex = chapterIndex,
             chapterTitle = chapterTitle,
@@ -335,8 +360,14 @@ class ReaderPaginationService {
                 )
             },
             searchableText = blocks
-                .filter { it.type == ReaderContentBlockType.HEADING || it.type == ReaderContentBlockType.PARAGRAPH }
-                .joinToString("\n") { convertText(it.text, config.chineseMode) },
+                .filter {
+                    checkActive()
+                    it.type == ReaderContentBlockType.HEADING || it.type == ReaderContentBlockType.PARAGRAPH
+                }
+                .joinToString("\n") {
+                    checkActive()
+                    convertText(it.text, config.chineseMode).withReaderCancellationChecks(checkActive)
+                }.also { checkActive() },
             imageStyle = config.normalizedImageStyle(),
         )
     }
@@ -409,12 +440,16 @@ class ReaderPaginationService {
         width: Float,
         metrics: TextMetrics,
         indentCount: Int,
+        checkActive: () -> Unit,
     ): List<WrappedLine> {
+        checkActive()
         if (text.isEmpty()) return emptyList()
         val lines = mutableListOf<WrappedLine>()
         var index = 0
         var lineNumber = 0
+        var charactersUntilCheck = 0
         while (index < text.length) {
+            checkActive()
             val indentWidth = if (lineNumber == 0) {
                 estimatedIndentWidth(metrics.fontSize) * indentCount
             } else {
@@ -424,6 +459,11 @@ class ReaderPaginationService {
             var currentWidth = 0f
             var end = index
             while (end < text.length) {
+                if (charactersUntilCheck == 0) {
+                    checkActive()
+                    charactersUntilCheck = 256
+                }
+                charactersUntilCheck--
                 val char = text[end]
                 val charWidth = estimatedCharWidth(char, metrics)
                 if (currentWidth > 0f && currentWidth + charWidth > maxWidth) {
@@ -444,6 +484,7 @@ class ReaderPaginationService {
             index = end
             lineNumber += 1
         }
+        checkActive()
         return lines
     }
 
@@ -491,19 +532,21 @@ private fun ReaderPaginationConfig.normalizedImageStyle(): String {
 private fun List<ReaderContentBlock>.withTitleVisibility(
     config: ReaderPaginationConfig,
     content: String,
+    checkActive: () -> Unit,
 ): List<ReaderContentBlock> {
+    checkActive()
     if (config.titleMode != 2) return this
-    val hasChapterContent = content
-        .replace("\r\n", "\n")
-        .replace('\r', '\n')
-        .trim()
-        .isNotEmpty()
+    // CR/LF normalization cannot change whether the chapter contains non-whitespace text.
+    val hasChapterContent = content.withReaderCancellationChecks(checkActive).any { !it.isWhitespace() }
     if (!hasChapterContent) return this
-    return dropFirstHeading()
+    return dropFirstHeading(checkActive)
 }
 
-private fun List<ReaderContentBlock>.dropFirstHeading(): List<ReaderContentBlock> {
+private fun List<ReaderContentBlock>.dropFirstHeading(checkActive: () -> Unit): List<ReaderContentBlock> {
     val first = firstOrNull() ?: return this
     if (first.type != ReaderContentBlockType.HEADING) return this
-    return drop(1)
+    return subList(1, size).map {
+        checkActive()
+        it
+    }
 }

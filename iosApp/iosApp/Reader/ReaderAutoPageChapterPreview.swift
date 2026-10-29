@@ -41,8 +41,21 @@ enum ReaderAutoPageChapterPreview {
             reader.renderView.bounds == bounds, reader.currentReaderSafeAreaPolicy() == policy,
             reader.doubleHorizontalPageMode(in: bounds) == mode
         else { throw CancellationError() }
-        let pages = ReaderLayoutEngine().paginate(layout: layout, in: paginationBounds, theme: theme)
-            .pages
+        let pages = try await ReaderLayoutEngine().paginateAsync(
+            layout: layout, in: paginationBounds, theme: theme, traits: reader.traitCollection
+        )
+        .pages
+        try Task.checkCancellation()
+        guard reader.bookURL == bookURL, reader.book?.origin == origin,
+            reader.currentChapterURL == sourceChapter,
+            reader.renderView.bounds == bounds, reader.currentReaderSafeAreaPolicy() == policy,
+            reader.doubleHorizontalPageMode(in: bounds) == mode,
+            reader.preferences?.effectiveReaderStyle(
+                userInterfaceStyle: reader.traitCollection.userInterfaceStyle
+            ).isEqual(style) == true,
+            let currentRuntime = reader.runtimeConfig,
+            !ReaderPaginationCoordinator.runtimeRequiresPagination(previous: runtime, updated: currentRuntime)
+        else { throw CancellationError() }
         guard let first = pages.first else { throw CancellationError() }
         let preview = ReaderRenderView(frame: bounds)
         preview.theme = theme

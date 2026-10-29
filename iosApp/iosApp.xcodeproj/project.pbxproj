@@ -334,6 +334,10 @@
 		A1000000000000000000000A /* BookDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* BookDetailViewController.swift */; };
 		A1000000000000000000000B /* ReaderThemeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* ReaderThemeController.swift */; };
 		A1000000000000000000000C /* ReaderLayoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* ReaderLayoutEngine.swift */; };
+		F02A49010000000000000001 /* ReaderLayoutRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A49020000000000000001; };
+		F02A49010000000000000002 /* ReaderPaginationWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A49020000000000000002; };
+		F02A49010000000000000003 /* ReaderPaginationInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A49020000000000000003; };
+		F02A49010000000000000004 /* ReaderVisualLineRanges.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A49020000000000000004; };
 		E1000000000000000000000E /* ReaderTextSelectionGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000000000000000000000E /* ReaderTextSelectionGeometry.swift */; };
 		E61019010000000000000001 /* ReaderTextSelectionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61019020000000000000001 /* ReaderTextSelectionCoordinator.swift */; };
 		E61019010000000000000002 /* ReaderTextSelectionHandlesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61019020000000000000002 /* ReaderTextSelectionHandlesView.swift */; };
@@ -1055,6 +1059,10 @@
 		A2000000000000000000000A /* BookDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailViewController.swift; sourceTree = "<group>"; };
 		A2000000000000000000000B /* ReaderThemeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderThemeController.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* ReaderLayoutEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLayoutEngine.swift; sourceTree = "<group>"; };
+		F02A49020000000000000001 /* ReaderLayoutRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLayoutRenderer.swift; sourceTree = "<group>"; };
+		F02A49020000000000000002 /* ReaderPaginationWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaginationWorker.swift; sourceTree = "<group>"; };
+		F02A49020000000000000003 /* ReaderPaginationInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaginationInput.swift; sourceTree = "<group>"; };
+		F02A49020000000000000004 /* ReaderVisualLineRanges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderVisualLineRanges.swift; sourceTree = "<group>"; };
 		A2000000000000000000005D /* ReaderChromeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderChromeView.swift; sourceTree = "<group>"; };
 		A2000000000000000000000D /* ReaderRenderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderRenderView.swift; sourceTree = "<group>"; };
 		A2000000000000000000000E /* ReaderPageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPageViewController.swift; sourceTree = "<group>"; };
@@ -2028,6 +2036,10 @@
 				E019D0020000000000000005 /* ReaderMenuActionContext.swift */,
 				A2000000000000000000000B /* ReaderThemeController.swift */,
 				A2000000000000000000000C /* ReaderLayoutEngine.swift */,
+				F02A49020000000000000001 /* ReaderLayoutRenderer.swift */,
+				F02A49020000000000000002 /* ReaderPaginationWorker.swift */,
+				F02A49020000000000000003 /* ReaderPaginationInput.swift */,
+				F02A49020000000000000004 /* ReaderVisualLineRanges.swift */,
 				A2000000000000000000004B /* ReaderLayoutSupport.swift */,
 				E2000000000000000000000E /* ReaderTextSelectionGeometry.swift */,
 				E61019020000000000000001 /* ReaderTextSelectionCoordinator.swift */,
@@ -2821,6 +2833,10 @@
 				A1000000000000000000000A /* BookDetailViewController.swift in Sources */,
 				A1000000000000000000000B /* ReaderThemeController.swift in Sources */,
 				A1000000000000000000000C /* ReaderLayoutEngine.swift in Sources */,
+				F02A49010000000000000001 /* ReaderLayoutRenderer.swift in Sources */,
+				F02A49010000000000000002 /* ReaderPaginationWorker.swift in Sources */,
+				F02A49010000000000000003 /* ReaderPaginationInput.swift in Sources */,
+				F02A49010000000000000004 /* ReaderVisualLineRanges.swift in Sources */,
 				A1000000000000000000004B /* ReaderLayoutSupport.swift in Sources */,
 				E1000000000000000000000E /* ReaderTextSelectionGeometry.swift in Sources */,
 				E61019010000000000000001 /* ReaderTextSelectionCoordinator.swift in Sources */,

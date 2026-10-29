@@ -59,22 +59,32 @@ final class ReaderPaginationCache<Key: Hashable> {
         return entry.result
     }
 
-    func insert(_ result: ReaderLayoutEngine.PaginationResult, for key: Key) {
+    func insert(
+        _ result: ReaderLayoutEngine.PaginationResult,
+        for key: Key,
+        cancellation: ReaderPaginationCancellation? = nil
+    ) {
         guard entryLimit > 0, costLimit > 0 else { return }
-        let cost = Self.cost(of: result, limit: costLimit)
-        lock.lock()
-        defer { lock.unlock() }
-
-        removeEntry(for: key)
-        // An oversized result still belongs to the caller; do not flush other entries for it.
-        guard let cost else { return }
-        while entries.count >= entryLimit || cost > costLimit - estimatedCost {
-            guard let oldest = leastToMostRecent.first else { return }
-            removeEntry(for: oldest)
+        let cost = Self.cost(of: result, limit: costLimit, isCancelled: { cancellation?.isCancelled == true })
+        let commit = {
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            self.removeEntry(for: key)
+            // An oversized result still belongs to the caller; do not flush other entries for it.
+            guard let cost else { return }
+            while self.entries.count >= self.entryLimit || cost > self.costLimit - self.estimatedCost {
+                guard let oldest = self.leastToMostRecent.first else { return }
+                self.removeEntry(for: oldest)
+            }
+            self.entries[key] = Entry(result: result, cost: cost)
+            self.leastToMostRecent.append(key)
+            self.estimatedCost += cost
         }
-        entries[key] = Entry(result: result, cost: cost)
-        leastToMostRecent.append(key)
-        estimatedCost += cost
+        if let cancellation {
+            cancellation.ifNotCancelled(commit)
+        } else {
+            commit()
+        }
     }
 
     func removeAll() {
@@ -97,7 +107,11 @@ final class ReaderPaginationCache<Key: Hashable> {
         leastToMostRecent.removeAll { $0 == key }
     }
 
-    private static func cost(of result: ReaderLayoutEngine.PaginationResult, limit: Int) -> Int? {
+    private static func cost(
+        of result: ReaderLayoutEngine.PaginationResult,
+        limit: Int,
+        isCancelled: () -> Bool
+    ) -> Int? {
         var cost = CostBudget(limit: limit)
         // Array growth headroom, entry/key bookkeeping, and per-page string/array headers.
         guard cost.add(512),
@@ -106,6 +120,7 @@ final class ReaderPaginationCache<Key: Hashable> {
         else { return nil }
 
         for page in result.pages {
+            guard !isCancelled() else { return nil }
             guard cost.addText(page.chapterTitle), cost.addText(page.previewText),
                 cost.add(
                     page.textFragments.count, bytesPerItem: MemoryLayout<ReaderTextLayoutFragment>.stride * 2 + 256),
@@ -115,12 +130,13 @@ final class ReaderPaginationCache<Key: Hashable> {
             else { return nil }
 
             for fragment in page.textFragments {
+                guard !isCancelled() else { return nil }
                 let text = fragment.attributedText
                 guard cost.add(text.length, bytesPerItem: 4) else { return nil }
                 // Kern changes create runs; charge each dictionary and its style/value objects.
                 var fits = true
                 text.enumerateAttributes(in: NSRange(location: 0, length: text.length), options: []) { _, _, stop in
-                    if cost.add(512) == false {
+                    if isCancelled() || cost.add(512) == false {
                         fits = false
                         stop.pointee = true
                     }
@@ -129,6 +145,7 @@ final class ReaderPaginationCache<Key: Hashable> {
             }
 
             for fragment in page.attachmentFragments {
+                guard !isCancelled() else { return nil }
                 if case .remoteImage(let url, let altText) = fragment.source {
                     guard cost.addText(url.absoluteString) else { return nil }
                     if let altText, cost.addText(altText) == false { return nil }

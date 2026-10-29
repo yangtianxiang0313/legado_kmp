@@ -64,7 +64,8 @@ struct ReaderPaginationCacheKey: Hashable {
         bounds: CGRect,
         pageGeometry: ReaderPageGeometry,
         theme: ReaderThemeController,
-        imageStyle: String
+        imageStyle: String,
+        isCancelled: () -> Bool = { false }
     ) {
         chapterIndex = Int(layout.chapterIndex)
         pageCount = layout.pages.count
@@ -123,31 +124,81 @@ struct ReaderPaginationCacheKey: Hashable {
         textColor = theme.textColor
         backgroundColor = theme.backgroundColor
         self.imageStyle = imageStyle
-        layoutSignature = layout.layoutSignature
+        layoutSignature = layout.layoutSignature(isCancelled: isCancelled)
     }
 }
 
 extension ReaderChapterLayout {
-    fileprivate var layoutSignature: Int {
+    // A cancelled signature is deliberately unusable: the worker must check its
+    // token before lookup/insert, not interpret this partial digest as a cache key.
+    fileprivate func layoutSignature(isCancelled: () -> Bool) -> Int {
         var hasher = Hasher()
-        hasher.combine(chapterTitle)
-        hasher.combine(searchableText)
-        return pages.reduce(into: hasher) { hasher, page in
+        guard combinePaginationText(chapterTitle, into: &hasher, isCancelled: isCancelled),
+            combinePaginationText(searchableText, into: &hasher, isCancelled: isCancelled)
+        else { return hasher.finalize() }
+        for page in pages {
+            guard !isCancelled() else { return hasher.finalize() }
             hasher.combine(Int(page.pageIndex))
             hasher.combine(Int(page.chapterStartPosition))
             hasher.combine(Int(page.chapterEndPosition))
-            hasher.combine(page.previewText)
+            guard combinePaginationText(page.previewText, into: &hasher, isCancelled: isCancelled) else {
+                return hasher.finalize()
+            }
             for fragment in page.fragments {
+                guard !isCancelled() else { return hasher.finalize() }
                 hasher.combine(Int(fragment.blockIndex))
                 hasher.combine(String(describing: fragment.kind))
-                hasher.combine(fragment.text)
-                hasher.combine(fragment.imageUrl)
-                hasher.combine(fragment.imageAlt)
+                guard combinePaginationText(fragment.text, into: &hasher, isCancelled: isCancelled) else {
+                    return hasher.finalize()
+                }
+                for value in [fragment.imageUrl, fragment.imageAlt] {
+                    hasher.combine(value != nil)
+                    if let value, !combinePaginationText(value, into: &hasher, isCancelled: isCancelled) {
+                        return hasher.finalize()
+                    }
+                }
                 hasher.combine(Int(fragment.chapterStartPosition))
                 hasher.combine(Int(fragment.chapterEndPosition))
                 hasher.combine(fragment.isContinuation)
                 hasher.combine(fragment.isParagraphEnd)
             }
-        }.finalize()
+        }
+        return hasher.finalize()
     }
+}
+
+// Bound time between cancellation checks even for a chapter with one huge text
+// block. Native UTF-8 storage avoids copying; foreign strings use the same chunks.
+private func combinePaginationText(_ text: String, into hasher: inout Hasher, isCancelled: () -> Bool) -> Bool {
+    guard !isCancelled() else { return false }
+    if let completed = text.utf8.withContiguousStorageIfAvailable({ bytes -> Bool in
+        let raw = UnsafeRawBufferPointer(bytes)
+        for start in stride(from: 0, to: raw.count, by: 4096) {
+            guard !isCancelled() else { return false }
+            let end = min(start + 4096, raw.count)
+            hasher.combine(bytes: UnsafeRawBufferPointer(rebasing: raw[start..<end]))
+        }
+        hasher.combine(raw.count)
+        return true
+    }) {
+        return completed
+    }
+    var buffer: [UInt8] = []
+    buffer.reserveCapacity(4096)
+    var count = 0
+    for byte in text.utf8 {
+        buffer.append(byte)
+        count += 1
+        if buffer.count == 4096 {
+            guard !isCancelled() else { return false }
+            buffer.withUnsafeBufferPointer { hasher.combine(bytes: UnsafeRawBufferPointer($0)) }
+            buffer.removeAll(keepingCapacity: true)
+        }
+    }
+    guard !isCancelled() else { return false }
+    if !buffer.isEmpty {
+        buffer.withUnsafeBufferPointer { hasher.combine(bytes: UnsafeRawBufferPointer($0)) }
+    }
+    hasher.combine(count)
+    return true
 }

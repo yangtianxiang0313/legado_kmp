@@ -10,11 +10,12 @@ enum SharedAsync {
                 } else if let value {
                     continuation.resume(returning: value)
                 } else {
-                    continuation.resume(throwing: NSError(
-                        domain: "io.legado.kmp.ios",
-                        code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: L10n.Shared.emptyValue]
-                    ))
+                    continuation.resume(
+                        throwing: NSError(
+                            domain: "io.legado.kmp.ios",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: L10n.Shared.emptyValue]
+                        ))
                 }
             }
         }
@@ -415,7 +416,8 @@ extension BookDetailFacade {
 
     func changeSourceAsync(bookUrl: String, candidateBookUrl: String, sourceUrl: String) async throws -> BookDetailRefreshResult {
         try await SharedAsync.value { completion in
-            changeSource(bookUrl: bookUrl, candidateBookUrl: candidateBookUrl, sourceUrl: sourceUrl, completionHandler: completion)
+            changeSource(
+                bookUrl: bookUrl, candidateBookUrl: candidateBookUrl, sourceUrl: sourceUrl, completionHandler: completion)
         }
     }
 
@@ -489,9 +491,12 @@ extension BookDetailFacade {
     }
 
     // F20/F41-F49 编辑书籍信息
-    func updateBookInfoAsync(bookUrl: String, name: String?, author: String?, coverUrl: String?, intro: String?) async throws -> Book {
+    func updateBookInfoAsync(bookUrl: String, name: String?, author: String?, coverUrl: String?, intro: String?) async throws
+        -> Book
+    {
         try await SharedAsync.value { completion in
-            updateBookInfo(bookUrl: bookUrl, name: name, author: author, coverUrl: coverUrl, intro: intro, completionHandler: completion)
+            updateBookInfo(
+                bookUrl: bookUrl, name: name, author: author, coverUrl: coverUrl, intro: intro, completionHandler: completion)
         }
     }
 
@@ -625,8 +630,8 @@ extension ReaderFacade {
         viewport: ReaderViewport,
         imageStyle: String?
     ) async throws -> ReaderChapterLayout {
-        try await SharedAsync.value { completion in
-            paginateChapter(
+        try await SharedCancellableAsync.value { completion in
+            ReaderPaginationRequest(facade: self).paginate(
                 chapterIndex: chapterIndex,
                 chapterTitle: chapterTitle,
                 content: content,
@@ -634,12 +639,25 @@ extension ReaderFacade {
                 runtime: runtime,
                 viewport: viewport,
                 imageStyle: imageStyle,
-                completionHandler: completion
-            )
+                onResult: { result in
+                    if result.isCancelled {
+                        completion(nil, CancellationError())
+                    } else if let layout = result.layout {
+                        completion(layout, nil)
+                    } else {
+                        completion(
+                            nil,
+                            NSError(
+                                domain: "io.legado.reader-pagination", code: 1,
+                                userInfo: [NSLocalizedDescriptionKey: result.errorMessage ?? "章节排版失败，请重试"]))
+                    }
+                })
         }
     }
 
-    func updateReadingProgressAsync(bookUrl: String, chapterIndex: Int32, chapterTitle: String?, chapterPosition: Int32) async throws {
+    func updateReadingProgressAsync(bookUrl: String, chapterIndex: Int32, chapterTitle: String?, chapterPosition: Int32)
+        async throws
+    {
         try await SharedAsync.void { completion in
             updateReadingProgress(
                 bookUrl: bookUrl,

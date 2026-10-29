@@ -174,8 +174,21 @@ final class ReaderPaginationCoordinator {
                     return
                 }
 
-                let pagination = self.layoutEngine.paginate(
-                    layout: chapterLayout, in: paginationBounds, theme: renderTheme)
+                let pagination = try await self.layoutEngine.paginateAsync(
+                    layout: chapterLayout, in: paginationBounds, theme: renderTheme,
+                    traits: controller.traitCollection)
+                guard !Task.isCancelled, self.requestID == requestID,
+                    self.chapter == chapter, self.matchesChapter(in: controller)
+                else { return }
+                guard controller.view.window != nil,
+                    controller.renderView.bounds == bounds,
+                    controller.currentReaderSafeAreaPolicy() == safeAreaPolicy,
+                    controller.doubleHorizontalPageMode(in: bounds) == doublePageMode
+                else {
+                    self.needsPagination = true
+                    controller.view.setNeedsLayout()
+                    return
+                }
                 self.capturePageSelection(in: controller)
                 self.isApplyingPagination = true
                 controller.pages = pagination.pages
