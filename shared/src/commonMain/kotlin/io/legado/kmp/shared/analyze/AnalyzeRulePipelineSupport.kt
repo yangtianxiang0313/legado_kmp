@@ -21,7 +21,7 @@ internal class AnalyzeRulePipelineSupport(
     private val getXPathParser: () -> XPathParser,
     private val splitSourceRule: (String) -> List<SourceRule>,
     private val splitSourceRuleForContent: (String?, Any?, Boolean) -> List<SourceRule>,
-    private val applyPutMap: suspend (Map<String, String>) -> Unit,
+    private val applyPutMap: suspend (SourceRule) -> Unit,
     private val resolveLegacySourceRule: suspend (SourceRule, AnalyzeResult) -> SourceRule,
     private val parseJsRule: suspend (String, AnalyzeResult) -> AnalyzeResult
 ) {
@@ -37,7 +37,7 @@ internal class AnalyzeRulePipelineSupport(
         var result: Any? = input
         for (sourceRule in ruleList) {
             if (sourceRule.putMap.isNotEmpty()) {
-                applyPutMap(sourceRule.putMap)
+                applyPutMap(sourceRule)
             }
             result = result?.let { current ->
                 when (sourceRule.type) {
@@ -103,7 +103,7 @@ internal class AnalyzeRulePipelineSupport(
 
         for (sourceRule in ruleList) {
             if (sourceRule.putMap.isNotEmpty()) {
-                applyPutMap(sourceRule.putMap)
+                applyPutMap(sourceRule)
             }
             val resolvedRule = resolveLegacySourceRule(sourceRule, currentResult)
             currentResult = evaluateResolvedSourceRule(sourceRule, resolvedRule, currentResult, resultMode, currentInput)
@@ -133,7 +133,7 @@ internal class AnalyzeRulePipelineSupport(
         var currentInput = input
         for (sourceRule in splitSourceRule(rule)) {
             if (sourceRule.putMap.isNotEmpty()) {
-                applyPutMap(sourceRule.putMap)
+                applyPutMap(sourceRule)
             }
             val resolvedRule = resolveLegacySourceRule(sourceRule, currentResult)
             currentResult = evaluateResolvedSourceRule(sourceRule, resolvedRule, currentResult, resultMode, currentInput)

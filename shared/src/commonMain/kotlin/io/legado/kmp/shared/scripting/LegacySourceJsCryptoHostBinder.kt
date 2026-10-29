@@ -10,6 +10,34 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 
 /** Registration-only companion; the crypto implementations remain in their existing helpers. */
 internal suspend fun QuickJs.bindLegacyCryptoHost(json: Json) {
+    function("__legacyJavaCipherConfig") { args ->
+        require(args.size == 1) { "Unsupported Java Cipher config host arguments" }
+        val transformation = args[0] as? String
+            ?: throw IllegalArgumentException("Expected a Java Cipher transformation")
+        json.encodeToString(LegacyJavaCipherSupport.config(transformation))
+    }
+    function("__legacyJavaCipherInit") { args ->
+        require(args.size == 4) { "Unsupported Java Cipher init host arguments" }
+        val transformation = args[0] as? String
+            ?: throw IllegalArgumentException("Expected a Java Cipher transformation")
+        val opmode = legacyJavaCipherOperation(args[1])
+        val key = args[2] as? String
+            ?: throw IllegalArgumentException("Expected a Java Cipher key byte array")
+        require(args[3] == null || args[3] is String) { "Expected a Java Cipher IV byte array or null" }
+        json.encodeToString(LegacyJavaCipherSupport.init(transformation, opmode, key, args[3] as? String))
+    }
+    function("__legacyJavaCipherProcess") { args ->
+        require(args.size == 5) { "Unsupported Java Cipher process host arguments" }
+        val transformation = args[0] as? String
+            ?: throw IllegalArgumentException("Expected a Java Cipher transformation")
+        val opmode = legacyJavaCipherOperation(args[1])
+        val key = args[2] as? String
+            ?: throw IllegalArgumentException("Expected a Java Cipher key byte array")
+        require(args[3] == null || args[3] is String) { "Expected a Java Cipher IV byte array or null" }
+        val data = args[4] as? String
+            ?: throw IllegalArgumentException("Expected a Java Cipher input byte array")
+        LegacyJavaCipherSupport.process(transformation, opmode, key, args[3] as? String, data)
+    }
     function("__legacyJavaHmacBytes") { args ->
         require(args.size == 3) { "Unsupported Java HMAC host arguments" }
         val algorithm = args[0] as? String
@@ -165,4 +193,11 @@ internal suspend fun QuickJs.bindLegacyCryptoHost(json: Json) {
         val signature = args.getOrNull(4)?.toString().orEmpty().toLegacyCryptoBinaryInput()
         LegacyAsymmetricCrypto.verify(algorithm, publicKey, privateKey, data, signature)
     }
+}
+
+private fun legacyJavaCipherOperation(value: Any?): Int {
+    val number = (value as? Number)?.toDouble()
+        ?: throw IllegalArgumentException("Expected a Java Cipher numeric opmode")
+    require(number == 1.0 || number == 2.0) { "Unsupported Java Cipher opmode; expected 1 or 2" }
+    return number.toInt()
 }

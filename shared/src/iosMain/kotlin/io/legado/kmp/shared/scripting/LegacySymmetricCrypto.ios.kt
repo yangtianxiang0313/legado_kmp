@@ -3,9 +3,7 @@
 package io.legado.kmp.shared.scripting
 
 import kotlinx.cinterop.ByteVar
-import kotlinx.cinterop.ULongVarOf
 import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
@@ -25,6 +23,8 @@ import platform.CoreCrypto.kCCDecrypt
 import platform.CoreCrypto.kCCEncrypt
 import platform.CoreCrypto.kCCKeySize3DES
 import platform.CoreCrypto.kCCKeySizeAES128
+import platform.CoreCrypto.kCCKeySizeAES192
+import platform.CoreCrypto.kCCKeySizeAES256
 import platform.CoreCrypto.kCCKeySizeDES
 import platform.CoreCrypto.kCCOptionECBMode
 import platform.CoreCrypto.kCCOptionPKCS7Padding
@@ -55,19 +55,32 @@ internal actual object LegacySymmetricCrypto {
     ): ByteArray {
         val config = parseSymmetricCipherConfig(transformation)
         val actualKey = key ?: randomBytes(config.defaultKeySize)
+        val validKey = when (config.algorithm) {
+            kCCAlgorithmAES -> actualKey.size == kCCKeySizeAES128.toInt() ||
+                actualKey.size == kCCKeySizeAES192.toInt() || actualKey.size == kCCKeySizeAES256.toInt()
+            kCCAlgorithmDES -> actualKey.size == kCCKeySizeDES.toInt()
+            kCCAlgorithm3DES -> actualKey.size == kCCKeySize3DES.toInt()
+            else -> false
+        }
+        require(validKey) { "Invalid legacy symmetric crypto key length" }
         val actualIv = if (config.needsIv) {
-            iv ?: ByteArray(config.blockSize)
+            (iv ?: ByteArray(config.blockSize)).also {
+                require(it.size == config.blockSize) { "Legacy symmetric crypto IV must match the block size" }
+            }
         } else {
             null
         }
+        require(data.size <= Int.MAX_VALUE - config.blockSize) { "Legacy symmetric crypto input is too large" }
         val outputCapacity = data.size + config.blockSize
+        // CCCrypt must still finalize padding for empty input; never address an empty pinned array.
+        val input = if (data.isEmpty()) ByteArray(1) else data
 
         return memScoped {
             val output = allocArray<ByteVar>(outputCapacity)
             val outputMoved = ULongArray(1)
 
             actualKey.usePinned { keyPinned ->
-                data.usePinned { dataPinned ->
+                input.usePinned { dataPinned ->
                     outputMoved.usePinned { outputMovedPinned ->
                         actualIv?.usePinned { ivPinned ->
                             val status = CCCrypt(
@@ -111,14 +124,19 @@ internal actual object LegacySymmetricCrypto {
             output.readBytes(outputMoved[0].toInt())
         }
     }
+}
 
-    private fun randomBytes(size: Int): ByteArray {
-        val bytes = ByteArray(size)
+internal actual fun javaCipherRandomBytes(size: Int): ByteArray = randomBytes(size)
+
+private fun randomBytes(size: Int): ByteArray {
+    require(size >= 0) { "Invalid symmetric crypto random byte count" }
+    val bytes = ByteArray(size)
+    if (bytes.isNotEmpty()) {
         bytes.usePinned { pinned ->
             arc4random_buf(pinned.addressOf(0), bytes.size.convert())
         }
-        return bytes
     }
+    return bytes
 }
 
 private data class SymmetricCipherConfig(

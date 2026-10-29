@@ -908,11 +908,11 @@ class AnalyzeRule(
         )
     }
 
-    private suspend fun applyPutMap(putMap: Map<kotlin.String, kotlin.String>) {
-        putMap.forEach { (key, valueRule) ->
+    private suspend fun applyPutMap(sourceRule: SourceRule) {
+        sourceRule.putMap.forEach { (key, valueRule) ->
             val resolvedKey = replaceVariables(key)
             if (resolvedKey.isEmpty()) return@forEach
-            val resolvedValue = if (shouldEvaluatePutValue(valueRule)) {
+            val resolvedValue = if (key in sourceRule.putRuleKeys || shouldEvaluatePutValue(valueRule)) {
                 evaluateAuxiliaryRule(valueRule)
             } else {
                 valueRule

@@ -1,5 +1,6 @@
 package io.legado.kmp.shared.analyze
 
+import io.legado.kmp.shared.analyze.parser.JsonPathJsonReader
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -14,7 +15,8 @@ data class SourceRule(
     val putMap: Map<String, String> = emptyMap(),
     val replaceRegex: String = "",
     val replacement: String = "",
-    val replaceFirst: Boolean = false
+    val replaceFirst: Boolean = false,
+    val putRuleKeys: Set<String> = putMap.keys.toSet(),
 ) {
     val isJs: Boolean
         get() = rule.startsWith("@js:", ignoreCase = true) || rule.startsWith("<js>", ignoreCase = true)
@@ -53,7 +55,7 @@ data class SourceRule(
          */
         fun parse(rule: String): SourceRule {
             val trimmed = rule.trim()
-            val (withoutPut, putMap) = extractPutMap(trimmed)
+            val (withoutPut, putMap, putRuleKeys) = extractPutMap(trimmed)
             val replaceParts = splitLegacyReplaceSegments(withoutPut)
             val originalRule = replaceParts.firstOrNull()?.trim().orEmpty()
             val parsedRule = when {
@@ -79,12 +81,14 @@ data class SourceRule(
                 putMap = putMap,
                 replaceRegex = replaceParts.getOrElse(1) { "" },
                 replacement = replaceParts.getOrElse(2) { "" },
-                replaceFirst = replaceParts.size > 3
+                replaceFirst = replaceParts.size > 3,
+                putRuleKeys = putRuleKeys,
             )
         }
 
-        private fun extractPutMap(rule: String): Pair<String, Map<String, String>> {
+        private fun extractPutMap(rule: String): Triple<String, Map<String, String>, Set<String>> {
             val putMap = linkedMapOf<String, String>()
+            val ruleKeys = mutableSetOf<String>()
             var stripped = rule
             while (true) {
                 val start = stripped.indexOf("@put:", ignoreCase = true)
@@ -94,11 +98,12 @@ data class SourceRule(
                 val end = findLegacyPutBlockEnd(stripped, braceStart)
                 if (end < 0) break
                 val jsonText = stripped.substring(braceStart, end + 1)
-                val parsed = parseJsonObject(jsonText)
+                val (parsed, legacyLiteral) = parseJsonObject(jsonText)
                 putMap.putAll(parsed)
+                if (legacyLiteral) ruleKeys.removeAll(parsed.keys) else ruleKeys.addAll(parsed.keys)
                 stripped = stripped.removeRange(start, end + 1)
             }
-            return stripped.trim() to putMap
+            return Triple(stripped.trim(), putMap, ruleKeys)
         }
 
         private fun findLegacyPutBlockEnd(rule: String, braceStart: Int): Int {
@@ -310,20 +315,16 @@ data class SourceRule(
             loggedNonStandardJSON = false
         }
 
-        private fun parseJsonObject(text: String): Map<String, String> {
+        private fun parseJsonObject(text: String): Pair<Map<String, String>, Boolean> {
             val content = text.removePrefix("{").removeSuffix("}")
-            if (content.isBlank()) return emptyMap()
+            if (content.isBlank()) return emptyMap<String, String>() to false
             runCatching { Json.parseToJsonElement("{$content}") }
                 .getOrNull()
                 ?.let { element ->
                     val objectValue = element as? JsonObject ?: return@let
-                    return extractJsonMap(objectValue)
+                    return extractJsonMap(objectValue) to false
                 }
-            val lenient = Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-            }
-            runCatching { lenient.parseToJsonElement("{$content}") }
+            runCatching { JsonPathJsonReader.parseComplete("{$content}") }
                 .getOrNull()
                 ?.let { element ->
                     val objectValue = element as? JsonObject ?: return@let
@@ -331,9 +332,10 @@ data class SourceRule(
                         println("AnalyzeRule: @put rule JSON format is non-standard, please use standard format")
                         loggedNonStandardJSON = true
                     }
-                    return extractJsonMap(objectValue)
+                    return extractJsonMap(objectValue) to false
                 }
-            return parseLegacyPutPair(content)
+            // The comma-pair extension predates JSON-object rules and retains literal values.
+            return parseLegacyPutPair(content) to true
         }
 
         private fun parseLegacyPutPair(content: String): Map<String, String> {

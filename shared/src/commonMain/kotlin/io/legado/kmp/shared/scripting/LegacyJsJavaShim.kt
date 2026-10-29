@@ -164,6 +164,7 @@ internal val LEGACY_JS_JAVA_SHIM = """
       $LEGACY_JS_JAVA_COLLECTION_ALGORITHMS
       $LEGACY_JS_JAVA_VALUES
       $LEGACY_JS_JAVA_CRYPTO
+      $LEGACY_JS_JAVA_CIPHER
       $LEGACY_JS_JAVA_URL
 
       registerClass('org.jsoup.Jsoup', org.jsoup.Jsoup);
@@ -185,7 +186,9 @@ internal val LEGACY_JS_JAVA_SHIM = """
       registerClass('java.util.Base64', JBase64);
       registerClass('android.util.Base64', JAndroidBase64);
       registerClass('javax.crypto.Mac', JMac);
+      registerClass('javax.crypto.Cipher', JCipher);
       registerClass('javax.crypto.spec.SecretKeySpec', JSecretKeySpec);
+      registerClass('javax.crypto.spec.IvParameterSpec', JIvParameterSpec);
       registerClass('javax.xml.bind.DatatypeConverter', JDatatypeConverter);
       registerClass('java.net.URLEncoder', JURLEncoder);
       registerClass('java.net.URLDecoder', JURLDecoder);
@@ -267,7 +270,23 @@ internal val LEGACY_JS_JAVA_SHIM = """
       }
       global.importClass = function() { importAliases(aliases(arguments, false)); };
       global.importPackage = function() { importAliases(aliases(arguments, 'packages')); };
-      global.JavaImporter = function() { return aliases(arguments, true); };
+      global.JavaImporter = function() {
+        var imports = aliases(arguments, true);
+        function append(additions) {
+          var names = keys(additions);
+          for (var i = 0; i < names.length; i++) {
+            if (own(imports, names[i]) && imports[names[i]] !== additions[names[i]]) {
+              throw new fail('Conflicting Java class name: ' + names[i]);
+            }
+          }
+          for (var i = 0; i < names.length; i++) {
+            if (!own(imports, names[i])) field(imports, names[i], additions[names[i]]);
+          }
+        }
+        method(imports, 'importClass', function() { append(aliases(arguments, false)); });
+        method(imports, 'importPackage', function() { append(aliases(arguments, 'packages')); });
+        return imports;
+      };
       var root = namespace('');
       field(global, 'Packages', root);
       field(global, 'javax', root.javax);
