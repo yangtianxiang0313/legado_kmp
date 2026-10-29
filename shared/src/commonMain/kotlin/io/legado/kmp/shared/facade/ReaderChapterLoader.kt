@@ -37,6 +37,7 @@ import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
@@ -468,10 +469,15 @@ internal class ReaderChapterLoader(
         }
     }
 
-    suspend fun preloadAdjacentChapters(bookUrl: String, chapterIndex: Int, preDownloadNum: Int) {
+    suspend fun preloadAdjacentChapters(
+        bookUrl: String,
+        chapterIndex: Int,
+        preDownloadNum: Int,
+        includeCurrent: Boolean = false,
+    ) {
         try {
             coroutineContext.ensureActive()
-            val window = preDownloadNum.coerceIn(0, 100)
+            val window = preDownloadNum.coerceIn(0, 9999).let { if (includeCurrent) it.coerceAtLeast(1) else it }
             if (window == 0 || chapterIndex < 0) return
             val state = loadingState(bookUrl)
             val book = getBookUseCase.get(bookUrl) ?: return
@@ -484,17 +490,39 @@ internal class ReaderChapterLoader(
             if (chapterIndex > readableLast) return
             val snapshot = PreloadSnapshot(book, source, chapters)
             withPreloadSnapshot(snapshot, state) {
+                var currentImageError: Exception? = null
+                if (includeCurrent) {
+                    try {
+                        cacheDisplayedChapterImages(book, source, chapters[chapterIndex], state, snapshot)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        coroutineContext.ensureActive()
+                        findFacadeRequestCancellation(error)?.let { throw it }
+                        currentImageError = error
+                    }
+                }
+                // Layout neighbors stay ahead of the expanded window, even when N is 9999.
+                if (chapterIndex < readableLast) {
+                    preloadChapter(book, source, chapters[chapterIndex + 1], chapterIndex + 1, state, snapshot)
+                }
+                if (chapterIndex > 0) {
+                    preloadChapter(book, source, chapters[chapterIndex - 1], chapterIndex - 1, state, snapshot)
+                }
                 val maxForward = min(chapterIndex.toLong() + window, readableLast.toLong()).toInt()
-                for (idx in (chapterIndex + 1)..maxForward) {
+                // One sequential chapter worker, not one coroutine per requested chapter.
+                for (idx in (chapterIndex.toLong() + 2)..maxForward.toLong()) {
                     coroutineContext.ensureActive()
-                    preloadChapter(book, source, chapters[idx], idx, state, snapshot)
+                    val index = idx.toInt()
+                    preloadChapter(book, source, chapters[index], index, state, snapshot)
                 }
                 val backwardRange = min(window, 5)
                 val minBackward = max(chapterIndex - backwardRange, 0)
-                for (idx in (chapterIndex - 1) downTo minBackward) {
+                for (idx in (chapterIndex - 2) downTo minBackward) {
                     coroutineContext.ensureActive()
                     preloadChapter(book, source, chapters[idx], idx, state, snapshot)
                 }
+                currentImageError?.let { throw it }
             }
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
@@ -502,6 +530,28 @@ internal class ReaderChapterLoader(
             findFacadeRequestCancellation(e)?.let { throw it }
             CrashCollector.record("ReaderFacade", "preloadAdjacentChapters", error = e)
             throw e
+        }
+    }
+
+    private suspend fun cacheDisplayedChapterImages(
+        book: Book,
+        source: BookSource,
+        chapter: BookChapter,
+        state: ChapterLoadingState,
+        snapshot: PreloadSnapshot,
+    ) {
+        if (chapter.isVolume) return
+        downloadSemaphore.withPermit {
+            requirePreloadSnapshot(snapshot, state)
+            // Read raw persisted text so hidden/replaced images are included. Never fetch a missing body.
+            val content = checkNotNull(chapterContentRepository.getContent(book, chapter)) {
+                "Displayed chapter cache is missing"
+            }
+            requirePreloadSnapshot(snapshot, state)
+            // Do not skip an already displayed chapter because of old failures or a display loading guard.
+            chapterImages?.save(book, source, chapter, content)
+            requirePreloadSnapshot(snapshot, state)
+            withLoadingState(book.bookUrl, state) { it.failures.remove(chapter.index) }
         }
     }
 
@@ -567,38 +617,49 @@ internal class ReaderChapterLoader(
         fun invalidate() {
             windowJob.cancel(CancellationException("Preload target changed"))
         }
+        val ready = List(3) { CompletableDeferred<Unit>() }
         // Keep image downloads cancellable too, including a late response after a source/TOC change.
         val observers = listOf(
             launch(start = CoroutineStart.UNDISPATCHED) {
                 getBookUseCase(snapshot.bookUrl).collect { book ->
                     if (!snapshot.matchesBook(book)) invalidate()
+                    ready[0].complete(Unit)
                 }
             },
             launch(start = CoroutineStart.UNDISPATCHED) {
                 observeBookChaptersUseCase(snapshot.bookUrl).collect { chapters ->
                     if (!snapshot.matchesChapters(chapters)) invalidate()
+                    ready[1].complete(Unit)
                 }
             },
             launch(start = CoroutineStart.UNDISPATCHED) {
                 getBookSourcesUseCase().collect { sources ->
                     if (!snapshot.matchesSource(sources.firstOrNull { it.bookSourceUrl == snapshot.origin })) invalidate()
+                    ready[2].complete(Unit)
                 }
             },
         )
         try {
+            ready.forEach { it.await() }
             requirePreloadSnapshot(snapshot, state)
             block()
+            requirePreloadSnapshot(snapshot, state, checkChapters = true)
         } finally {
             observers.forEach { it.cancel() }
             withContext(NonCancellable) { observers.forEach { it.cancelAndJoin() } }
         }
     }
 
-    private suspend fun requirePreloadSnapshot(snapshot: PreloadSnapshot, state: ChapterLoadingState) {
+    private suspend fun requirePreloadSnapshot(
+        snapshot: PreloadSnapshot,
+        state: ChapterLoadingState,
+        checkChapters: Boolean = false,
+    ) {
         coroutineContext.ensureActive()
         withLoadingState(snapshot.bookUrl, state) {}
+        // The window observer validates TOC emissions. Do not requery/scan the full TOC per chapter I/O.
         if (!snapshot.matchesBook(getBookUseCase.get(snapshot.bookUrl)) ||
-            !snapshot.matchesChapters(observeBookChaptersUseCase(snapshot.bookUrl).first()) ||
+            (checkChapters && !snapshot.matchesChapters(observeBookChaptersUseCase(snapshot.bookUrl).first())) ||
             !snapshot.matchesSource(getBookSourcesUseCase.getByUrl(snapshot.origin))
         ) {
             throw CancellationException("Preload target changed")

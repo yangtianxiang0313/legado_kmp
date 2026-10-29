@@ -118,8 +118,7 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
             let entry = reader.chapters[safe: chapter.index],
             Int(entry.index) == chapter.index, entry.url == chapter.url
         else { return nil }
-        let count = min(max(Int(configuredCount), 0), 100)
-        guard count > 0 else { return nil }
+        let count = min(max(Int(configuredCount), 0), 9999)
         return RequestKey(
             chapter: chapter, tocURL: book.tocUrl, reversed: book.config.reverseToc,
             catalog: catalogSignature, count: count)
@@ -233,7 +232,7 @@ enum ReaderChapterPrefetchRequest {
     static func run(facade: ReaderFacade, bookURL: String, index: Int) async throws -> Bool {
         let request = ReaderPreloadRequest(facade: facade)
         let result: ReaderPreloadResult = try await SharedCancellableAsync.value { completion in
-            request.preload(bookUrl: bookURL, chapterIndex: Int32(index), preDownloadNum: -1) { result in
+            request.preloadDisplayedChapter(bookUrl: bookURL, chapterIndex: Int32(index)) { result in
                 if result.isCancelled {
                     completion(nil, CancellationError())
                 } else {

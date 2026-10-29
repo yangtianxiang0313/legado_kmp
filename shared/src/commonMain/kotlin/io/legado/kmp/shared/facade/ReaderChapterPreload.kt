@@ -1,5 +1,6 @@
 package io.legado.kmp.shared.facade
 
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -16,6 +17,7 @@ internal class ReaderChapterPreload(private val loader: ReaderChapterLoader) {
         val bookUrl: String,
         val index: Int,
         val count: Int,
+        val includeCurrent: Boolean,
         val job: Deferred<Unit>,
         val settled: CompletableDeferred<Unit> = CompletableDeferred(),
     )
@@ -26,8 +28,8 @@ internal class ReaderChapterPreload(private val loader: ReaderChapterLoader) {
         current.value?.job?.cancel()
     }
 
-    suspend fun run(bookUrl: String, index: Int, count: Int) = supervisorScope {
-        val boundedCount = count.coerceIn(0, 100)
+    suspend fun run(bookUrl: String, index: Int, count: Int, includeCurrent: Boolean = false) = supervisorScope {
+        val boundedCount = count.coerceIn(0, 9999).let { if (includeCurrent) it.coerceAtLeast(1) else it }
         if (boundedCount == 0) {
             val previous = current.value
             previous?.job?.cancel()
@@ -37,17 +39,24 @@ internal class ReaderChapterPreload(private val loader: ReaderChapterLoader) {
         while (true) {
             val previous = current.value
             if (previous != null && previous.bookUrl == bookUrl && previous.index == index &&
-                previous.count == boundedCount && previous.job.isActive
+                previous.count == boundedCount && previous.includeCurrent == includeCurrent && previous.job.isActive
             ) {
-                previous.job.await()
+                try {
+                    previous.job.await()
+                } catch (cancelled: CancellationException) {
+                    previous.job.cancel()
+                    throw cancelled
+                } finally {
+                    withContext(NonCancellable) { previous.settled.await() }
+                }
                 return@supervisorScope
             }
             val job = async(start = CoroutineStart.LAZY) {
                 // Also wait for ancestors if an intermediate lazy window never started.
                 previous?.settled?.await()
-                loader.preloadAdjacentChapters(bookUrl, index, boundedCount)
+                loader.preloadAdjacentChapters(bookUrl, index, boundedCount, includeCurrent)
             }
-            val request = Request(bookUrl, index, boundedCount, job)
+            val request = Request(bookUrl, index, boundedCount, includeCurrent, job)
             if (!current.compareAndSet(previous, request)) {
                 job.cancel()
                 continue

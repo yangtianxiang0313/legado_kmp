@@ -303,8 +303,7 @@ class ReaderFacade(
         }
         if (prepared.preloadAdjacent) {
             try {
-                val nearbyCount = preferencesStore.runtimeConfig.first().preDownloadNum.coerceIn(0, 1)
-                preloadAdjacentChapters(bookUrl, prepared.payload.book.durChapterIndex, preDownloadNum = nearbyCount)
+                preloadAdjacentChapters(bookUrl, prepared.payload.book.durChapterIndex, preDownloadNum = 1)
             } catch (e: kotlin.coroutines.cancellation.CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -428,12 +427,19 @@ class ReaderFacade(
      * Aligns with legado ReadBook.preDownload().
      * M28/M29: Uses downloadSemaphore for concurrency control.
      *
-     * @param preDownloadNum number of chapters to preload in each direction
+     * @param preDownloadNum forward count (0..9999), with at most five backward chapters
      */
     @Throws(Exception::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun preloadAdjacentChapters(bookUrl: String, chapterIndex: Int, preDownloadNum: Int = -1) {
         val count = if (preDownloadNum < 0) preferencesStore.runtimeConfig.first().preDownloadNum else preDownloadNum
         chapterPreload.run(bookUrl, chapterIndex, count)
+    }
+
+    /** Completes the displayed chapter's raw-cache images, then max(persisted N, 1) adjacent chapters. */
+    @Throws(Exception::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun cacheDisplayedChapter(bookUrl: String, chapterIndex: Int) {
+        val count = preferencesStore.runtimeConfig.first().preDownloadNum
+        chapterPreload.run(bookUrl, chapterIndex, count, includeCurrent = true)
     }
 
     /**

@@ -43,7 +43,7 @@ extension AndroidReplicaSettingsCategoryViewController {
                     Section(
                         title: nil,
                         rows: [
-                            .bookshelfLayout, .precisionSearch, .threadCount, .replaceRuleEnabledByDefault,
+                            .bookshelfLayout, .precisionSearch, .threadCount, .preDownloadNum, .replaceRuleEnabledByDefault,
                             .keepScreenOn, .showDiscovery, .showRss, .defaultHome, .autoRefreshOnStart, .defaultToRead,
                             .userAgent,
                             .sourceCheck, .showAddToShelfAlert, .appLock, .clearCache,
@@ -83,6 +83,7 @@ extension AndroidReplicaSettingsCategoryViewController {
         case bookshelfLayout
         case precisionSearch
         case threadCount
+        case preDownloadNum
         case replaceRuleEnabledByDefault
         case keepScreenOn
         case showDiscovery

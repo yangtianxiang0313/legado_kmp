@@ -7,6 +7,8 @@ interface BookChapterRepository {
 
     fun observeChaptersByBookUrl(bookUrl: String): Flow<List<BookChapter>>
 
+    fun observeChapterByBookUrlAndIndex(bookUrl: String, index: Int): Flow<BookChapter?>
+
     suspend fun getChaptersByBookUrl(bookUrl: String): List<BookChapter>
 
     suspend fun getChapter(bookUrl: String, index: Int): BookChapter?

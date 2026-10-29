@@ -537,6 +537,8 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
             showBookshelfLayoutPicker()
         case .threadCount:
             showThreadCountPicker()
+        case .preDownloadNum:
+            showPreDownloadNumPicker()
         case .sourceCheck:
             let generation = bootstrapGeneration
             showSourceCheckConfiguration(
@@ -583,8 +585,8 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
                 try await self?.screen.setWebDavPassword(password: value)
             }
         case .webDavDir:
-            showTextEditor(title: L10n.Settings.webDavDirTitle, value: runtimeConfig?.webDavDir, placeholder: "legado")
-            { [weak self] value in
+            showTextEditor(title: L10n.Settings.webDavDirTitle, value: runtimeConfig?.webDavDir, placeholder: "legado") {
+                [weak self] value in
                 try await self?.screen.setWebDavDir(dir: value ?? "legado")
             }
         case .webDavDeviceName:
@@ -661,6 +663,16 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
 
     private func showThreadCountPicker() {
         preferenceDialogs.showThreadCount(current: Int(runtimeConfig?.threadCount ?? 16))
+    }
+
+    private func showPreDownloadNumPicker() {
+        let generation = bootstrapGeneration
+        AndroidReplicaPreDownloadPreference.showPicker(
+            from: self, current: Int(runtimeConfig?.preDownloadNum ?? 10)
+        ) { [weak self] value in
+            guard let self, self.allowsRowInteraction, self.settingsSessionIsCurrent(generation) else { return }
+            self.runSettingTask { try await AndroidReplicaPreDownloadPreference.set(value) }
+        }
     }
 
     private func showDefaultHomePicker() {

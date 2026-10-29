@@ -45,6 +45,7 @@ struct AndroidReplicaSettingsRowPresentation {
         case .bookshelfLayout: return L10n.Settings.bookshelfLayoutTitle
         case .precisionSearch: return L10n.Settings.precisionSearchTitle
         case .threadCount: return L10n.Settings.threadCountTitle
+        case .preDownloadNum: return AndroidReplicaPreDownloadPreference.title
         case .sourceCheck: return "校验设置"
         case .replaceRuleEnabledByDefault: return L10n.Settings.replaceRuleTitle
         case .keepScreenOn: return L10n.Settings.keepScreenOnTitle
@@ -100,6 +101,8 @@ struct AndroidReplicaSettingsRowPresentation {
             return boolText(runtimeConfig?.precisionSearch == true)
         case .threadCount:
             return "\(runtimeConfig?.threadCount ?? 16)"
+        case .preDownloadNum:
+            return "预先下载 \(runtimeConfig?.preDownloadNum ?? 10) 章正文"
         case .sourceCheck:
             return SourceCheckSettingsStore().load().summary
         case .replaceRuleEnabledByDefault:
@@ -269,6 +272,26 @@ struct AndroidReplicaSettingsRowPresentation {
         ]
     }
 
+}
+
+@MainActor
+enum AndroidReplicaPreDownloadPreference {
+    static let title = "预下载"
+
+    static func showPicker(from owner: UIViewController, current: Int, onConfirm: @escaping (Int) -> Void) {
+        guard owner.presentedViewController == nil else { return }
+        let dialog = AndroidReaderNumberPickerDialogViewController(
+            titleText: title, value: current, range: 0...9999,
+            valueTitle: { "\($0)" }, completion: onConfirm)
+        owner.present(dialog, animated: true)
+    }
+
+    static func set(_ value: Int) async throws {
+        let facade = try SharedRuntime.settingsFacade().get()
+        try await SharedAsync.void { completion in
+            facade.setPreDownloadNum(num: Int32(value), completionHandler: completion)
+        }
+    }
 }
 
 extension AndroidReplicaSettingsCategoryViewController {

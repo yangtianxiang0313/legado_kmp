@@ -242,6 +242,7 @@ class CacheFacade(
     ) {
         private val queue = CacheDownloadQueue()
         internal var batchProgress: CacheBatchProgress? = null
+        internal var automaticTarget: AutomaticBookCacheTarget? = null
 
         suspend fun getWaitCount(): Int = queue.pendingCount
         suspend fun getOnDownloadCount(): Int = queue.activeCount
@@ -337,6 +338,7 @@ class CacheFacade(
         }
 
         private suspend fun saveDownloadedContent(chapter: BookChapter, content: String) {
+            automaticTarget?.requireChapter(chapter)
             // Synthetic volume headings are always available and may have no body to cache.
             if (content.isEmpty() && chapter.isVolume && chapter.url.startsWith(chapter.title)) return
             check(chapterContentRepository.saveContent(book, chapter, content)) {
@@ -345,14 +347,22 @@ class CacheFacade(
         }
 
         private suspend fun downloadAndCache(chapter: BookChapter): String {
+            val target = automaticTarget
+            return if (target == null) downloadAndCacheContent(chapter)
+            else target.withChapter(chapter) { downloadAndCacheContent(chapter) }
+        }
+
+        private suspend fun downloadAndCacheContent(chapter: BookChapter): String {
             val content = chapterContentRepository.getContent(book, chapter) ?: run {
                 val downloaded = webBookRepository.getChapterContent(bookSource, book, chapter).getOrThrow()
                 coroutineContext.ensureActive()
                 saveDownloadedContent(chapter, downloaded)
                 downloaded
             }
+            automaticTarget?.requireChapter(chapter)
             chapterImages.save(book, bookSource, chapter, content)
             coroutineContext.ensureActive()
+            automaticTarget?.requireChapter(chapter)
             return content
         }
 
@@ -490,6 +500,22 @@ class CacheFacade(
         endIndex: Int = Int.MAX_VALUE,
         onProgress: (CacheProgress) -> Unit,
     ) {
+        startDownloadSession(bookUrl, startIndex, endIndex, onProgress)
+    }
+
+    internal suspend fun downloadAutomatically(
+        bookUrl: String, startIndex: Int, endIndex: Int, onProgress: (CacheProgress) -> Unit,
+    ) {
+        val target = AutomaticBookCacheTarget.create(
+            bookRepository, bookChapterRepository, bookSourceRepository, preferencesStore, bookUrl,
+        )
+        target.run { startDownloadSession(bookUrl, startIndex, endIndex, onProgress, target) }
+    }
+
+    private suspend fun startDownloadSession(
+        bookUrl: String, startIndex: Int, endIndex: Int, onProgress: (CacheProgress) -> Unit,
+        target: AutomaticBookCacheTarget? = null,
+    ) {
         runRecoverable("CacheFacade.download") {
             coroutineScope {
                 val session = DownloadSession(coroutineContext[Job]!!)
@@ -506,9 +532,10 @@ class CacheFacade(
                 }
                 var completed = false
                 try {
-                    completed = runDownloadBatch(session, bookUrl, startIndex, endIndex, onProgress)
+                    completed = runDownloadBatch(session, bookUrl, startIndex, endIndex, onProgress, target)
                 } finally {
                     session.model.value?.stopSync()
+                    session.model.value?.automaticTarget = null
                     downloadJobs.update { if (it[bookUrl] === session) it - bookUrl else it }
                     if (downloadJobs.value.isEmpty() && !isRun) {
                         _downloadStateChanged.value = if (completed) DownloadState.COMPLETED else DownloadState.IDLE
@@ -524,6 +551,7 @@ class CacheFacade(
         startIndex: Int,
         endIndex: Int,
         onProgress: (CacheProgress) -> Unit,
+        target: AutomaticBookCacheTarget?,
     ): Boolean {
         val book = bookRepository.getBook(bookUrl)
             ?: throw IllegalArgumentException("Book not found: $bookUrl")
@@ -548,6 +576,7 @@ class CacheFacade(
         _downloadStateChanged.value = if (isPaused) DownloadState.PAUSED else DownloadState.RUNNING
         val model = getOrCreate(source, book)
         model.batchProgress = progress
+        model.automaticTarget = target
         session.model.value = model
         coroutineContext.ensureActive()
         model.addDownload(effectiveStart, effectiveEnd)

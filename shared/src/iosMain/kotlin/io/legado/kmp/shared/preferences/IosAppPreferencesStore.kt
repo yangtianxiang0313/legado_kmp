@@ -602,7 +602,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
     override suspend fun setImportKeepName(enabled: Boolean) = write { setBool(enabled, KEY_IMPORT_KEEP_NAME) }
     override suspend fun setImportKeepGroup(enabled: Boolean) = write { setBool(enabled, KEY_IMPORT_KEEP_GROUP) }
     override suspend fun setImportKeepEnable(enabled: Boolean) = write { setBool(enabled, KEY_IMPORT_KEEP_ENABLE) }
-    override suspend fun setPreDownloadNum(num: Int) = write { setInteger(num.coerceIn(1, 100).toLong(), KEY_PRE_DOWNLOAD_NUM) }
+    override suspend fun setPreDownloadNum(num: Int) = write { setInteger(num.coerceIn(0, 9999).toLong(), KEY_PRE_DOWNLOAD_NUM) }
     override suspend fun setMediaButtonOnExit(enabled: Boolean) = write { setBool(enabled, KEY_MEDIA_BUTTON_ON_EXIT) }
     override suspend fun setReadAloudByMediaButton(enabled: Boolean) = write { setBool(enabled, KEY_READ_ALOUD_BY_MEDIA_BUTTON) }
     override suspend fun setPauseReadAloudWhilePhoneCalls(enabled: Boolean) = write { setBool(enabled, KEY_PAUSE_READ_ALOUD_WHILE_PHONE_CALLS) }
@@ -894,7 +894,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
             importKeepName = defaults.objectForKey(KEY_IMPORT_KEEP_NAME)?.let { defaults.boolForKey(KEY_IMPORT_KEEP_NAME) } ?: false,
             importKeepGroup = defaults.objectForKey(KEY_IMPORT_KEEP_GROUP)?.let { defaults.boolForKey(KEY_IMPORT_KEEP_GROUP) } ?: false,
             importKeepEnable = defaults.objectForKey(KEY_IMPORT_KEEP_ENABLE)?.let { defaults.boolForKey(KEY_IMPORT_KEEP_ENABLE) } ?: false,
-            preDownloadNum = defaults.integerForKey(KEY_PRE_DOWNLOAD_NUM).takeIf { defaults.objectForKey(KEY_PRE_DOWNLOAD_NUM) != null }?.toInt()?.coerceIn(1, 100) ?: 10,
+            preDownloadNum = defaults.integerForKey(KEY_PRE_DOWNLOAD_NUM).takeIf { defaults.objectForKey(KEY_PRE_DOWNLOAD_NUM) != null }?.toInt()?.coerceIn(0, 9999) ?: 10,
             mediaButtonOnExit = defaults.objectForKey(KEY_MEDIA_BUTTON_ON_EXIT)?.let { defaults.boolForKey(KEY_MEDIA_BUTTON_ON_EXIT) } ?: true,
             readAloudByMediaButton = defaults.objectForKey(KEY_READ_ALOUD_BY_MEDIA_BUTTON)?.let { defaults.boolForKey(KEY_READ_ALOUD_BY_MEDIA_BUTTON) } ?: false,
             pauseReadAloudWhilePhoneCalls = defaults.objectForKey(KEY_PAUSE_READ_ALOUD_WHILE_PHONE_CALLS)?.let { defaults.boolForKey(KEY_PAUSE_READ_ALOUD_WHILE_PHONE_CALLS) } ?: false,

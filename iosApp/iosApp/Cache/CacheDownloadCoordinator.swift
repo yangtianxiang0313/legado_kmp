@@ -33,6 +33,16 @@ final class CacheDownloadCoordinator {
         var stopMonitor: Task<Void, Never>?
         var stopRequested = false
         var progressError: String?
+        let automatic: Bool
+        var manualReplacement: Request?
+
+        init(automatic: Bool) { self.automatic = automatic }
+    }
+
+    private struct Request {
+        let book: Book
+        let start: Int
+        let end: Int
     }
 
     private struct Notification {
@@ -45,6 +55,7 @@ final class CacheDownloadCoordinator {
     private var observers: [UUID: ([String: Snapshot]) -> Void] = [:]
     private var notifications: [Notification] = []
     private var isNotifying = false
+    weak var automaticObserver: (any CacheAutomaticDownloadObserver)?
 
     private(set) var snapshots: [String: Snapshot] = [:]
 
@@ -65,15 +76,36 @@ final class CacheDownloadCoordinator {
 
     @discardableResult
     func start(book: Book, startIndex: Int, endIndex: Int = Int(Int32.max)) -> Bool {
+        guard validRange(book: book, start: startIndex, end: endIndex) else { return false }
+        if let job = jobs[book.bookUrl] {
+            guard job.automatic, job.manualReplacement == nil else { return false }
+            automaticObserver?.cacheManualDownloadWillStart(bookURL: book.bookUrl)
+            job.manualReplacement = Request(book: book, start: startIndex, end: endIndex)
+            requestStop(bookURL: book.bookUrl)
+            return true
+        }
+        automaticObserver?.cacheManualDownloadWillStart(bookURL: book.bookUrl)
+        return begin(book: book, startIndex: startIndex, endIndex: endIndex, automatic: false)
+    }
+
+    @discardableResult
+    func startAutomatic(book: Book, startIndex: Int, endIndex: Int) -> Bool {
+        begin(book: book, startIndex: startIndex, endIndex: endIndex, automatic: true)
+    }
+
+    private func validRange(book: Book, start: Int, end: Int) -> Bool {
+        !book.isLocal && !book.bookUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && start >= 0 && end >= start && Int32(exactly: start) != nil && Int32(exactly: end) != nil
+    }
+
+    private func begin(book: Book, startIndex: Int, endIndex: Int, automatic: Bool) -> Bool {
         let bookURL = book.bookUrl
-        guard !book.isLocal,
-            !bookURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-            startIndex >= 0, endIndex >= startIndex,
+        guard validRange(book: book, start: startIndex, end: endIndex),
             let start = Int32(exactly: startIndex), let end = Int32(exactly: endIndex),
             jobs[bookURL] == nil
         else { return false }
 
-        let job = Job()
+        let job = Job(automatic: automatic)
         let previous = snapshots[bookURL]
         jobs[bookURL] = job
         // Until real progress arrives these are last-known counts, never the range length.
@@ -91,15 +123,20 @@ final class CacheDownloadCoordinator {
         job.task = Task { @MainActor [self] in
             do {
                 try Task.checkCancellation()
-                let summary = try await backend.download(
-                    bookURL: bookURL, startIndex: start, endIndex: end,
-                    onProgress: { @Sendable [weak self] update in
-                        guard progress.record(update, bookURL: bookURL) else { return }
-                        Task { @MainActor [weak self] in
-                            self?.consumeProgress(bookURL: bookURL, id: id)
-                        }
+                let onProgress: @Sendable (CacheProgress) -> Void = { @Sendable [weak self] update in
+                    guard progress.record(update, bookURL: bookURL) else { return }
+                    Task { @MainActor [weak self] in
+                        self?.consumeProgress(bookURL: bookURL, id: id)
                     }
-                )
+                }
+                let summary: BookDownloadSummary
+                if automatic {
+                    summary = try await backend.downloadAutomatically(
+                        bookURL: bookURL, startIndex: start, endIndex: end, onProgress: onProgress)
+                } else {
+                    summary = try await backend.download(
+                        bookURL: bookURL, startIndex: start, endIndex: end, onProgress: onProgress)
+                }
                 finish(bookURL: bookURL, id: id, result: .success(summary))
             } catch {
                 finish(bookURL: bookURL, id: id, result: .failure(error))
@@ -110,6 +147,17 @@ final class CacheDownloadCoordinator {
     }
 
     func stop(bookURL: String) {
+        automaticObserver?.cacheDownloadStopRequested(bookURL: bookURL)
+        jobs[bookURL]?.manualReplacement = nil
+        requestStop(bookURL: bookURL)
+    }
+
+    func pauseAutomatic(bookURL: String) {
+        guard let job = jobs[bookURL], job.automatic, job.manualReplacement == nil else { return }
+        requestStop(bookURL: bookURL)
+    }
+
+    private func requestStop(bookURL: String) {
         guard let job = jobs[bookURL], !job.stopRequested,
             let current = snapshots[bookURL]
         else { return }
@@ -142,8 +190,10 @@ final class CacheDownloadCoordinator {
     }
 
     func stopAll() {
+        automaticObserver?.cacheDownloadStopRequested(bookURL: nil)
         for bookURL in Array(jobs.keys) {
-            stop(bookURL: bookURL)
+            jobs[bookURL]?.manualReplacement = nil
+            requestStop(bookURL: bookURL)
         }
     }
 
@@ -197,7 +247,7 @@ final class CacheDownloadCoordinator {
             }
         case .failure(let error):
             let detail = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            if job.stopRequested {
+            if job.stopRequested || (job.automatic && error is CancellationError) {
                 phase = .stopped
                 var details = ["下载已停止，已缓存章节已保留"]
                 if let error = job.progressError { details.append(error) }
@@ -222,7 +272,12 @@ final class CacheDownloadCoordinator {
             bookURL: bookURL, phase: phase, cached: cached, total: total, message: message,
             hasProgress: hasProgress
         )
-        notifyObservers()
+        if job.automatic { automaticObserver?.cacheAutomaticDownloadDidFinish(bookURL: bookURL) }
+        if let replacement = job.manualReplacement {
+            _ = begin(book: replacement.book, startIndex: replacement.start, endIndex: replacement.end, automatic: false)
+        } else {
+            notifyObservers()
+        }
     }
 
     private func stoppingMessage(error: String?) -> String {

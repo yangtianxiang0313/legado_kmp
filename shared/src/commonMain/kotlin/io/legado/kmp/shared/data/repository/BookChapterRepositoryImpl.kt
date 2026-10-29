@@ -2,6 +2,7 @@ package io.legado.kmp.shared.data.repository
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import app.cash.sqldelight.coroutines.mapToOneOrNull
 import io.legado.kmp.shared.data.database.LegadoDatabase
 import io.legado.kmp.shared.domain.repository.BookChapterRepository
 import io.legado.kmp.shared.model.BookChapter
@@ -17,6 +18,10 @@ class BookChapterRepositoryImpl(
     override fun observeChaptersByBookUrl(bookUrl: String): Flow<List<BookChapter>> =
         database.bookChapterQueries.selectByBookUrl(bookUrl, ::mapChapter)
             .asFlow().mapToList(Dispatchers.Default)
+
+    override fun observeChapterByBookUrlAndIndex(bookUrl: String, index: Int): Flow<BookChapter?> =
+        database.bookChapterQueries.selectByBookUrlAndIndex(bookUrl, index.toLong(), ::mapChapter)
+            .asFlow().mapToOneOrNull(Dispatchers.Default)
 
     override suspend fun getChaptersByBookUrl(bookUrl: String): List<BookChapter> {
         return database.bookChapterQueries.selectByBookUrl(bookUrl, ::mapChapter).executeAsList()

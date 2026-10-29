@@ -17,9 +17,26 @@ class ReaderPreloadRequest(private val facade: ReaderFacade) {
         chapterIndex: Int,
         preDownloadNum: Int = -1,
         onResult: (ReaderPreloadResult) -> Unit,
+    ): FlowSubscription = start("preload", onResult) {
+        facade.preloadAdjacentChapters(bookUrl, chapterIndex, preDownloadNum)
+    }
+
+    /** Cache-only work after display; persisted zero still keeps the layout's adjacent chapters. */
+    fun preloadDisplayedChapter(
+        bookUrl: String,
+        chapterIndex: Int,
+        onResult: (ReaderPreloadResult) -> Unit,
+    ): FlowSubscription = start("preloadDisplayedChapter", onResult) {
+        facade.cacheDisplayedChapter(bookUrl, chapterIndex)
+    }
+
+    private fun start(
+        method: String,
+        onResult: (ReaderPreloadResult) -> Unit,
+        prepare: suspend () -> Unit,
     ): FlowSubscription = CancellableFacadeRequest.start(
         prepare = {
-            facade.preloadAdjacentChapters(bookUrl, chapterIndex, preDownloadNum)
+            prepare()
             ReaderPreloadResult(completed = true)
         },
         cancelledResult = ReaderPreloadResult(isCancelled = true),
@@ -33,7 +50,7 @@ class ReaderPreloadRequest(private val facade: ReaderFacade) {
             }
         },
         facade = "ReaderPreloadRequest",
-        callbackMethod = "preload.onResult",
+        callbackMethod = "$method.onResult",
         missingResultMessage = "Preload request completed without a result",
     )
 }

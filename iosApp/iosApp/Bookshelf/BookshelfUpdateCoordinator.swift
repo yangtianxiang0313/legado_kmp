@@ -10,7 +10,8 @@ protocol BookshelfUpdateBackend: AnyObject {
 // Like MainViewModel's queue, submitted work outlives a bookshelf page, not the iOS process.
 @MainActor
 final class BookshelfUpdateCoordinator {
-    static let shared = BookshelfUpdateCoordinator(backend: SharedBookshelfUpdateBackend())
+    static let shared = BookshelfUpdateCoordinator(
+        backend: SharedBookshelfUpdateBackend(), automaticCache: .shared)
 
     struct Snapshot: Equatable {
         let queuedURLs: [String]
@@ -31,6 +32,7 @@ final class BookshelfUpdateCoordinator {
     }
 
     private let backend: any BookshelfUpdateBackend
+    private let automaticCache: BookshelfAutomaticCacheCoordinator?
     private var isPrepared = false
     private var concurrencyLimit = 0
     private var queued: [String] = []
@@ -42,7 +44,10 @@ final class BookshelfUpdateCoordinator {
     private var isPumping = false
     private(set) var snapshot = Snapshot(queuedURLs: [], activeURLs: [], completionRevision: 0)
 
-    init(backend: any BookshelfUpdateBackend) { self.backend = backend }
+    init(backend: any BookshelfUpdateBackend, automaticCache: BookshelfAutomaticCacheCoordinator? = nil) {
+        self.backend = backend
+        self.automaticCache = automaticCache
+    }
 
     func observe(_ handler: @escaping (Snapshot) -> Void) -> UUID {
         let id = UUID()
@@ -83,6 +88,7 @@ final class BookshelfUpdateCoordinator {
     private func pump() {
         guard !isPumping else { return }
         isPumping = true
+        automaticCache?.setUpdating(!queued.isEmpty || !active.isEmpty)
         while concurrencyLimit > 0, active.count < concurrencyLimit, !queued.isEmpty {
             let url = queued.removeFirst()
             let job = Job()
@@ -90,9 +96,11 @@ final class BookshelfUpdateCoordinator {
             let id = job.id
             // Register the job before callbacks can enqueue the same book again.
             job.task = Task { @MainActor [self] in
+                await automaticCache?.waitUntilActiveCacheSettled()
                 do {
                     let result = try await backend.update(bookURL: url)
                     if result.failedCount > 0 { SharedRuntime.log("书架目录更新失败: \(url)") }
+                    if result.updatedCount > 0 { automaticCache?.didUpdate(bookURL: url) }
                 } catch {
                     SharedRuntime.log("书架目录更新失败: \(url): \(error.userFacingMessage)")
                 }

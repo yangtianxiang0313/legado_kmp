@@ -376,6 +376,7 @@ final class SettingsScreenAdapter {
         latestRuntimeConfig = runtimeConfig
         let signature = [
             "\(runtimeConfig.threadCount)",
+            "\(runtimeConfig.preDownloadNum)",
             "\(runtimeConfig.precisionSearch)",
             "\(runtimeConfig.replaceRuleEnabledByDefault)",
             runtimeConfig.userAgent,
