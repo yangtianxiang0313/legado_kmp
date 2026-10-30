@@ -1,8 +1,11 @@
 package io.legado.kmp.shared.facade
 
 import io.legado.kmp.shared.domain.localbook.BookArchiveZipReader
+import io.legado.kmp.shared.domain.localbook.ByteArrayLocalBookByteSource
 import io.legado.kmp.shared.domain.localbook.EpubArchive
+import io.legado.kmp.shared.domain.localbook.EpubArchiveReader
 import io.legado.kmp.shared.domain.localbook.EpubPackage
+import io.legado.kmp.shared.domain.localbook.NativeEpubArchiveReader
 import io.legado.kmp.shared.domain.localbook.RemoteBookOrigin
 import io.legado.kmp.shared.domain.localbook.requireRemoteBookWithinRoot
 import io.legado.kmp.shared.domain.remote.RemoteBookManager
@@ -123,9 +126,7 @@ internal fun validateRemoteBookBytes(bytes: ByteArray, fileName: String, checkAc
     when (extension) {
         "epub" -> {
             require(zip) { "远程 EPUB 文件格式无效" }
-            val archive = BookArchiveZipReader(bytes, checkActive)
-            archive.entries().forEach { checkActive(); archive.read(it.path) }
-            require(EpubPackage(EpubArchive(bytes, checkActive)).spinePaths().isNotEmpty()) { "远程 EPUB 目录无效" }
+            validateRemoteEpubBytes(bytes, checkActive)
         }
         "pdf" -> require(head.startsWith("%pdf-") && bytes.decodeToString(maxOf(0, bytes.size - 1024), bytes.size).contains("%%EOF")) {
             "远程 PDF 文件无效或不完整"
@@ -138,6 +139,40 @@ internal fun validateRemoteBookBytes(bytes: ByteArray, fileName: String, checkAc
         else -> error("远程书籍格式不受支持")
     }
     checkActive()
+}
+
+private fun validateRemoteEpubBytes(bytes: ByteArray, checkActive: () -> Unit) {
+    val source = ByteArrayLocalBookByteSource(bytes)
+    var reader: EpubArchiveReader? = null
+    var failure: Throwable? = null
+    try {
+        val opened = NativeEpubArchiveReader(source, checkActive)
+        reader = opened
+        var declared = 0L
+        opened.entries().forEach { entry ->
+            checkActive()
+            require(entry.size <= BookArchiveZipReader.MAX_ENTRY_BYTES) { "远程 EPUB 单资源超过 64 MiB" }
+            declared += entry.size
+            require(declared <= BookArchiveZipReader.MAX_TOTAL_BYTES) { "远程 EPUB 解压总量超过 256 MiB" }
+            opened.read(entry.path, BookArchiveZipReader.MAX_ENTRY_BYTES)
+        }
+        require(EpubPackage(EpubArchive(opened, checkActive)).spinePaths().isNotEmpty()) { "远程 EPUB 目录无效" }
+        checkActive()
+    } catch (error: Throwable) {
+        failure = error
+        throw error
+    } finally {
+        var closing: Throwable? = null
+        try { reader?.closeReader() } catch (error: Throwable) { closing = error }
+        try { source.closeSource() } catch (error: Throwable) {
+            val prior = closing
+            if (prior == null) closing = error else prior.addSuppressed(error)
+        }
+        closing?.let { error ->
+            val prior = failure
+            if (prior == null) throw error else prior.addSuppressed(error)
+        }
+    }
 }
 
 /** Write exclusively to a disposable temporary file; commit is a separate cancellation boundary. */
