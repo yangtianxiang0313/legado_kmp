@@ -105,7 +105,7 @@ final class RemoteBookOperation: NSObject, UIDocumentPickerDelegate, UIAdaptiveP
         // Import cleanup must return its acknowledged commits before source association starts.
         // Do not cancel that Task: the association pass still visits every committed book.
         if phase != .importing && phase != .associating { task?.cancel() }
-        if phase == .downloading { try? browser.get().cancel() }
+        if phase == .downloading || phase == .uploading { try? browser.get().cancel() }
         importer?.cancel()
         onStateChanged?(BookshelfLocalImportText.cancelling, false)
         if phase == .picking, task == nil, let picker, let id = operationID {
@@ -272,10 +272,23 @@ final class RemoteBookOperation: NSObject, UIDocumentPickerDelegate, UIAdaptiveP
                         }
                         needsReload = true
                         do {
-                            _ = try await client.upload(lease.source)
+                            _ = try await client.upload(lease.source) { [weak self] sent, total in
+                                guard let self, self.canDeliver(id), !self.cancellationRequested else { return }
+                                let sentText = ByteCountFormatter.string(fromByteCount: sent, countStyle: .file)
+                                let totalText = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+                                self.onStateChanged?("上传 \(sentText) / \(totalText)", true)
+                            }
                             successful += 1
                         } catch {
+                            if error is RemoteBookUploadOutcomeError {
+                                pendingOutcome = .message(error.userFacingMessage)
+                                // Never replay an uncertain mutation or continue a batch against a changed session.
+                                throw error
+                            }
                             if cancellationRequested || Task.isCancelled || error is CancellationError {
+                                pendingOutcome = .message(
+                                    "已取消当前文件上传，当前文件尚未发送。"
+                                        + (successful > 0 ? "此前已确认上传 \(successful) 个文件，取消不会撤销这些文件。" : ""))
                                 throw CancellationError()
                             }
                             failures.append("\(lease.source.lastPathComponent)：\(error.userFacingMessage)")
@@ -347,7 +360,7 @@ final class RemoteBookOperation: NSObject, UIDocumentPickerDelegate, UIAdaptiveP
     private func finish(_ id: UUID) {
         guard operationID == id else { return }
         let wasWriting = phase == .uploading || phase == .deleting
-        if cancellationRequested, wasWriting {
+        if cancellationRequested, wasWriting, pendingOutcome == nil {
             pendingOutcome = .message("已停止本地等待，远端操作可能已完成；请刷新确认。已成功处理的文件不会删除。")
         }
         phase = nil

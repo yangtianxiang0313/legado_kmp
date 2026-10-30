@@ -18,6 +18,14 @@ enum LocalBookFileStore {
     private static let importLeases = ImportFileLeases()
 
     static func prepare(from url: URL) async throws -> PreparedLocalBookFile {
+        try await prepareCopy(from: url, forUpload: false)
+    }
+
+    static func prepareForUpload(from url: URL) async throws -> PreparedLocalBookFile {
+        try await prepareCopy(from: url, forUpload: true)
+    }
+
+    private static func prepareCopy(from url: URL, forUpload: Bool) async throws -> PreparedLocalBookFile {
         let cancellation = ImportCancellation()
         return try await withTaskCancellationHandler(
             operation: {
@@ -27,6 +35,7 @@ enum LocalBookFileStore {
                         do {
                             let prepared = try prepareSynchronously(
                                 from: url,
+                                forUpload: forUpload,
                                 cancellation: cancellation
                             )
                             continuation.resume(returning: importLeases.register(prepared))
@@ -74,6 +83,7 @@ enum LocalBookFileStore {
 
     private static func prepareSynchronously(
         from sourceURL: URL,
+        forUpload: Bool,
         cancellation: ImportCancellation
     ) throws -> PreparedLocalBookFile {
         try cancellation.check()
@@ -96,6 +106,7 @@ enum LocalBookFileStore {
                     at: readableURL,
                     originalURL: sourceURL,
                     fileExtension: fileExtension,
+                    forUpload: forUpload,
                     cancellation: cancellation
                 )
             }
@@ -111,12 +122,19 @@ enum LocalBookFileStore {
         at readableURL: URL,
         originalURL: URL,
         fileExtension: String,
+        forUpload: Bool,
         cancellation: ImportCancellation
     ) throws -> PreparedLocalBookFile {
         try cancellation.check()
         let fileManager = FileManager.default
         try validateFile(at: readableURL, fileManager: fileManager)
-        let root = try storageRoot(fileManager: fileManager, create: true)
+        if forUpload,
+            let size = try fileManager.attributesOfItem(atPath: readableURL.path)[.size] as? NSNumber,
+            size.uint64Value > 2 * 1024 * 1024 * 1024
+        {
+            throw StoreError.uploadTooLarge
+        }
+        let root = try storageRoot(fileManager: fileManager, create: true, forUpload: forUpload)
         let stagingDirectory = root.appendingPathComponent(".import-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: stagingDirectory, withIntermediateDirectories: false)
         defer { try? fileManager.removeItem(at: stagingDirectory) }
@@ -127,9 +145,14 @@ enum LocalBookFileStore {
             to: temporaryURL,
             fileManager: fileManager,
             cancellation: cancellation,
-            byteLimit: LocalBookArchiveType.isArchive(fileExtension: fileExtension) ? 128 * 1024 * 1024 : nil
+            byteLimit: forUpload
+                ? 2 * 1024 * 1024 * 1024
+                : (LocalBookArchiveType.isArchive(fileExtension: fileExtension) ? 128 * 1024 * 1024 : nil),
+            limitError: forUpload ? .uploadTooLarge : .archiveTooLarge
         )
-        let directory = root.appendingPathComponent("\(fileExtension)-\(hash)", isDirectory: true)
+        // Upload snapshots never share a mutable retained book or another filename's deduplicated original.
+        let identity = forUpload ? UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased() : hash
+        let directory = root.appendingPathComponent("\(fileExtension)-\(identity)", isDirectory: true)
         try cancellation.check()
         if let existing = try existingFile(in: directory, fileExtension: fileExtension, fileManager: fileManager) {
             return PreparedLocalBookFile(url: existing, wasCreated: false)
@@ -159,7 +182,8 @@ enum LocalBookFileStore {
         to destination: URL,
         fileManager: FileManager,
         cancellation: ImportCancellation,
-        byteLimit: Int? = nil
+        byteLimit: Int? = nil,
+        limitError: StoreError = .archiveTooLarge
     ) throws -> String {
         let input = try FileHandle(forReadingFrom: source)
         defer { try? input.close() }
@@ -181,7 +205,7 @@ enum LocalBookFileStore {
                 let data = try input.read(upToCount: 1024 * 1024) ?? Data()
                 guard data.isEmpty == false else { return false }
                 copiedBytes += data.count
-                if let byteLimit, copiedBytes > byteLimit { throw StoreError.archiveTooLarge }
+                if let byteLimit, copiedBytes > byteLimit { throw limitError }
                 try cancellation.check()
                 try output.write(contentsOf: data)
                 hasher.update(data: data)
@@ -220,13 +244,13 @@ enum LocalBookFileStore {
         return file
     }
 
-    private static func storageRoot(fileManager: FileManager, create: Bool) throws -> URL {
+    private static func storageRoot(fileManager: FileManager, create: Bool, forUpload: Bool = false) throws -> URL {
         let root = try fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: create
-        ).appendingPathComponent("LocalBooks", isDirectory: true)
+        ).appendingPathComponent(forUpload ? "LocalBookUploadCopies" : "LocalBooks", isDirectory: true)
         if create { try fileManager.createDirectory(at: root, withIntermediateDirectories: true) }
         return root
     }
@@ -251,16 +275,19 @@ enum LocalBookFileStore {
 
     private static func discardSynchronously(at fileURL: URL) {
         let fileManager = FileManager.default
-        guard let root = try? storageRoot(fileManager: fileManager, create: false) else { return }
+        guard let root = try? storageRoot(fileManager: fileManager, create: false),
+            let uploads = try? storageRoot(fileManager: fileManager, create: false, forUpload: true)
+        else { return }
         let url = fileURL.standardizedFileURL
         let directory = url.deletingLastPathComponent()
-        guard url.isFileURL,
-            directory.deletingLastPathComponent() == root.standardizedFileURL
+        let parent = directory.deletingLastPathComponent()
+        let isUpload = parent == uploads.standardizedFileURL
+        guard url.isFileURL, isUpload || parent == root.standardizedFileURL
         else { return }
         let parts = directory.lastPathComponent.split(separator: "-", maxSplits: 1)
         guard parts.count == 2, LocalBookFormats.importExtensions.contains(String(parts[0])),
             url.pathExtension.lowercased() == String(parts[0]),
-            parts[1].count == 64,
+            parts[1].count == (isUpload ? 32 : 64),
             parts[1].allSatisfy({ "0123456789abcdef".contains($0) }),
             let directoryAttributes = try? fileManager.attributesOfItem(atPath: directory.path),
             directoryAttributes[.type] as? FileAttributeType == .typeDirectory,
@@ -344,6 +371,7 @@ enum LocalBookFileStore {
         case invalidStorage
         case cannotCreateFile
         case archiveTooLarge
+        case uploadTooLarge
         case fileOperationFailed(Error)
 
         var errorDescription: String? {
@@ -354,6 +382,7 @@ enum LocalBookFileStore {
             case .invalidStorage: return "本地书籍目录异常，无法导入"
             case .cannotCreateFile: return "无法创建本地书籍文件"
             case .archiveTooLarge: return "压缩包超过 128 MiB，无法导入"
+            case .uploadTooLarge: return "上传文件超过 2 GiB 限制"
             case .fileOperationFailed: return "本地文件导入失败，请重试"
             }
         }

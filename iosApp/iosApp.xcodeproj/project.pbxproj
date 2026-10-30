@@ -325,6 +325,9 @@
 		F02A4B010000000000000001 /* ReaderChapterPrefetchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A4B020000000000000001; };
 		A10000000000000000000062 /* RemoteBookViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* RemoteBookViewController.swift */; };
 		F02A48010000000000000001 /* RemoteBookBrowserClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A48020000000000000001; };
+		F030A0010000000000000001 /* RemoteBookFileUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F030A0020000000000000001; };
+		F030A0010000000000000002 /* RemoteBookFileUploadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F030A0020000000000000002; };
+		F030A0010000000000000003 /* RemoteBookFileUploadTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F030A0020000000000000003; };
 		F02A48010000000000000002 /* RemoteBookOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A48020000000000000002; };
 		A10000000000000000000074 /* AndroidReplicaRemoteBookViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000074 /* AndroidReplicaRemoteBookViews.swift */; };
 		A10000000000000000000006 /* DiscoveryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* DiscoveryViewController.swift */; };
@@ -1061,6 +1064,9 @@
 		DA9EFB55242844DD8E22B8E2 /* ReaderLoadFailureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLoadFailureView.swift; sourceTree = "<group>"; };
 		A20000000000000000000062 /* RemoteBookViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookViewController.swift; sourceTree = "<group>"; };
 		F02A48020000000000000001 /* RemoteBookBrowserClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookBrowserClient.swift; sourceTree = "<group>"; };
+		F030A0020000000000000001 /* RemoteBookFileUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookFileUploader.swift; sourceTree = "<group>"; };
+		F030A0020000000000000002 /* RemoteBookFileUploadPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookFileUploadPolicy.swift; sourceTree = "<group>"; };
+		F030A0020000000000000003 /* RemoteBookFileUploadTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookFileUploadTransfer.swift; sourceTree = "<group>"; };
 		F02A48020000000000000002 /* RemoteBookOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBookOperation.swift; sourceTree = "<group>"; };
 		A20000000000000000000074 /* AndroidReplicaRemoteBookViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidReplicaRemoteBookViews.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* DiscoveryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryViewController.swift; sourceTree = "<group>"; };
@@ -1830,6 +1836,9 @@
 				B200000000000000000000A2 /* LocalBookFileStore.swift */,
 				A20000000000000000000062 /* RemoteBookViewController.swift */,
 				F02A48020000000000000001 /* RemoteBookBrowserClient.swift */,
+				F030A0020000000000000001 /* RemoteBookFileUploader.swift */,
+				F030A0020000000000000002 /* RemoteBookFileUploadPolicy.swift */,
+				F030A0020000000000000003 /* RemoteBookFileUploadTransfer.swift */,
 				F02A48020000000000000002 /* RemoteBookOperation.swift */,
 				A20000000000000000000074 /* AndroidReplicaRemoteBookViews.swift */,
 				A20000000000000000000020 /* BookshelfRootView.swift */,
@@ -2819,6 +2828,9 @@
 				B100000000000000000000A2 /* LocalBookFileStore.swift in Sources */,
 				A10000000000000000000062 /* RemoteBookViewController.swift in Sources */,
 				F02A48010000000000000001 /* RemoteBookBrowserClient.swift in Sources */,
+				F030A0010000000000000001 /* RemoteBookFileUploader.swift in Sources */,
+				F030A0010000000000000002 /* RemoteBookFileUploadPolicy.swift in Sources */,
+				F030A0010000000000000003 /* RemoteBookFileUploadTransfer.swift in Sources */,
 				F02A48010000000000000002 /* RemoteBookOperation.swift in Sources */,
 				A10000000000000000000074 /* AndroidReplicaRemoteBookViews.swift in Sources */,
 				A10000000000000000000006 /* DiscoveryViewController.swift in Sources */,

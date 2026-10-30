@@ -11,7 +11,9 @@ final class RemoteBookBrowserClient {
     private let facade: RemoteBookTransferFacade
     private var session: RemoteBookSession?
     private var loader: WebBookFileLoader?
+    private var uploader: RemoteBookFileUploader?
     private var downloading = false
+    private var uploading = false
 
     init() throws {
         facade = try RemoteBookTransferFacade.companion.create()
@@ -29,7 +31,7 @@ final class RemoteBookBrowserClient {
     func download(
         _ remoteBook: RemoteBook, onProgress: @escaping @MainActor (Int64, Int64?) -> Void
     ) async throws -> RemoteBookDownloadedFile {
-        guard !downloading else { throw Self.failure("已有远程文件正在下载") }
+        guard !downloading, !uploading else { throw Self.failure("已有远程文件正在传输") }
         downloading = true
         defer { downloading = false }
         let session = try await currentSession()
@@ -56,20 +58,57 @@ final class RemoteBookBrowserClient {
         return RemoteBookDownloadedFile(url: file, remoteOrigin: origin)
     }
 
-    func upload(_ url: URL) async throws -> RemoteBook {
+    func upload(
+        _ url: URL, onProgress: @escaping @MainActor (Int64, Int64) -> Void = { _, _ in }
+    ) async throws -> RemoteBook {
+        guard !uploading, !downloading else { throw Self.failure("已有远程文件正在传输") }
+        uploading = true
+        defer { uploading = false }
         let session = try await currentSession()
-        let file = try await LocalBookFileStore.prepare(from: url)
+        let file = try await LocalBookFileStore.prepareForUpload(from: url)
+        var prepared: PreparedRemoteBookUpload?
+        var serverConfirmed = false
         do {
             try Task.checkCancellation()
             let result = try await request { onResult in
-                facade.uploadFileRequest(sessionId: session.id, path: file.url.path, onResult: onResult)
+                facade.prepareUploadFileRequest(sessionId: session.id, path: file.url.path, onResult: onResult)
             }
-            // The terminal callback acknowledges that Kotlin has stopped reading the file.
+            guard let upload = result.upload else { throw Self.failure("远程上传请求未返回") }
+            prepared = upload
+            try Task.checkCancellation()
+            guard let target = URL(string: upload.url) else { throw Self.failure("远程上传地址无效") }
+            var request = URLRequest(url: target, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 120)
+            request.httpMethod = "PUT"
+            for (name, value) in upload.headers { request.setValue(value, forHTTPHeaderField: name) }
+            let transfer = RemoteBookFileUploader()
+            uploader = transfer
+            defer { if uploader === transfer { uploader = nil } }
+            let receipt = try await transfer.upload(
+                request: request, fileURL: file.url, byteCount: upload.byteCount,
+                validate: { [self] in
+                    _ = try await self.request { facade.validateUploadFileRequest(upload: upload, onResult: $0) }
+                }, onProgress: onProgress)
+            serverConfirmed = true
+            // Acknowledged PUT wins over a late Swift cancellation; wait for the real shared finish.
+            let uploaded: RemoteBook = try await SharedAsync.value {
+                facade.finishUploadFile(
+                    upload: upload, responseUrl: receipt.responseURL, statusCode: Int32(receipt.statusCode), completionHandler: $0
+                )
+            }
+            try? await SharedAsync.void { facade.discardUploadFile(upload: upload, completionHandler: $0) }
             await LocalBookFileStore.discard(file)
-            guard let uploaded = result.remoteBook else { throw Self.failure("远程上传未返回结果，请刷新书库确认") }
             return uploaded
         } catch {
+            if let prepared {
+                try? await SharedAsync.void { facade.discardUploadFile(upload: prepared, completionHandler: $0) }
+            }
+            // The uploader has drained native invalidation before this lease can be released.
             await LocalBookFileStore.discard(file)
+            if serverConfirmed { throw RemoteBookUploadOutcomeError(confirmed: true) }
+            if let failure = error as? RemoteBookFileUploadFailure, failure.wasDispatched {
+                throw RemoteBookUploadOutcomeError(confirmed: failure.wasConfirmed)
+            }
+            if Task.isCancelled { throw CancellationError() }
             throw error
         }
     }
@@ -90,6 +129,7 @@ final class RemoteBookBrowserClient {
     func cancel() {
         // Each Swift task cancels only its own Kotlin request. Parent/child pages share this client.
         loader?.cancel()
+        uploader?.cancel()
     }
 
     private func currentSession() async throws -> RemoteBookSession {
@@ -126,6 +166,16 @@ final class RemoteBookBrowserClient {
 
     private static func failure(_ message: String) -> NSError {
         NSError(domain: "io.legado.remote-book", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+struct RemoteBookUploadOutcomeError: LocalizedError {
+    let confirmed: Bool
+
+    var errorDescription: String? {
+        confirmed
+            ? "服务器已确认上传，但操作未正常返回；请刷新原远程书库确认，勿重复上传。"
+            : "上传结果未知，远端可能已写入文件；取消不会撤销上传，请刷新原远程书库确认，勿直接重试。"
     }
 }
 

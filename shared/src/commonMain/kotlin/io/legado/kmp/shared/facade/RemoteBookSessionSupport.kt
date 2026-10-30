@@ -31,6 +31,11 @@ internal enum class RemoteBookSessionProblem(val userMessage: String) {
     LOCAL_FILE("请选择可信的本地安全副本文件路径"),
     FILE_LIMIT("上传文件为空或超过 128 MiB 限制"),
     LOCAL_CHANGED("本地安全副本已变化或读取不完整，未开始上传"),
+    UPLOAD_FILE_LIMIT("上传文件为空或超过 2 GiB 限制"),
+    UPLOAD_LOCAL_CHANGED("本地安全副本已变化或不可用，请重新准备上传"),
+    UPLOAD_REQUEST("上传准备已失效、已使用或不是当前会话签发的请求，请重新准备"),
+    UPLOAD_RESPONSE("上传响应与原会话目标不符，未签发远程条目，请刷新原目录确认"),
+    UPLOAD_LIMIT("当前会话准备的上传请求已达 16 个，请先完成或取消已有请求"),
     LIMIT("当前会话签发的条目过多，请重新打开远程书库"),
 }
 
@@ -117,12 +122,14 @@ internal class RemoteBookSessionState(val session: RemoteBookSession, val config
         private set
     val issuedBooks = linkedMapOf<String, RemoteBook>()
     val issuedRequests = linkedMapOf<String, WebBookFileRequest>()
+    val preparedUploads = linkedMapOf<PreparedRemoteBookUpload, RemoteBookUploadFileSnapshot>()
     private val issuedSegments = linkedMapOf<String, List<String>>()
 
     fun invalidate(problem: RemoteBookSessionProblem = RemoteBookSessionProblem.EXPIRED) {
         invalidated = problem
         issuedBooks.clear()
         issuedRequests.clear()
+        preparedUploads.clear()
         issuedSegments.clear()
     }
 
@@ -146,6 +153,14 @@ internal class RemoteBookSessionState(val session: RemoteBookSession, val config
         val segments = config.scope.requireUrl(path).segments
         val stale = issuedSegments.filterValues { it.take(segments.size) == segments }.keys.toList()
         stale.forEach(::revoke)
+    }
+
+    fun issueUploaded(book: RemoteBook) {
+        val segments = config.scope.requireUrl(book.path).segments
+        val stale = issuedSegments.filterValues { it.take(segments.size) == segments }.keys.toList()
+        requireRemoteBookSession(issuedBooks.size - stale.size < 20_000, RemoteBookSessionProblem.LIMIT)
+        stale.forEach(::revoke)
+        issue(book)
     }
 
     fun replaceChildren(directory: String, books: List<RemoteBook>) {

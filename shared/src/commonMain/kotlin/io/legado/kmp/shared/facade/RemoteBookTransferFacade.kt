@@ -7,18 +7,21 @@ import io.legado.kmp.shared.domain.repository.BookRepository
 import io.legado.kmp.shared.domain.repository.ServerRepository
 import io.legado.kmp.shared.model.RemoteBook
 import io.legado.kmp.shared.network.ScopedWebDavClient
+import io.legado.kmp.shared.network.scopedWebDavHttpFailure
 import io.legado.kmp.shared.platform.FileAccess
 import io.legado.kmp.shared.preferences.AppPreferencesStore
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.random.Random
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.koin.mp.KoinPlatformTools
 
-/** Fixed-account DAV management/preparation only. The platform owns GET, atomic storage and import. */
+/** Fixed-account DAV management/preparation. The platform owns GET and prepared from-file PUT. */
 class RemoteBookTransferFacade(
     private val preferences: AppPreferencesStore,
     private val servers: ServerRepository,
@@ -136,7 +139,83 @@ class RemoteBookTransferFacade(
             RemoteBookOrigin.create(book.path, state.session.serverId).encoded
         }
 
-    /** The caller supplies an immutable, trusted local copy; uploads always target this session root. */
+    /** Metadata only. Native must stream the immutable local copy with no redirects or cookies. */
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun prepareUploadFile(sessionId: String, path: String): PreparedRemoteBookUpload {
+        var prepared: PreparedRemoteBookUpload? = null
+        try {
+            return operation("prepareUploadFile", sessionId) { state ->
+                requireRemoteBookSession(state.preparedUploads.size < 16, RemoteBookSessionProblem.UPLOAD_LIMIT)
+                val snapshot = prepareRemoteBookUploadFile(files, path)
+                val target = state.config.scope.rootFile(snapshot.fileName)
+                remoteBookDownloadFileName(RemoteBook(
+                    snapshot.fileName, target, snapshot.byteCount, 0L, snapshot.fileName.substringAfterLast('.', "").lowercase(),
+                ))
+                state.config.scope.requireUrl(target)
+                gate(state)
+                val upload = PreparedRemoteBookUpload(
+                    url = target,
+                    headers = mapOf(
+                        "Authorization" to state.config.authorization,
+                        "Content-Type" to "application/octet-stream",
+                        "Accept-Encoding" to "identity",
+                    ),
+                    localPath = snapshot.path,
+                    fileName = snapshot.fileName,
+                    byteCount = snapshot.byteCount,
+                )
+                state.preparedUploads[upload] = snapshot
+                prepared = upload
+                upload
+            }
+        } catch (error: Throwable) {
+            prepared?.let { discardUploadFile(it) }
+            throw error
+        }
+    }
+
+    /** Recheck the original session and file metadata immediately before native dispatch. */
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun validateUploadFile(upload: PreparedRemoteBookUpload) {
+        preparedUploadOperation("validateUploadFile", upload) { _, snapshot ->
+            validateRemoteBookUploadFile(files, snapshot)
+        }
+    }
+
+    fun validateUploadFileRequest(
+        upload: PreparedRemoteBookUpload,
+        onResult: (RemoteBookTransferResult) -> Unit,
+    ): FlowSubscription = remoteBookTransferRequest("validateUploadFileRequest", onResult = onResult) {
+        validateUploadFile(upload)
+        RemoteBookTransferResult()
+    }
+
+    /** Consume once, even on rejection. Native must have a definite HTTP ack and await the true terminal result. */
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun finishUploadFile(upload: PreparedRemoteBookUpload, responseUrl: String, statusCode: Int): RemoteBook =
+        preparedUploadOperation("finishUploadFile", upload, consume = true) { state, snapshot ->
+            val response = state.config.scope.requireUrl(responseUrl)
+            requireRemoteBookSession(!response.isDirectory && response.url == upload.url, RemoteBookSessionProblem.UPLOAD_RESPONSE)
+            if (statusCode !in setOf(200, 201, 204)) scopedWebDavHttpFailure(statusCode)
+            validateRemoteBookUploadFile(files, snapshot)
+            gate(state)
+            val book = RemoteBook(
+                snapshot.fileName, upload.url, snapshot.byteCount, 0L, snapshot.fileName.substringAfterLast('.', "").lowercase(),
+            )
+            state.issueUploaded(book)
+            book
+        }
+
+    /** Idempotent identity-only cleanup, even after configuration changes or caller cancellation. */
+    suspend fun discardUploadFile(upload: PreparedRemoteBookUpload) {
+        withContext(NonCancellable) {
+            mutex.withLock {
+                sessions.values.forEach { it.preparedUploads.remove(upload) }
+            }
+        }
+    }
+
+    /** Legacy in-memory upload, still limited to 128 MiB; the trusted copy targets this session root. */
     @Throws(RecoverableSharedException::class, CancellationException::class)
     suspend fun uploadFile(sessionId: String, path: String): RemoteBook =
         uploadFileTracked(sessionId, path, RemoteBookMutation(upload = true))
@@ -205,6 +284,16 @@ class RemoteBookTransferFacade(
         }
     }
 
+    fun prepareUploadFileRequest(
+        sessionId: String,
+        path: String,
+        onResult: (RemoteBookTransferResult) -> Unit,
+    ): FlowSubscription = remoteBookUploadPreparationRequest(
+        onResult = onResult,
+        prepare = { prepareUploadFile(sessionId, path) },
+        discard = { discardUploadFile(it) },
+    )
+
     fun deleteRequest(sessionId: String, remoteBook: RemoteBook, onResult: (RemoteBookTransferResult) -> Unit): FlowSubscription {
         val mutation = RemoteBookMutation(upload = false)
         return remoteBookTransferRequest("deleteRequest", mutation, onResult) {
@@ -224,6 +313,31 @@ class RemoteBookTransferFacade(
             gate(state)
             try {
                 block(state)
+            } finally {
+                gate(state)
+            }
+        }
+    }
+
+    private suspend fun <T> preparedUploadOperation(
+        name: String,
+        upload: PreparedRemoteBookUpload,
+        consume: Boolean = false,
+        block: suspend (RemoteBookSessionState, RemoteBookUploadFileSnapshot) -> T,
+    ): T = recoverRemoteBookTransfer(name) {
+        mutex.withLock {
+            // Keys use object identity; matching fields or a handle from another facade cannot authorize a PUT.
+            val state = sessions.values.firstOrNull { upload in it.preparedUploads }
+                ?: throw RemoteBookSessionFailure(RemoteBookSessionProblem.UPLOAD_REQUEST)
+            val snapshot = state.preparedUploads[upload]
+                ?: throw RemoteBookSessionFailure(RemoteBookSessionProblem.UPLOAD_REQUEST)
+            if (consume) state.preparedUploads.remove(upload)
+            gate(state)
+            val target = state.config.scope.requireUrl(upload.url)
+            requireRemoteBookSession(!target.isDirectory && target.url == upload.url &&
+                target.url == state.config.scope.rootFile(snapshot.fileName), RemoteBookSessionProblem.UPLOAD_REQUEST)
+            try {
+                block(state, snapshot)
             } finally {
                 gate(state)
             }
