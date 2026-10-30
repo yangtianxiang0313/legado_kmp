@@ -3,10 +3,24 @@ import NIOCore
 import NIOHTTP1
 import NIOPosix
 
+/// A response body consumed by a single reader, with no concurrent `nextChunk()` calls.
+/// Each chunk must contain at most 32 KiB; `nil` indicates clean EOF only, never cancellation or failure.
+protocol HLSRelayHTTPStreamingBody: Sendable {
+    /// The reader's representation length, fixed for its lifetime; nil means genuinely unknown.
+    var length: Int64? { get }
+    var idleTimeoutSeconds: Int64 { get }
+    func nextChunk() async throws -> Data?
+
+    /// Must be thread-safe, idempotent and nonblocking, and make any suspended read throw.
+    /// Cancels only this reader, without cancelling its shared source.
+    func cancel()
+}
+
 struct HLSRelayHTTPResponse: Sendable {
     let statusCode: Int
     let headers: [String: String]
     let body: Data
+    var stream: (any HLSRelayHTTPStreamingBody)? = nil
 }
 
 /// A session-owned, IPv4 loopback-only HTTP endpoint. No shared server or LAN access policy is used.

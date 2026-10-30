@@ -28,6 +28,8 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
     private var bufferedPlayer: AVAudioPlayer?
     private var streamPlayer: AVPlayer?
     private var progressiveAsset: ProgressiveAudioAsset?
+    private var streamResumeTime: CMTime?
+    private var streamSeekPending = false
     private var itemObservation: NSKeyValueObservation?
     private var notifications: [NSObjectProtocol] = []
     private var chunks: [Chunk] = []
@@ -125,12 +127,14 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
             var end = min(start + 300, full.length)
             if end < full.length {
                 end = full.rangeOfComposedCharacterSequence(at: end).location
-                let boundary = full.rangeOfCharacter(from: punctuation, options: .backwards,
-                                                     range: NSRange(location: start, length: end - start))
+                let boundary = full.rangeOfCharacter(
+                    from: punctuation, options: .backwards,
+                    range: NSRange(location: start, length: end - start))
                 if boundary.location != NSNotFound, boundary.location > start + 80 { end = NSMaxRange(boundary) }
             }
             if end <= start { end = NSMaxRange(full.rangeOfComposedCharacterSequence(at: start)) }
-            output.append(Chunk(text: full.substring(with: NSRange(location: start, length: end - start)), start: start, end: end))
+            output.append(
+                Chunk(text: full.substring(with: NSRange(location: start, length: end - start)), start: start, end: end))
             start = end
         }
         return output
@@ -155,6 +159,12 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
                     let source = try ProgressiveAudioAsset(request: native)
                     guard !Task.isCancelled, token == generation else { source.cancel(); return }
                     progressiveAsset = source
+                    let sourceID = ObjectIdentifier(source)
+                    source.observePlaybackURL { [weak self] url in
+                        Task { @MainActor [weak self] in
+                            self?.installHTTPStream(url, sourceID: sourceID, token: token)
+                        }
+                    }
                     installStream(source.asset, token: token)
                 } else {
                     // Keep the full legacy transport: cookies, proxy/WebView capabilities and source rate limiting.
@@ -184,10 +194,34 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
         }
     }
 
+    private func installHTTPStream(_ url: URL, sourceID: ObjectIdentifier, token: UUID) {
+        guard token == generation, !finished, !chunkCompleted,
+            let source = progressiveAsset, ObjectIdentifier(source) == sourceID,
+            let player = streamPlayer, let previousItem = player.currentItem,
+            previousItem.asset === source.asset
+        else { return }
+        let position = player.currentTime()
+        if position.seconds.isFinite, position.seconds > 0 { streamResumeTime = position }
+        previousItem.cancelPendingSeeks()
+        // The native item reads the existing spool over loopback, never a second upstream request.
+        // Keep progressiveAsset owned until invalidation; cancelling its old AVAsset is reader-only.
+        installStream(AVURLAsset(url: url), token: token)
+        previousItem.asset.cancelLoading()
+        playIfWanted(token: token)
+    }
+
     private func installStream(_ asset: AVURLAsset, token: UUID) {
+        removeStreamObservers()
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 1
-        let player = AVPlayer(playerItem: item)
+        let player: AVPlayer
+        if let existing = streamPlayer {
+            player = existing
+            player.pause()
+            player.replaceCurrentItem(with: item)
+        } else {
+            player = AVPlayer(playerItem: item)
+        }
         player.automaticallyWaitsToMinimizeStalling = false
         streamPlayer = player
         itemObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
@@ -202,17 +236,27 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
         }
         notifications.append(
             NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) {
-                [weak self] _ in
-                Task { @MainActor [weak self] in self?.didCompleteChunk(token: token) }
+                [weak self, weak item] _ in
+                Task { @MainActor [weak self, weak item] in
+                    guard let self, let item, token == generation, item === streamPlayer?.currentItem else { return }
+                    didCompleteChunk(token: token)
+                }
             })
         notifications.append(
             NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) {
-                [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self, token == generation else { return }
+                [weak self, weak item] _ in
+                Task { @MainActor [weak self, weak item] in
+                    guard let self, let item, token == generation, item === streamPlayer?.currentItem else { return }
                     reportFailure("HTTP 朗读流播放中断，请重试")
                 }
             })
+    }
+
+    private func removeStreamObservers() {
+        itemObservation?.invalidate()
+        itemObservation = nil
+        notifications.forEach { NotificationCenter.default.removeObserver($0) }
+        notifications = []
     }
 
     private func playIfWanted(token: UUID) {
@@ -222,7 +266,21 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
                 guard authorizePlayback(token: token) else { return }
                 guard player.prepareToPlay(), player.play() else { reportFailure("无法继续播放朗读音频"); return }
             }
-        } else if let player = streamPlayer, player.currentItem?.status == .readyToPlay {
+        } else if let player = streamPlayer, let item = player.currentItem, item.status == .readyToPlay {
+            guard !streamSeekPending else { return }
+            if let position = streamResumeTime {
+                streamResumeTime = nil
+                streamSeekPending = true
+                player.seek(to: position, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak item] completed in
+                    Task { @MainActor [weak self, weak item] in
+                        guard let self, let item, token == generation, item === streamPlayer?.currentItem else { return }
+                        streamSeekPending = false
+                        guard completed else { reportFailure("无法恢复朗读音频进度，请重试"); return }
+                        playIfWanted(token: token)
+                    }
+                }
+                return
+            }
             if player.rate == 0 {
                 guard authorizePlayback(token: token) else { return }
                 player.play()
@@ -277,14 +335,15 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
         generation = UUID()
         request?.cancel()
         request = nil
-        itemObservation?.invalidate()
-        itemObservation = nil
-        notifications.forEach { NotificationCenter.default.removeObserver($0) }
-        notifications = []
+        removeStreamObservers()
+        streamResumeTime = nil
+        streamSeekPending = false
         bufferedPlayer?.delegate = nil
         bufferedPlayer?.stop()
         bufferedPlayer = nil
         streamPlayer?.pause()
+        streamPlayer?.currentItem?.cancelPendingSeeks()
+        streamPlayer?.currentItem?.asset.cancelLoading()
         streamPlayer?.replaceCurrentItem(with: nil)
         streamPlayer = nil
         progressiveAsset?.cancel()
@@ -354,6 +413,9 @@ final class ReaderHttpSpeechPlayer: NSObject, @preconcurrency AVAudioPlayerDeleg
         bufferedPlayer?.delegate = nil
         bufferedPlayer?.stop()
         streamPlayer?.pause()
+        streamPlayer?.currentItem?.cancelPendingSeeks()
+        streamPlayer?.currentItem?.asset.cancelLoading()
+        streamPlayer?.replaceCurrentItem(with: nil)
         progressiveAsset?.cancel()
     }
 }

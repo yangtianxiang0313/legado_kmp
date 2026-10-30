@@ -700,9 +700,12 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
     private func clearCache() {
         KingfisherManager.shared.cache.clearMemoryCache()
         KingfisherManager.shared.cache.clearDiskCache { [weak self] in
-            URLCache.shared.removeAllCachedResponses()
-            DispatchQueue.main.async {
-                self?.showTransientMessage(L10n.Settings.clearCacheSuccess)
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                URLCache.shared.removeAllCachedResponses()
+                MediaAudioDiskCache.shared.removeAll()
+                DispatchQueue.main.async {
+                    self?.showTransientMessage(L10n.Settings.clearCacheSuccess)
+                }
             }
         }
     }

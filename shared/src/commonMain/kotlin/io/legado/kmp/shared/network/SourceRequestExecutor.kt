@@ -123,7 +123,9 @@ class SourceRequestExecutor(
         val declared = headerJson?.let(::parseHeaderJson)
             ?: resolveSourceHeaders(source, request, includeLoginHeader = true)
         val headers = LinkedHashMap(declared).apply {
-            if (headerJson == null) applyCompatibilityDefaults(request.baseUrl.ifBlank { source.bookSourceUrl }, request.url)
+            if (headerJson == null) applyCompatibilityDefaults(
+                request.baseUrl.ifBlank { source.bookSourceUrl }, request.url, includeCacheControl = false,
+            )
         }
         val explicitCookie = request.toHttpRequestConfig(headers).headers.entries
             .filter { it.key.equals("Cookie", ignoreCase = true) }.joinToString("; ") { it.value }.ifBlank { null }
@@ -898,11 +900,13 @@ class SourceRequestExecutor(
 
     private fun MutableMap<String, String>.applyCompatibilityDefaults(
         baseUrl: String,
-        requestUrl: String
+        requestUrl: String,
+        includeCacheControl: Boolean = true,
     ) {
         putIfMissing("Keep-Alive", "300")
         putIfMissing("Connection", "Keep-Alive")
-        putIfMissing("Cache-Control", "no-cache")
+        // Native media has its own persistent byte cache; retain explicit source/URL directives only.
+        if (includeCacheControl) putIfMissing("Cache-Control", "no-cache")
         putIfMissing("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         putIfMissing("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 

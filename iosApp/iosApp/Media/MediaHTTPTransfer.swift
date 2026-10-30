@@ -19,6 +19,24 @@ enum MediaAudioError: LocalizedError {
     }
 }
 
+/// AVFoundation can report item failure before the loader's queued failure callback arrives.
+final class MediaAudioFailureSnapshot: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: MediaAudioError?
+
+    func set(_ value: MediaAudioError?) {
+        lock.lock()
+        self.value = value
+        lock.unlock()
+    }
+
+    func get() -> MediaAudioError? {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
 protocol MediaHTTPTransferDelegate: AnyObject {
     func mediaTransfer(received response: HTTPURLResponse, contentLength: Int64?)
     func mediaTransfer(received data: Data)

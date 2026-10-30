@@ -57,6 +57,10 @@
 		F028C0010000000000000001 /* AudioPlayRecoveryActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028C0020000000000000001; };
 		F028C0010000000000000002 /* MangaReaderDownloadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028C0020000000000000002; };
 		F028C0010000000000000003 /* MediaHTTPByteRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028C0020000000000000003; };
+		AD0301010000000000000001 /* MediaAudioDiskCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0301020000000000000001; };
+		AD0301010000000000000002 /* MediaAudioDiskCacheFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0301020000000000000002; };
+		AD0301010000000000000003 /* MediaAudioDiskCachePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0301020000000000000003; };
+		AD0301010000000000000004 /* ProgressiveAudioHTTPRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0301020000000000000004; };
 		F028C0010000000000000004 /* RangedAudioResourceLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028C0020000000000000004; };
 		F027F4000000000000000001 /* AudioPlaybackBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027F5000000000000000001 /* AudioPlaybackBar.swift */; };
 		F027F4000000000000000002 /* AudioPlaybackProgressWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027F5000000000000000002 /* AudioPlaybackProgressWriter.swift */; };
@@ -787,6 +791,10 @@
 		F028C0020000000000000001 /* AudioPlayRecoveryActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlay/AudioPlayRecoveryActions.swift"; sourceTree = "<group>"; };
 		F028C0020000000000000002 /* MangaReaderDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReaderDownloadCoordinator.swift"; sourceTree = "<group>"; };
 		F028C0020000000000000003 /* MediaHTTPByteRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Media/MediaHTTPByteRange.swift"; sourceTree = "<group>"; };
+		AD0301020000000000000001 /* MediaAudioDiskCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Media/MediaAudioDiskCache.swift"; sourceTree = "<group>"; };
+		AD0301020000000000000002 /* MediaAudioDiskCacheFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Media/MediaAudioDiskCacheFiles.swift"; sourceTree = "<group>"; };
+		AD0301020000000000000003 /* MediaAudioDiskCachePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Media/MediaAudioDiskCachePolicy.swift"; sourceTree = "<group>"; };
+		AD0301020000000000000004 /* ProgressiveAudioHTTPRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Media/ProgressiveAudioHTTPRelay.swift"; sourceTree = "<group>"; };
 		F028C0020000000000000004 /* RangedAudioResourceLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Media/RangedAudioResourceLoader.swift"; sourceTree = "<group>"; };
 		F027F5000000000000000001 /* AudioPlaybackBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlay/AudioPlaybackBar.swift"; sourceTree = "<group>"; };
 		F027F5000000000000000002 /* AudioPlaybackProgressWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlay/AudioPlaybackProgressWriter.swift"; sourceTree = "<group>"; };
@@ -1527,6 +1535,10 @@
 				F028C0020000000000000001 /* AudioPlayRecoveryActions.swift */,
 				F028C0020000000000000002 /* MangaReaderDownloadCoordinator.swift */,
 				F028C0020000000000000003 /* MediaHTTPByteRange.swift */,
+				AD0301020000000000000001 /* MediaAudioDiskCache.swift */,
+				AD0301020000000000000002 /* MediaAudioDiskCacheFiles.swift */,
+				AD0301020000000000000003 /* MediaAudioDiskCachePolicy.swift */,
+				AD0301020000000000000004 /* ProgressiveAudioHTTPRelay.swift */,
 				F028C0020000000000000004 /* RangedAudioResourceLoader.swift */,
 				F028D0020000000000000001 /* MangaReadingSettings.swift */,
 				F028D0020000000000000002 /* MangaReadingSettingsViewController.swift */,
@@ -2551,6 +2563,10 @@
 				F028C0010000000000000001 /* AudioPlayRecoveryActions.swift in Sources */,
 				F028C0010000000000000002 /* MangaReaderDownloadCoordinator.swift in Sources */,
 				F028C0010000000000000003 /* MediaHTTPByteRange.swift in Sources */,
+				AD0301010000000000000001 /* MediaAudioDiskCache.swift in Sources */,
+				AD0301010000000000000002 /* MediaAudioDiskCacheFiles.swift in Sources */,
+				AD0301010000000000000003 /* MediaAudioDiskCachePolicy.swift in Sources */,
+				AD0301010000000000000004 /* ProgressiveAudioHTTPRelay.swift in Sources */,
 				F028C0010000000000000004 /* RangedAudioResourceLoader.swift in Sources */,
 				F028D0010000000000000001 /* MangaReadingSettings.swift in Sources */,
 				F028D0010000000000000002 /* MangaReadingSettingsViewController.swift in Sources */,

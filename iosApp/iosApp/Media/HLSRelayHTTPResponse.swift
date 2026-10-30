@@ -5,11 +5,19 @@ import NIOHTTP1
 struct HLSRelayHTTPOutput {
     let head: HTTPResponseHead
     let body: Data
+    var stream: (any HLSRelayHTTPStreamingBody)? = nil
 
     static func prepare(
         _ response: HLSRelayHTTPResponse, isHead: Bool, version: HTTPVersion
     ) -> HLSRelayHTTPOutput {
-        do { return try checked(response, isHead: isHead, version: version) } catch {
+        do {
+            let output = try checked(response, isHead: isHead, version: version)
+            // HEAD and static error responses do not retain a reader. Cancelling a reader
+            // releases only that reader; the streaming-body contract preserves its source.
+            if output.stream == nil { response.stream?.cancel() }
+            return output
+        } catch {
+            response.stream?.cancel()
             return Self.error(500, isHead: isHead, version: version)
         }
     }
@@ -80,6 +88,35 @@ struct HLSRelayHTTPOutput {
             suppliedLength = length
         } else {
             suppliedLength = nil
+        }
+
+        if let stream = response.stream {
+            guard (code == 200 || code == 206), response.body.isEmpty else {
+                throw HLSRelayHTTPFailure.unavailable
+            }
+            if let length = stream.length {
+                guard length >= 0, suppliedLength == nil || suppliedLength == length else {
+                    throw HLSRelayHTTPFailure.unavailable
+                }
+                if code == 206 {
+                    guard let value = fields["content-range"], let range = contentRange(value),
+                        range.length == length
+                    else { throw HLSRelayHTTPFailure.unavailable }
+                    headers.add(name: "Content-Range", value: range.value)
+                } else {
+                    guard fields["content-range"] == nil else { throw HLSRelayHTTPFailure.unavailable }
+                }
+                headers.add(name: "Content-Length", value: String(length))
+            } else {
+                guard code == 200, suppliedLength == nil, fields["content-range"] == nil else {
+                    throw HLSRelayHTTPFailure.unavailable
+                }
+                // Leave unknown lengths unframed here: NIO's HTTP/1.1 encoder owns
+                // chunking, while HTTP/1.0 uses the connection-close boundary.
+            }
+            return HLSRelayHTTPOutput(
+                head: HTTPResponseHead(version: version, status: HTTPResponseStatus(statusCode: code), headers: headers),
+                body: Data(), stream: isHead ? nil : stream)
         }
 
         if code == 206 {

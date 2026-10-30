@@ -8,6 +8,7 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
     typealias OutboundOut = HTTPServerResponsePart
 
     private enum Phase: Equatable { case head, end, ready, handling, writing, closed }
+    private enum StreamReadResult: Sendable { case chunk(Data?), failed }
 
     private let runtime: HLSRelayHTTPRuntime
     private let id: UUID
@@ -22,6 +23,14 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
     private var outboundBody: Data?
     private var offset = 0
     private var writePending = false
+    private var outboundStream: (any HLSRelayHTTPStreamingBody)?
+    private var streamLength: Int64?
+    private var streamBytes: Int64 = 0
+    private var streamIdleSeconds: Int64 = 15
+    private var streamChunk: Data?
+    private var streamEOF = false
+    private var streamReadID: UUID?
+    private var streamReadTask: Task<Void, Never>?
 
     init(runtime: HLSRelayHTTPRuntime, id: UUID, host: String, overloaded: Bool) {
         self.runtime = runtime
@@ -41,7 +50,11 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        guard phase != .closed, phase != .writing else { return }
+        guard phase != .closed else { return }
+        if phase == .writing {
+            if outboundStream != nil { close() }
+            return
+        }
         switch unwrapInboundIn(data) {
         case .head(let head):
             guard phase == .head else { fail(429); return }
@@ -69,7 +82,9 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
         case .handling:
             // Observe EOF/cancel promptly; any extra request is rejected, never queued. Raw ingress stays bounded.
             context.read()
-        case .writing, .closed: break
+        case .writing:
+            if outboundStream != nil { context.read() }
+        case .closed: break
         }
         context.fireChannelReadComplete()
     }
@@ -82,23 +97,25 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
         armDeadline(seconds: 30)
         let channel = context.channel
         let task = Task.detached { [weak self] in
-            var response: HLSRelayHTTPResponse
+            let response: HLSRelayHTTPResponse
             do {
                 try Task.checkCancellation()
                 response = try await handler(request.path, request.method, request.headers)
-                try Task.checkCancellation()
             } catch {
                 guard !Task.isCancelled else { return }
                 response = HLSRelayHTTPResponse(statusCode: 500, headers: [:], body: Data())
             }
-            guard !Task.isCancelled else { return }
-            channel.eventLoop.execute { [weak self] in self?.complete(response) }
+            guard !Task.isCancelled else { response.stream?.cancel(); return }
+            channel.eventLoop.execute { [weak self] in
+                guard let self else { response.stream?.cancel(); return }
+                self.complete(response)
+            }
         }
         runtime.store(task, for: id)
     }
 
     private func complete(_ response: HLSRelayHTTPResponse) {
-        guard phase == .handling else { return }
+        guard phase == .handling else { response.stream?.cancel(); return }
         runtime.cancelTask(for: id)
         request = nil
         respond(HLSRelayHTTPOutput.prepare(response, isHead: isHead, version: version))
@@ -113,20 +130,29 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
     }
 
     private func respond(_ output: HLSRelayHTTPOutput) {
-        guard let context, context.channel.isActive else { close(); return }
+        guard let context, context.channel.isActive else { output.stream?.cancel(); close(); return }
         phase = .writing
         outboundBody = output.body
+        outboundStream = output.stream
+        if let stream = output.stream {
+            // Use the already validated framing metadata, not a second length query on the reader.
+            streamLength = output.head.headers.first(name: "Content-Length").flatMap { Int64($0) }
+            streamIdleSeconds = min(300, max(1, stream.idleTimeoutSeconds))
+        }
         offset = 0
         writePending = true
-        armDeadline(seconds: 15)
+        armDeadline(seconds: outboundStream == nil ? 15 : streamIdleSeconds)
         let promise = context.eventLoop.makePromise(of: Void.self)
         promise.futureResult.whenComplete { [self] result in
             guard phase == .writing else { return }
             writePending = false
             if case .failure = result { close(); return }
+            if outboundStream != nil { armDeadline(seconds: streamIdleSeconds) }
             scheduleWrite()
         }
         context.writeAndFlush(wrapOutboundOut(.head(output.head)), promise: promise)
+        // Manual reads must continue during long responses to observe client EOF promptly.
+        if phase == .writing, outboundStream != nil { context.read() }
     }
 
     private func scheduleWrite() {
@@ -135,8 +161,10 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
 
     private func writeNext() {
         guard phase == .writing, !writePending, let context, context.channel.isActive,
-            context.channel.isWritable, let body = outboundBody
+            context.channel.isWritable
         else { return }
+        if outboundStream != nil { writeStreamNext(context: context); return }
+        guard let body = outboundBody else { return }
         armDeadline(seconds: 15)
         writePending = true
         let promise = context.eventLoop.makePromise(of: Void.self)
@@ -165,6 +193,92 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
             scheduleWrite()
         }
         context.writeAndFlush(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: promise)
+    }
+
+    private func writeStreamNext(context: ChannelHandlerContext) {
+        guard streamReadID == nil, let stream = outboundStream else { return }
+        if streamEOF {
+            writePending = true
+            armDeadline(seconds: streamIdleSeconds)
+            let promise = context.eventLoop.makePromise(of: Void.self)
+            promise.futureResult.whenComplete { [self] _ in close() }
+            context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: promise)
+            return
+        }
+        if let chunk = streamChunk {
+            streamChunk = nil
+            writePending = true
+            armDeadline(seconds: streamIdleSeconds)
+            var buffer = context.channel.allocator.buffer(capacity: chunk.count)
+            buffer.writeBytes(chunk)
+            let promise = context.eventLoop.makePromise(of: Void.self)
+            promise.futureResult.whenComplete { [self] result in
+                guard phase == .writing else { return }
+                writePending = false
+                if case .failure = result { close(); return }
+                armDeadline(seconds: streamIdleSeconds)
+                scheduleWrite()
+            }
+            context.writeAndFlush(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: promise)
+            return
+        }
+
+        let readID = UUID()
+        streamReadID = readID
+        let eventLoop = context.eventLoop
+        // Only this task crosses executors; connection state and all NIO writes stay on the event loop.
+        streamReadTask = Task.detached { [weak self] in
+            let result: StreamReadResult
+            do {
+                let chunk = try await withTaskCancellationHandler {
+                    try Task.checkCancellation()
+                    let chunk = try await stream.nextChunk()
+                    try Task.checkCancellation()
+                    return chunk
+                } onCancel: {
+                    stream.cancel()
+                }
+                // Reject an oversized allocation before retaining it in the event-loop callback.
+                if let chunk, chunk.count > 32 * 1024 {
+                    result = .failed
+                } else {
+                    result = .chunk(chunk)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                result = .failed
+            }
+            guard !Task.isCancelled else { return }
+            eventLoop.execute { [weak self] in self?.completeStreamRead(result, id: readID) }
+        }
+    }
+
+    private func completeStreamRead(_ result: StreamReadResult, id: UUID) {
+        guard phase == .writing, streamReadID == id else { return }
+        streamReadID = nil
+        streamReadTask = nil
+        switch result {
+        case .failed:
+            close()
+            return
+        case .chunk(nil):
+            guard streamLength == nil || streamBytes == streamLength else { close(); return }
+            streamEOF = true
+        case .chunk(.some(let chunk)):
+            guard chunk.count <= 32 * 1024 else { close(); return }
+            if chunk.isEmpty {
+                // Empty reads are not EOF or progress and cannot extend the idle deadline.
+                scheduleWrite()
+                return
+            }
+            let (total, overflow) = streamBytes.addingReportingOverflow(Int64(chunk.count))
+            guard !overflow else { close(); return }
+            if let streamLength, total > streamLength { close(); return }
+            streamBytes = total
+            streamChunk = chunk
+        }
+        armDeadline(seconds: streamIdleSeconds)
+        scheduleWrite()
     }
 
     func channelWritabilityChanged(context: ChannelHandlerContext) {
@@ -213,5 +327,13 @@ final class HLSRelayHTTPConnection: ChannelInboundHandler, @unchecked Sendable {
         runtime.cancelTask(for: id)
         request = nil
         outboundBody = nil
+        let readTask = streamReadTask
+        let stream = outboundStream
+        streamReadTask = nil
+        streamReadID = nil
+        outboundStream = nil
+        streamChunk = nil
+        readTask?.cancel()
+        stream?.cancel()
     }
 }

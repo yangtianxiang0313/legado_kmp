@@ -704,11 +704,14 @@ final class SettingsViewController: UIViewController, UITableViewDataSource, UIT
     private func clearCache() {
         KingfisherManager.shared.cache.clearMemoryCache()
         KingfisherManager.shared.cache.clearDiskCache { [weak self] in
-            URLCache.shared.removeAllCachedResponses()
-            DispatchQueue.main.async {
-                let alert = UIAlertController(title: L10n.Settings.clearCacheSuccess, message: nil, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-                self?.present(alert, animated: true)
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                URLCache.shared.removeAllCachedResponses()
+                MediaAudioDiskCache.shared.removeAll()
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(title: L10n.Settings.clearCacheSuccess, message: nil, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
+                    self?.present(alert, animated: true)
+                }
             }
         }
     }

@@ -302,7 +302,8 @@ final class AudioPlayerService: NSObject {
                     self.installItem(request: URLRequest(url: url), relay: relay, generation: token)
                 } catch {
                     guard let self, self.generation == token, self.preparationID == preparationToken,
-                        self.ownsPlayback, !Task.isCancelled else { return }
+                        self.ownsPlayback, !Task.isCancelled
+                    else { return }
                     self.preparationTask = nil
                     self.fail(error)
                 }
@@ -317,13 +318,19 @@ final class AudioPlayerService: NSObject {
         guard let url = request.url, request.httpBodyStream == nil else { throw URLError(.badURL) }
         return PreparedMediaRequest(
             url: url.absoluteString, method: request.httpMethod ?? "GET", headers: request.allHTTPHeaderFields ?? [:],
-            bodyBase64: request.httpBody?.base64EncodedString(), timeoutMillis: Int64(max(1, min(300, request.timeoutInterval)) * 1000),
+            bodyBase64: request.httpBody?.base64EncodedString(),
+            timeoutMillis: Int64(max(1, min(300, request.timeoutInterval)) * 1000),
             allowsSystemAsset: false, resourceContext: nil)
     }
 
-    private func installItem(request: URLRequest, relay: HLSAudioRelay? = nil, generation token: UUID) {
+    private func installItem(
+        request: URLRequest, relay: HLSAudioRelay? = nil, generation token: UUID, allowsFileCache: Bool = true,
+        progressiveSource: ProgressiveAudioAsset? = nil, progressiveURL: URL? = nil
+    ) {
         do {
-            let itemRuntime = try AudioPlayerItemRuntime(request: request, relay: relay)
+            let itemRuntime = try AudioPlayerItemRuntime(
+                request: request, relay: relay, allowsFileCache: allowsFileCache,
+                progressiveSource: progressiveSource, progressiveURL: progressiveURL)
             runtime = itemRuntime
             itemRuntime.observe(
                 status: { [weak self, weak itemRuntime] in
@@ -344,7 +351,17 @@ final class AudioPlayerService: NSObject {
                 },
                 failed: { [weak self, weak itemRuntime] error in
                     guard let self, let itemRuntime, self.isCurrent(itemRuntime, generation: token) else { return }
-                    self.fail(error ?? self.playbackError("音频播放失败"))
+                    self.itemFailed(itemRuntime, error: error ?? self.playbackError("音频播放失败"), generation: token)
+                },
+                playbackURL: { [weak self, weak itemRuntime] url in
+                    guard let self, let itemRuntime, self.isCurrent(itemRuntime, generation: token),
+                        let source = itemRuntime.progressiveSource
+                    else { return }
+                    self.capturePosition()
+                    self.pendingPosition = max(self.pendingPosition, self.currentTime)
+                    self.clearItemRuntime()
+                    self.installItem(
+                        request: request, generation: token, progressiveSource: source, progressiveURL: url)
                 }
             )
             refreshState()
@@ -357,6 +374,24 @@ final class AudioPlayerService: NSObject {
 
     private func isCurrent(_ itemRuntime: AudioPlayerItemRuntime, generation token: UUID) -> Bool {
         generation == token && runtime === itemRuntime && ownsPlayback
+    }
+
+    private func itemFailed(_ itemRuntime: AudioPlayerItemRuntime, error: Error, generation token: UUID) {
+        if itemRuntime.permitsSystemFallback, let request {
+            switch itemRuntime.progressiveFailure ?? (error as? MediaAudioError) {
+            case .tooLarge?, .unsupportedFormat?:
+                // Only an original plain GET may retain its pre-cache system playback path.
+                // Protected requests never retry without their headers, nor after a version mismatch.
+                capturePosition()
+                pendingPosition = max(pendingPosition, currentTime)
+                clearItemRuntime()
+                installItem(request: request, generation: token, allowsFileCache: false)
+                return
+            default:
+                break
+            }
+        }
+        fail(error)
     }
 
     private func itemStatusChanged(_ itemRuntime: AudioPlayerItemRuntime) {
@@ -374,7 +409,7 @@ final class AudioPlayerService: NSObject {
                 startPlaybackIfPossible()
             }
         case .failed:
-            fail(itemRuntime.item.error ?? playbackError("无法加载音频"))
+            itemFailed(itemRuntime, error: itemRuntime.item.error ?? playbackError("无法加载音频"), generation: generation)
         default:
             break
         }
