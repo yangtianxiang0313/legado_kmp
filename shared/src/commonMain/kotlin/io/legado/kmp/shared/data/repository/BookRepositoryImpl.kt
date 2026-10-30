@@ -8,9 +8,11 @@ import io.legado.kmp.shared.data.database.LegadoDatabase
 import io.legado.kmp.shared.domain.repository.BookRepository
 import io.legado.kmp.shared.domain.repository.ChapterListReorderResult
 import io.legado.kmp.shared.domain.repository.ReadingProgressUpdateResult
+import io.legado.kmp.shared.domain.repository.ReadingProgressImportGuard
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.domain.localbook.EpubCatalogReflowPlan
 import io.legado.kmp.shared.model.BookChapter
+import io.legado.kmp.shared.model.BookProgress
 import io.legado.kmp.shared.model.BookType
 import io.legado.kmp.shared.model.ReadConfig
 import io.legado.kmp.shared.model.isTxtLocalBook
@@ -973,6 +975,53 @@ class BookRepositoryImpl(
             val persisted = if (importedTimestamp != null) progress.copy(durChapterTime = importedTimestamp) else progress
             writeReadingProgress(persisted)
             ReadingProgressUpdateResult(persisted, persisted = true)
+        }
+    }
+
+    override suspend fun importReadingProgressIfUnchanged(
+        current: Book,
+        progress: BookProgress,
+        syncedAt: Long,
+    ): ReadingProgressUpdateResult {
+        require(progress.name == current.name && progress.author == current.author)
+        require(progress.durChapterIndex >= 0 && progress.durChapterPos >= 0 &&
+            progress.durChapterTime >= 0 && syncedAt >= 0)
+        val context = currentCoroutineContext()
+        fun check() {
+            context.ensureActive()
+            context[ReadingProgressImportGuard]?.check?.invoke()
+        }
+        check()
+        return database.bookQueries.transactionWithResult {
+            check()
+            val stored = database.bookQueries.selectByBookUrl(current.bookUrl).executeAsOneOrNull()
+                ?: return@transactionWithResult ReadingProgressUpdateResult(null, false)
+            val latest = mapToBook(stored)
+            val matches = !latest.isNotShelf && latest.origin == current.origin && latest.tocUrl == current.tocUrl &&
+                latest.type == current.type && latest.name == current.name && latest.author == current.author &&
+                latest.config.reverseToc == current.config.reverseToc && latest.syncTime == current.syncTime &&
+                latest.durChapterIndex == current.durChapterIndex && latest.durChapterTitle == current.durChapterTitle &&
+                latest.durChapterPos == current.durChapterPos && latest.durChapterTime == current.durChapterTime
+            val ahead = progress.durChapterIndex > latest.durChapterIndex ||
+                (progress.durChapterIndex == latest.durChapterIndex && progress.durChapterPos > latest.durChapterPos)
+            if (!matches || !ahead) return@transactionWithResult ReadingProgressUpdateResult(latest, false)
+            check()
+            database.bookQueries.importReadingProgress(
+                dur_chapter_title = progress.durChapterTitle,
+                dur_chapter_index = progress.durChapterIndex.toLong(),
+                dur_chapter_pos = progress.durChapterPos.toLong(),
+                dur_chapter_time = progress.durChapterTime,
+                sync_time = syncedAt,
+                book_url = current.bookUrl,
+            )
+            check()
+            ReadingProgressUpdateResult(latest.copy(
+                durChapterTitle = progress.durChapterTitle,
+                durChapterIndex = progress.durChapterIndex,
+                durChapterPos = progress.durChapterPos,
+                durChapterTime = progress.durChapterTime,
+                syncTime = syncedAt,
+            ), true)
         }
     }
 

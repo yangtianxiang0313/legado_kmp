@@ -3,6 +3,7 @@ package io.legado.kmp.shared.domain.repository
 import io.legado.kmp.shared.domain.localbook.EpubCatalogReflowPlan
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.BookChapter
+import io.legado.kmp.shared.model.BookProgress
 import kotlinx.coroutines.flow.Flow
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -10,6 +11,11 @@ import kotlin.coroutines.CoroutineContext
 /** Keep the caller's cancellation checks while a cache move/commit is being finalized. */
 internal class WebFileMetadataMergeContext(val callerContext: CoroutineContext) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<WebFileMetadataMergeContext>
+}
+
+/** Revalidate a cloud import's account and cancellation while its row transaction is still open. */
+internal class ReadingProgressImportGuard(val check: () -> Unit) : AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<ReadingProgressImportGuard>
 }
 
 /** The transaction's latest snapshot; persisted is false for conflicts, no-ops and missing books. */
@@ -272,6 +278,18 @@ interface BookRepository {
         current: Book,
         updated: Book,
         importedTimestamp: Long? = null,
+    ): ReadingProgressUpdateResult
+
+    /**
+     * Import strictly-ahead cloud progress into a still-matching shelf book in one transaction.
+     * Compare source/name/author/type/directory/progress/sync time, preserve all other latest columns,
+     * and store both the remote reading time and the local successful synchronization time.
+     * Guard failure/cancellation before commit rolls back; never inserts or updates preview books.
+     */
+    suspend fun importReadingProgressIfUnchanged(
+        current: Book,
+        progress: BookProgress,
+        syncedAt: Long,
     ): ReadingProgressUpdateResult
 
     /**

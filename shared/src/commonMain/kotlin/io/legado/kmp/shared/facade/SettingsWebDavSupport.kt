@@ -12,11 +12,8 @@ import io.legado.kmp.shared.model.BookProgress
 import io.legado.kmp.shared.model.RemoteBook
 import io.legado.kmp.shared.network.WebDavClient
 import io.legado.kmp.shared.preferences.AppPreferencesStore
-import io.legado.kmp.shared.util.currentTimeMillis
 import kotlinx.datetime.Clock
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.ensureActive
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 open class SettingsWebDavSupport(
@@ -29,6 +26,7 @@ open class SettingsWebDavSupport(
     private val webDavClient = WebDavClient()
     private val progressJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val readerProgressCloud by lazy { ReaderProgressCloudSupport(preferencesStore, bookRepository) }
+    private val bookshelfProgressCloud by lazy { BookshelfProgressCloudSupport(preferencesStore, bookRepository) }
 
     companion object {
         /** W-10: Default WebDAV URL for jianguoyun (坚果云). Mirrors legado AppWebDav.defaultWebDavUrl. */
@@ -282,51 +280,12 @@ open class SettingsWebDavSupport(
      */
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun downloadAllBookProgress() {
-        runRecoverable("SettingsFacade.downloadAllBookProgress") {
-            val (_, account, password) = getWebDavConfig() ?: return@runRecoverable
-            val root = getRootWebDavUrl() ?: return@runRecoverable
-            val repo = bookRepository ?: return@runRecoverable
-            val progressDir = "${root}bookProgress/"
-            val progressFiles = try {
-                webDavClient.listFiles(progressDir, account, password)
-            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                return@runRecoverable
-            }
-            val fileMap = hashMapOf<String, io.legado.kmp.shared.network.WebDavFile>()
-            progressFiles.forEach { fileMap[it.displayName] = it }
-
-            val allBooks = repo.getAllBooks()
-            for (book in allBooks) {
-                val progressFileName = buildProgressFileName(book.name, book.author)
-                val webDavFile = fileMap[progressFileName] ?: continue
-                if (webDavFile.lastModify <= book.syncTime) {
-                    continue
-                }
-                val bookProgress = getBookProgress(book.name, book.author) ?: continue
-                if (bookProgress.durChapterIndex > book.durChapterIndex
-                    || (bookProgress.durChapterIndex == book.durChapterIndex
-                            && bookProgress.durChapterPos > book.durChapterPos)
-                ) {
-                    val updated = book.copy(
-                        durChapterIndex = bookProgress.durChapterIndex,
-                        durChapterPos = bookProgress.durChapterPos,
-                        durChapterTitle = bookProgress.durChapterTitle,
-                        durChapterTime = bookProgress.durChapterTime,
-                        syncTime = currentTimeMillis()
-                    )
-                    // A settings sync must not replace metadata or progress saved while GET was pending.
-                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                    repo.updateReadingProgressIfUnchanged(book, updated)
-                }
-            }
-        }
+        syncBookshelfProgress()
     }
 
-    private fun buildProgressFileName(name: String, author: String): String {
-        return "${name}_${author}".replace(Regex("[\\\\/:*?\"<>|]"), "_") + ".json"
-    }
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun syncBookshelfProgress(): BookshelfProgressSyncResult =
+        runRecoverable("SettingsFacade.syncBookshelfProgress") { bookshelfProgressCloud.sync() }
 
     // MARK: - WC-05/WC-06: WebDAV file operations
 

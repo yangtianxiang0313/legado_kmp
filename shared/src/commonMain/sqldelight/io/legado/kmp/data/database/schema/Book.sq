@@ -173,6 +173,15 @@ UPDATE books SET
     dur_chapter_time = ?
 WHERE book_url = ?;
 
+importReadingProgress:
+UPDATE books SET
+    dur_chapter_title = :dur_chapter_title,
+    dur_chapter_index = :dur_chapter_index,
+    dur_chapter_pos = :dur_chapter_pos,
+    dur_chapter_time = :dur_chapter_time,
+    sync_time = :sync_time
+WHERE book_url = :book_url;
+
 updateAudioReadingProgress:
 UPDATE books SET
     last_check_count = 0,

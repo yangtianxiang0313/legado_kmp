@@ -12,7 +12,7 @@ data class BookProgress(
     val durChapterIndex: Int,
     val durChapterPos: Int,
     val durChapterTime: Long,
-    val durChapterTitle: String?
+    val durChapterTitle: String? = null
 ) {
     constructor(book: Book) : this(
         name = book.name,

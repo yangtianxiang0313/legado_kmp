@@ -40,6 +40,10 @@ final class MainTabBarController: UIViewController, NavigationCustomToolbarProvi
         appearancePhase == .visible && !isChangingSelection && canPerformNavigationAction
     }
 
+    var isVisibleForBookshelfProgressSync: Bool {
+        appearancePhase == .visible && !isChangingSelection
+    }
+
     func selectBookshelfForStartup() -> UIViewController? {
         guard isReadyForStartupNavigation,
             let index = tabs.firstIndex(where: { $0.controller is AndroidReplicaBookshelfViewController })
@@ -94,6 +98,7 @@ final class MainTabBarController: UIViewController, NavigationCustomToolbarProvi
         appearancePhase = .visible
         applyPendingTabVisibility()
         updateRootInteraction()
+        BookshelfProgressSyncCoordinator.shared.resume(from: self)
         // UIKit clears transition/moving flags after this appearance callback returns.
         DispatchQueue.main.async { [weak self] in
             guard let self, self.isReadyForStartupNavigation else { return }
@@ -104,6 +109,7 @@ final class MainTabBarController: UIViewController, NavigationCustomToolbarProvi
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         appearancePhase = .disappearing
+        BookshelfProgressSyncCoordinator.shared.suspend(from: self)
         updateRootInteraction()
         beginSelectedAppearance(false, animated: animated)
     }

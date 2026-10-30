@@ -65,6 +65,8 @@ final class StartupReadingCoordinator {
                     try await Task.sleep(nanoseconds: 50_000_000)
                 }
                 guard let bookshelf else { return }
+                await BookshelfProgressSyncCoordinator.shared.suspendAndWait()
+                guard self.accepts(id, bookshelf: bookshelf) else { return }
                 let facade = try SharedRuntime.bookshelfFacade().get()
                 let books = try await facade.loadBooksAsync(groupId: BookGroup.companion.ID_ALL)
                 guard self.accepts(id, bookshelf: bookshelf), let book = Self.lastReadBook(in: books),

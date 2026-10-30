@@ -374,6 +374,8 @@ final class AndroidReplicaBookshelfViewController: UIViewController {
                 if self.openGeneration == generation { self.openTask = nil }
             }
             do {
+                await BookshelfProgressSyncCoordinator.shared.suspendAndWait()
+                try Task.checkCancellation()
                 let latestBooks = try await self.screen.loadBooks(groupId: groupId)
                 try Task.checkCancellation()
                 guard self.openGeneration == generation, self.screen.currentSelectedGroupId == groupId,

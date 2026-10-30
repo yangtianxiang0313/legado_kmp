@@ -190,6 +190,7 @@
 		BF019B010000000000000002 /* BookInfoEditCoverPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF019B020000000000000002 /* BookInfoEditCoverPreview.swift */; };
 		BF019B010000000000000003 /* BookInfoEditCoverFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF019B020000000000000003 /* BookInfoEditCoverFiles.swift */; };
 		BF019A010000000000000001 /* BookshelfUpdateCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF019A020000000000000001 /* BookshelfUpdateCoordinator.swift */; };
+		BF030A010000000000000001 /* BookshelfProgressSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF030A020000000000000001 /* BookshelfProgressSyncCoordinator.swift */; };
 		F02A4C010000000000000001 /* BookshelfAutomaticCacheCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A4C020000000000000001; };
 		BF019A010000000000000002 /* BookshelfUpdateBadgeBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF019A020000000000000002 /* BookshelfUpdateBadgeBinding.swift */; };
 		BF019A010000000000000003 /* BookshelfPendingUpdateBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF019A020000000000000003 /* BookshelfPendingUpdateBadgeView.swift */; };
@@ -919,6 +920,7 @@
 		BF019B020000000000000002 /* BookInfoEditCoverPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookInfoEditCoverPreview.swift; sourceTree = "<group>"; };
 		BF019B020000000000000003 /* BookInfoEditCoverFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookInfoEditCoverFiles.swift; sourceTree = "<group>"; };
 		BF019A020000000000000001 /* BookshelfUpdateCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfUpdateCoordinator.swift; sourceTree = "<group>"; };
+		BF030A020000000000000001 /* BookshelfProgressSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfProgressSyncCoordinator.swift; sourceTree = "<group>"; };
 		F02A4C020000000000000001 /* BookshelfAutomaticCacheCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfAutomaticCacheCoordinator.swift; sourceTree = "<group>"; };
 		BF019A020000000000000002 /* BookshelfUpdateBadgeBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfUpdateBadgeBinding.swift; sourceTree = "<group>"; };
 		BF019A020000000000000003 /* BookshelfPendingUpdateBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfPendingUpdateBadgeView.swift; sourceTree = "<group>"; };
@@ -1783,6 +1785,7 @@
 				F027B2000000000000000005 /* LocalBookImportProgressViewController.swift */,
 				F027B2000000000000000006 /* LocalBookImportService.swift */,
 				BF019A020000000000000001 /* BookshelfUpdateCoordinator.swift */,
+				BF030A020000000000000001 /* BookshelfProgressSyncCoordinator.swift */,
 				F02A4C020000000000000001 /* BookshelfAutomaticCacheCoordinator.swift */,
 				BF019A020000000000000002 /* BookshelfUpdateBadgeBinding.swift */,
 				BF019A020000000000000003 /* BookshelfPendingUpdateBadgeView.swift */,
@@ -2701,6 +2704,7 @@
 				BF019B010000000000000002 /* BookInfoEditCoverPreview.swift in Sources */,
 				BF019B010000000000000003 /* BookInfoEditCoverFiles.swift in Sources */,
 				BF019A010000000000000001 /* BookshelfUpdateCoordinator.swift in Sources */,
+				BF030A010000000000000001 /* BookshelfProgressSyncCoordinator.swift in Sources */,
 				F02A4C010000000000000001 /* BookshelfAutomaticCacheCoordinator.swift in Sources */,
 				BF019A010000000000000002 /* BookshelfUpdateBadgeBinding.swift in Sources */,
 				BF019A010000000000000003 /* BookshelfPendingUpdateBadgeView.swift in Sources */,
