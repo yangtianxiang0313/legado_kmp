@@ -2,29 +2,28 @@
 
 package io.legado.kmp.shared.network
 
-import io.ktor.http.Url
 import io.legado.kmp.shared.domain.repository.CookieRepository
 import io.legado.kmp.shared.facade.AppLogStore
-import io.legado.kmp.shared.model.StoredHttpCookie
 import kotlinx.cinterop.ObjCAction
 import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import platform.CoreGraphics.CGRectMake
 import platform.Foundation.NSError
-import platform.Foundation.NSHTTPCookie
 import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSString
 import platform.Foundation.NSThread
 import platform.Foundation.NSURL
+import platform.Foundation.NSURLErrorCancelled
+import platform.Foundation.NSURLErrorDomain
 import platform.Foundation.NSUUID
 import platform.Foundation.setValue
 import platform.WebKit.WKNavigation
@@ -47,7 +46,7 @@ import kotlin.native.Platform
 
 internal class InteractiveWebViewRunner(
     private val request: LegacyWebViewRequest,
-    private val cookieRepository: CookieRepository,
+    cookieRepository: CookieRepository,
     onComplete: (Result<String?>) -> Unit,
 ) : NSObject(), WKNavigationDelegateProtocol {
 
@@ -55,6 +54,13 @@ internal class InteractiveWebViewRunner(
     private val terminal = MutableStateFlow(false)
     private val scope = CoroutineScope(lifetime + Dispatchers.Main.immediate)
     private var completion: ((Result<String?>) -> Unit)? = onComplete
+    private val navigationSession = IosSourceWebNavigationSession(
+        initialUrl = request.url,
+        sourceUrl = request.source?.bookSourceUrl,
+        headers = request.headers,
+        cookieRepository = cookieRepository,
+        persistCookies = request.source?.enabledCookieJar == true,
+    )
 
     // Only cancellation/terminal arbitration is cross-thread; WebKit and session state stay on main.
     private var state = State.NEW
@@ -62,10 +68,14 @@ internal class InteractiveWebViewRunner(
     private var instrumentation: IosSourceWebViewScript? = null
     private var sourcePattern: Regex? = null
     private var overridePattern: Regex? = null
-    private var cookieSeeds: List<CookieSeed> = emptyList()
     private var navigation: WKNavigation? = null
     private var navigationRevision = 0L
     private var evaluationJob: Job? = null
+    private val pendingPolicies = mutableSetOf<SourceNavigationPolicy>()
+    private var policyRevision = 0L
+    private var preparingNavigation = false
+    private var initialHtmlPending = false
+    private val replacedNavigations = mutableSetOf<WKNavigation>()
 
     fun start() = onMain {
         if (state != State.NEW || !lifetime.isActive) return@onMain
@@ -78,24 +88,16 @@ internal class InteractiveWebViewRunner(
         scope.launch {
             try {
                 trace("reading cookie scope")
-                val prepared = withContext(Dispatchers.Default) {
+                val patterns = withContext(Dispatchers.Default) {
                     // Compile before creating/loading WebKit; malformed rules are ordinary failures.
-                    val patterns = Patterns(
+                    Patterns(
                         source = request.sourceRegex?.takeIf { it.isNotBlank() }?.let(::Regex),
                         overrideUrl = request.overrideUrlRegex?.takeIf { it.isNotBlank() }?.let(::Regex),
                     )
-                    val seeds = cookieScopeUrls().map { url ->
-                        ensureActive()
-                        CookieSeed(url, cookieRepository.getCookiesForHost(url))
-                    }
-                    ensureActive()
-                    patterns to seeds
                 }
                 if (!isPreparing()) return@launch
-                sourcePattern = prepared.first.source
-                overridePattern = prepared.first.overrideUrl
-                cookieSeeds = prepared.second
-                trace("cookie scope ready")
+                sourcePattern = patterns.source
+                overridePattern = patterns.overrideUrl
                 createWebView()
             } catch (cancelled: CancellationException) {
                 if (lifetime.isActive) fail(cancelled)
@@ -123,7 +125,7 @@ internal class InteractiveWebViewRunner(
         }
     }
 
-    private fun createWebView() {
+    private suspend fun createWebView() {
         if (!isPreparing()) return
         val url = request.url?.takeIf { it.isNotBlank() }?.let(NSURL::URLWithString)
         require(request.html != null || url != null) { "Interactive webView requires html or url" }
@@ -151,53 +153,30 @@ internal class InteractiveWebViewRunner(
         val headers = request.headers.withoutNullUserAgent()
         headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
             ?.value?.takeIf { it.isNotBlank() }?.let { view.customUserAgent = it }
-        prepareCookies(view, headers, 0) {
-            if (!isPreparing() || webView != view) return@prepareCookies
-            try {
-                state = State.RUNNING
-                trace(if (request.html != null) "loading HTML" else "loading URL")
-                if (request.html != null) {
-                    navigation = view.loadHTMLString(request.html, baseURL = url)
-                } else {
-                    val nativeRequest = NSMutableURLRequest.requestWithURL(checkNotNull(url))
-                    // Cookie headers have been scoped into WKHTTPCookieStore, not broadcast to redirects.
-                    headers.filterKeys { !it.equals("Cookie", ignoreCase = true) }.forEach { (name, value) ->
-                        nativeRequest.setValue(value, forHTTPHeaderField = name)
-                    }
-                    navigation = view.loadRequest(nativeRequest)
-                }
-                trace(if (navigation != null) "load accepted" else "load returned no navigation")
-            } catch (error: Throwable) {
-                fail(error)
-            }
-        }
-    }
-
-    private fun prepareCookies(view: WKWebView, headers: Map<String, String>, index: Int, done: () -> Unit) {
+        navigationSession.prepareInitial(view)
         if (!isPreparing() || webView != view) return
-        val seed = cookieSeeds.getOrNull(index)
-        if (seed == null) {
-            done()
-            return
-        }
-        val requestHost = httpHost(request.url)
-        val seedHeaders = if (requestHost != null && httpHost(seed.url) == requestHost) headers else emptyMap()
-        IosWebViewCookieBridge.prepare(view, seed.url, seedHeaders, storedCookies = seed.cookies) {
-            onMain {
-                if (!isPreparing() || webView != view) return@onMain
-                try {
-                    prepareCookies(view, headers, index + 1, done)
-                } catch (error: Throwable) {
-                    fail(error)
-                }
+        trace("cookie scope ready")
+        state = State.RUNNING
+        trace(if (request.html != null) "loading HTML" else "loading URL")
+        if (request.html != null) {
+            initialHtmlPending = true
+            navigation = view.loadHTMLString(request.html, baseURL = url)
+        } else {
+            val nativeRequest = NSMutableURLRequest.requestWithURL(checkNotNull(url))
+            // Cookie headers have been scoped into WKHTTPCookieStore, not broadcast to redirects.
+            headers.filterKeys { !it.equals("Cookie", ignoreCase = true) }.forEach { (name, value) ->
+                nativeRequest.setValue(value, forHTTPHeaderField = name)
             }
+            navigation = view.loadRequest(nativeRequest)
         }
+        trace(if (navigation != null) "load accepted" else "load returned no navigation")
     }
 
     @ObjCSignatureOverride
     override fun webView(webView: WKWebView, didStartProvisionalNavigation: WKNavigation?) = onMain {
         if (!isRunning(webView)) return@onMain
         trace("navigation started")
+        preparingNavigation = false
         navigation = didStartProvisionalNavigation
         navigationRevision++
         evaluationJob?.cancel()
@@ -240,13 +219,122 @@ internal class InteractiveWebViewRunner(
         } catch (error: Throwable) {
             failure = error
         }
-        // Fulfil WebKit's policy callback before stopping the view or exporting cookies.
-        decisionHandler(
-            if (matched != null || failure != null) WKNavigationActionPolicy.WKNavigationActionPolicyCancel
-            else WKNavigationActionPolicy.WKNavigationActionPolicyAllow
-        )
-        trace(if (matched != null || failure != null) "navigation intercepted" else "navigation allowed")
-        failure?.let(::fail) ?: matched?.let(::succeed)
+        if (matched != null || failure != null) {
+            // Fulfil WebKit's policy callback before stopping the view or exporting cookies.
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+            trace("navigation intercepted")
+            failure?.let(::fail) ?: matched?.let(::succeed)
+            return@onMain
+        }
+        val action = decidePolicyForNavigationAction
+        val mainFrame = action.targetFrame?.mainFrame == true
+        if (mainFrame) {
+            policyRevision++
+            cancelPendingPolicies()
+        }
+        val htmlBootstrap = mainFrame && initialHtmlPending
+        if (mainFrame) initialHtmlPending = false
+        val actionUrl = action.request.URL?.absoluteString
+        val initialUrl = request.url?.let(NSURL::URLWithString)?.absoluteString
+        if (htmlBootstrap && (actionUrl == "about:blank" || initialUrl != null && actionUrl == initialUrl)) {
+            // This is the caller's in-memory document, not a request to follow about:blank/file URLs.
+            navigationSession.recordDocument(request.url)
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)
+            trace("initial HTML navigation allowed")
+            return@onMain
+        }
+        val decision: IosSourceWebNavigationDecision?
+        val deferred: Boolean
+        try {
+            decision = navigationSession.preflight(webView, action)
+            deferred = decision == null && navigationSession.needsDeferredPreparation(webView, action)
+        } catch (error: Throwable) {
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+            fail(error)
+            return@onMain
+        }
+        if (decision == IosSourceWebNavigationDecision.Allow) {
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)
+            trace("navigation allowed")
+            return@onMain
+        }
+        if (decision == IosSourceWebNavigationDecision.Cancel) {
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+            trace("navigation cancelled")
+            return@onMain
+        }
+        if (mainFrame) {
+            navigationRevision++
+            evaluationJob?.cancel()
+            evaluationJob = null
+        }
+        val pending = SourceNavigationPolicy(mainFrame, decisionHandler)
+        pendingPolicies.add(pending)
+        if (!deferred) {
+            if (mainFrame) {
+                navigation?.let(replacedNavigations::add)
+                preparingNavigation = true
+            }
+            pending.answer(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+        }
+        trace(if (deferred) "awaiting navigation cookies" else "sanitizing navigation headers")
+        val revision = policyRevision
+        // Cookie-only preparation retains the original policy/body/frame; only header rewriting reloads.
+        dispatch_async(dispatch_get_main_queue()) {
+            if (!isRunning(webView) || policyRevision != revision) {
+                pending.cancel()
+                pendingPolicies.remove(pending)
+                return@dispatch_async
+            }
+            val job = scope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    val prepared = decision ?: navigationSession.decide(webView, action)
+                    if (!isRunning(webView) || policyRevision != revision) return@launch
+                    when (prepared) {
+                        IosSourceWebNavigationDecision.Allow -> {
+                            pending.answer(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)
+                            trace("prepared navigation allowed")
+                        }
+                        IosSourceWebNavigationDecision.Cancel -> {
+                            pending.answer(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+                            trace("prepared navigation cancelled")
+                        }
+                        is IosSourceWebNavigationDecision.Reload -> {
+                            if (!mainFrame || deferred) {
+                                pending.answer(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+                                return@launch
+                            }
+                            pending.answer(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+                            trace("reloading sanitized navigation")
+                            navigation = webView.loadRequest(prepared.request)
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    if (isRunning(webView) && policyRevision == revision) fail(cancelled)
+                } catch (error: Throwable) {
+                    if (isRunning(webView) && policyRevision == revision) fail(error)
+                } finally {
+                    pending.answer(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+                    pendingPolicies.remove(pending)
+                }
+            }
+            pending.job = job
+            // A lazy job can be cancelled before entering its body, so finally alone is insufficient.
+            job.invokeOnCompletion {
+                onMain {
+                    pending.answer(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+                    pendingPolicies.remove(pending)
+                }
+            }
+            job.start()
+        }
+    }
+
+    private fun cancelPendingPolicies() {
+        if (pendingPolicies.any { it.mainFrame }) navigation?.let(replacedNavigations::add)
+        val pending = pendingPolicies.toList()
+        pendingPolicies.clear()
+        pending.forEach { it.cancel() }
     }
 
     internal fun receiveResourceMessage(message: WKScriptMessage) = onMain {
@@ -308,6 +396,8 @@ internal class InteractiveWebViewRunner(
     }
 
     private fun failNavigation(view: WKWebView, failedNavigation: WKNavigation?, error: NSError) = onMain {
+        if (failedNavigation != null && replacedNavigations.remove(failedNavigation)) return@onMain
+        if (preparingNavigation && error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled) return@onMain
         if (isRunning(view) && (navigation == null || navigation == failedNavigation)) {
             fail(error.asSourceWebViewException())
         }
@@ -319,53 +409,20 @@ internal class InteractiveWebViewRunner(
         state = State.EXPORTING
         evaluationJob?.cancel()
         evaluationJob = null
+        policyRevision++
+        cancelPendingPolicies()
         navigationRevision++
         quiesce(view)
-        try {
-            view.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies ->
-                onMain {
-                    if (!isExporting(view)) return@onMain
-                    try {
-                        val nativeCookies = cookies.orEmpty().filterIsInstance<NSHTTPCookie>()
-                        val snapshots = cookieSeeds.map { seed ->
-                            val oldCookies = seed.cookies.associateBy { it.identity() }
-                            CookieSeed(
-                                seed.url,
-                                IosWebViewCookieBridge.exportCookiesForHost(nativeCookies, seed.url).map { cookie ->
-                                    val previous = oldCookies[cookie.identity()]
-                                    if (previous == null) cookie else cookie.copy(creationTimeMillis = previous.creationTimeMillis)
-                                },
-                            )
-                        }
-                        scope.launch {
-                            try {
-                                withContext(Dispatchers.Default) {
-                                    val persist = request.source?.enabledCookieJar == true
-                                    for (snapshot in snapshots) {
-                                        ensureActive()
-                                        cookieRepository.replaceCookiesForHost(
-                                            url = snapshot.url,
-                                            cookies = snapshot.cookies,
-                                            persistSession = persist,
-                                            persistCookies = persist,
-                                        )
-                                        ensureActive()
-                                    }
-                                }
-                                if (isExporting(view)) finish(Result.success(value))
-                            } catch (cancelled: CancellationException) {
-                                if (lifetime.isActive) fail(cancelled)
-                            } catch (error: Throwable) {
-                                if (lifetime.isActive) fail(error)
-                            }
-                        }
-                    } catch (error: Throwable) {
-                        fail(error)
-                    }
-                }
+        trace("exporting navigation cookies")
+        scope.launch {
+            try {
+                navigationSession.persist(view)
+                if (isExporting(view)) finish(Result.success(value))
+            } catch (cancelled: CancellationException) {
+                if (lifetime.isActive) fail(cancelled)
+            } catch (error: Throwable) {
+                if (lifetime.isActive) fail(error)
             }
-        } catch (error: Throwable) {
-            fail(error)
         }
     }
 
@@ -395,6 +452,9 @@ internal class InteractiveWebViewRunner(
         trace(if (result.isSuccess) "completed" else "cancelled or failed")
         state = State.FINISHED
         navigationRevision++
+        policyRevision++
+        cancelPendingPolicies()
+        navigationSession.cancel()
         lifetime.cancel()
         evaluationJob = null
         webView?.let { view ->
@@ -403,7 +463,7 @@ internal class InteractiveWebViewRunner(
         }
         webView = null
         navigation = null
-        cookieSeeds = emptyList()
+        replacedNavigations.clear()
         val callback = completion
         completion = null
         callback?.invoke(result)
@@ -430,17 +490,6 @@ internal class InteractiveWebViewRunner(
         else -> "Interactive webView timed out"
     }
 
-    private fun cookieScopeUrls(): List<String> =
-        listOfNotNull(request.url, request.source?.bookSourceUrl)
-            .filter { httpHost(it) != null }
-            .distinctBy { httpHost(it) }
-
-    private fun httpHost(url: String?): String? = url?.let {
-        runCatching { Url(it) }.getOrNull()
-            ?.takeIf { parsed -> parsed.protocol.name == "http" || parsed.protocol.name == "https" }
-            ?.host?.lowercase()?.takeIf { host -> host.isNotBlank() }
-    }
-
     private fun onMain(block: () -> Unit) {
         if (NSThread.isMainThread) block() else dispatch_async(dispatch_get_main_queue(), block)
     }
@@ -451,7 +500,24 @@ internal class InteractiveWebViewRunner(
 
     private enum class State { NEW, PREPARING, RUNNING, EXPORTING, FINISHED }
     private data class Patterns(val source: Regex?, val overrideUrl: Regex?)
-    private data class CookieSeed(val url: String, val cookies: List<StoredHttpCookie>)
+}
+
+private class SourceNavigationPolicy(
+    val mainFrame: Boolean,
+    private var handler: ((WKNavigationActionPolicy) -> Unit)?,
+) {
+    var job: Job? = null
+
+    fun answer(policy: WKNavigationActionPolicy) {
+        val callback = handler ?: return
+        handler = null
+        callback(policy)
+    }
+
+    fun cancel() {
+        answer(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+        job?.cancel()
+    }
 }
 
 private class SourceResourceMessageHandler(runner: InteractiveWebViewRunner) : NSObject(), WKScriptMessageHandlerProtocol {
@@ -461,8 +527,6 @@ private class SourceResourceMessageHandler(runner: InteractiveWebViewRunner) : N
         runner.get()?.receiveResourceMessage(didReceiveScriptMessage)
     }
 }
-
-private fun StoredHttpCookie.identity(): Triple<String, String, String> = Triple(name, domain, path)
 
 private fun Any?.toSourceWebViewString(): String = when (this) {
     null -> ""

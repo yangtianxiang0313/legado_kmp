@@ -6,16 +6,14 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import platform.CoreGraphics.CGRectMake
-import platform.Foundation.NSHTTPCookie
-import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSThread
 import platform.Foundation.NSURL
-import platform.Foundation.setValue
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKWebsiteDataStore
@@ -49,28 +47,28 @@ class IosWebViewRequestExecutor(
         }
         val requestUrl = NSURL(string = loadUrl)
             ?: throw IllegalArgumentException("Invalid WebView URL: $loadUrl")
-        val seedUrls = listOfNotNull(loadUrl, context.source?.bookSourceUrl)
-            .filter { NSURL(string = it)?.host != null }.distinctBy { NSURL(string = it)?.host }
-        val cookieSeeds = seedUrls.map { it to cookieRepository.getCookiesForHost(it) }
-
         return withTimeout(60_000L) {
             suspendCancellableCoroutine { continuation ->
+                val lifetime = SupervisorJob(continuation.context[Job])
+                val scope = CoroutineScope(lifetime + Dispatchers.Main.immediate)
                 // Session state and WebKit teardown are confined to the main thread.
                 var finished = false
                 var webView: WKWebView? = null
                 var delegate: IosWebViewNavigationDelegate? = null
-                var cookieJob: Job? = null
+                var navigationSession: IosSourceWebNavigationSession? = null
 
                 fun cleanUp() {
+                    if (finished) return
                     finished = true
+                    lifetime.cancel()
                     delegate?.cancel()
+                    navigationSession?.cancel()
                     webView?.navigationDelegate = null
                     webView?.stopLoading()
                     webView?.removeFromSuperview()
-                    cookieJob?.cancel()
-                    cookieJob = null
                     webView = null
                     delegate = null
+                    navigationSession = null
                 }
 
                 fun finish(result: Result<HttpResponse>) {
@@ -82,39 +80,8 @@ class IosWebViewRequestExecutor(
                     }
                 }
 
-                fun persistCookies(view: WKWebView, completion: () -> Unit) {
-                    if (finished || !continuation.isActive) return
-                    view.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies ->
-                        onMain {
-                            if (finished || !continuation.isActive) return@onMain
-                            val finalUrl = view.URL?.absoluteString.orEmpty().ifBlank { loadUrl }
-                            val snapshot = cookies.orEmpty().filterIsInstance<NSHTTPCookie>()
-                            cookieJob = CoroutineScope(continuation.context).launch(Dispatchers.Default) {
-                                try {
-                                    for (url in (seedUrls + finalUrl).distinctBy { NSURL(string = it)?.host }) {
-                                        ensureActive()
-                                        cookieRepository.replaceCookiesForHost(
-                                            url,
-                                            IosWebViewCookieBridge.exportCookiesForHost(snapshot, url),
-                                            persistSession = context.source?.enabledCookieJar == true,
-                                            persistCookies = context.source?.enabledCookieJar == true,
-                                        )
-                                    }
-                                    ensureActive()
-                                    onMain {
-                                        if (!finished && continuation.isActive) completion()
-                                    }
-                                } catch (throwable: Throwable) {
-                                    onMain {
-                                        if (!finished && continuation.isActive) finish(Result.failure(throwable))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
                 continuation.invokeOnCancellation {
+                    lifetime.cancel()
                     onMain { cleanUp() }
                 }
 
@@ -133,45 +100,37 @@ class IosWebViewRequestExecutor(
                             .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
                             ?.value?.takeIf { it.isNotBlank() }
                             ?.let { createdView.customUserAgent = it }
+                        val createdSession = IosSourceWebNavigationSession(
+                            initialUrl = loadUrl,
+                            sourceUrl = context.source?.bookSourceUrl ?: context.requestConfig.url,
+                            headers = requestHeaders,
+                            cookieRepository = cookieRepository,
+                            persistCookies = context.source?.enabledCookieJar == true,
+                        )
+                        navigationSession = createdSession
                         val createdDelegate = IosWebViewNavigationDelegate(
                             context = context,
                             initialResponse = initialResponse,
+                            navigationSession = createdSession,
+                            scope = scope,
                             onComplete = ::finish,
-                            onCookies = ::persistCookies,
                         )
                         delegate = createdDelegate
                         webView = createdView
                         createdView.navigationDelegate = createdDelegate
-                        fun loadPreparedPage() {
-                            if (!finished && continuation.isActive) {
-                                try {
-                                    if (directGet) {
-                                        val request = NSMutableURLRequest.requestWithURL(requestUrl)
-                                        requestHeaders.filterKeys { !it.equals("Cookie", true) }.forEach { (name, value) ->
-                                            request.setValue(value, forHTTPHeaderField = name)
-                                        }
-                                        createdView.loadRequest(request)
-                                    } else {
-                                        createdView.loadHTMLString(initialResponse.bodyText, baseURL = requestUrl)
-                                    }
-                                } catch (throwable: Throwable) {
+                        scope.launch {
+                            try {
+                                createdSession.prepareInitial(createdView)
+                                ensureActive()
+                                if (!finished && continuation.isActive) {
+                                    createdDelegate.loadInitialPage(createdView, requestUrl)
+                                }
+                            } catch (throwable: Throwable) {
+                                if (!finished && continuation.isActive && lifetime.isActive) {
                                     finish(Result.failure(throwable))
                                 }
                             }
                         }
-                        fun prepareSeed(index: Int) {
-                            if (finished || !continuation.isActive) return
-                            val seed = cookieSeeds.getOrNull(index)
-                            if (seed == null) {
-                                loadPreparedPage()
-                            } else {
-                                val headers = if (NSURL(string = seed.first)?.host == requestUrl.host) requestHeaders else emptyMap()
-                                IosWebViewCookieBridge.prepare(createdView, seed.first, headers, seed.second) {
-                                    if (!finished && continuation.isActive) prepareSeed(index + 1)
-                                }
-                            }
-                        }
-                        prepareSeed(0)
                     } catch (throwable: Throwable) {
                         finish(Result.failure(throwable))
                     }
