@@ -23,9 +23,23 @@ internal val LEGACY_SHIM = """
             $LEGACY_RESPONSE_SUPPORT
             $LEGACY_MAP_SUPPORT
             function __legacyHeaderJson(header) {
-              if (header == null || header === undefined) return null;
-              if (typeof header === 'string') return String(header);
-              return JSON.stringify(header);
+              if (header == null) return null;
+              return typeof header === 'string' ? header : JSON.stringify(header);
+            }
+            function __legacyRawHeaderJson(header) {
+              if (header == null || typeof header !== 'object' || Array.isArray(header)) {
+                throw new TypeError('Request headers must be a map');
+              }
+              var headers = Object.create(null);
+              Object.keys(header).forEach(function(key) {
+                var value = header[key];
+                if (key === '' || value !== null && typeof value !== 'string') {
+                  throw new TypeError('Request headers must have string names and values');
+                }
+                // Jsoup's raw Map overload turns null entry values into empty strings.
+                headers[key] = value === null ? '' : value;
+              });
+              return JSON.stringify(headers);
             }
             function __legacyCryptoArg(value) {
               if (value === undefined || value === null) return null;
@@ -82,7 +96,7 @@ internal val LEGACY_SHIM = """
                 }
                 return __legacyGet(key);
               }
-              var raw = __legacyConnectRaw(String(arg1), __legacyHeaderJson(arg2));
+              var raw = __legacyConnectRaw(String(arg1), __legacyRawHeaderJson(arg2));
               return __legacyWrapRawResponse(raw);
             };
             java.put = function(key, value) {
@@ -117,13 +131,9 @@ internal val LEGACY_SHIM = """
               return (typeof source === 'object' && source != null) ? source : null;
             };
             java.connect = function(url, header) {
-              var effectiveHeader = header;
-              if (effectiveHeader === undefined || effectiveHeader === null) {
-                effectiveHeader = java.__headerMap.toJSON();
-              }
               var actualUrl = String(url);
               try {
-                var raw = __legacyConnect(actualUrl, __legacyHeaderJson(effectiveHeader));
+                var raw = __legacyConnect(actualUrl, __legacyHeaderJson(header));
                 return __legacyWrapResponse(raw);
               } catch (error) {
                 return __legacyWrapResponse({
@@ -151,7 +161,7 @@ internal val LEGACY_SHIM = """
             java.ajaxAll = function(urlList) {
               if (!Array.isArray(urlList)) return [];
               var args = urlList.map(function(url) { return String(url); });
-              args.push(JSON.stringify(java.__headerMap.toJSON()));
+              args.push(null);
               var raw = __legacyConnectAll.apply(null, args);
               if (raw == null || raw === '') return [];
               var parsed;
@@ -177,11 +187,11 @@ internal val LEGACY_SHIM = """
               ));
             };
             java.head = function(url, headers) {
-              var raw = __legacyConnectRaw(String(url) + ',{"method":"HEAD"}', __legacyHeaderJson(headers));
+              var raw = __legacyConnectRaw(String(url) + ',{"method":"HEAD"}', __legacyRawHeaderJson(headers));
               return __legacyWrapRawResponse(raw);
             };
             java.post = function(url, body, header) {
-              var raw = __legacyPost(String(url), body != null ? String(body) : '', __legacyHeaderJson(header));
+              var raw = __legacyPost(String(url), body != null ? String(body) : '', __legacyRawHeaderJson(header));
               return __legacyWrapRawResponse(raw);
             };
             java.log = function(msg) { return __legacyLog(msg); };

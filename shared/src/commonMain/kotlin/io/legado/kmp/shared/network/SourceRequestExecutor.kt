@@ -10,10 +10,6 @@ import io.legado.kmp.shared.scripting.LegacyJsHostSurface
 import io.legado.kmp.shared.scripting.JsResult
 import io.legado.kmp.shared.scripting.SourceJsRuntime
 import io.legado.kmp.shared.source.SourceStateStore
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 data class SourceRequestResult(
     val response: HttpResponse
@@ -120,10 +116,11 @@ class SourceRequestExecutor(
         chapter: BookChapter?,
     ): PreparedMediaRequest {
         val request = prepareLegacyRequest(source, urlRule, baseUrl, ruleData, chapter)
-        val declared = headerJson?.let(::parseHeaderJson)
+        val explicitHeaders = headerJson?.let(::parseHeaderJson)
+        val declared = explicitHeaders
             ?: resolveSourceHeaders(source, request, includeLoginHeader = true)
         val headers = LinkedHashMap(declared).apply {
-            if (headerJson == null) applyCompatibilityDefaults(
+            if (explicitHeaders == null) applyCompatibilityDefaults(
                 request.baseUrl.ifBlank { source.bookSourceUrl }, request.url, includeCacheControl = false,
             )
         }
@@ -1006,7 +1003,7 @@ class SourceRequestExecutor(
             host = host,
         )
         return when (jsResult) {
-            is JsResult.JsString -> parseHeaderJson(jsResult.value)
+            is JsResult.JsString -> parseHeaderJson(jsResult.value).orEmpty()
             is JsResult.JsObject -> jsResult.value
                 .mapNotNull { (key, value) -> value?.toString()?.let { key to it } }
                 .toMap(LinkedHashMap())
@@ -1021,14 +1018,8 @@ class SourceRequestExecutor(
         }
     }
 
-    private fun parseHeaderJson(headerJson: String): Map<String, String> {
-        return runCatching {
-            val root = json.parseToJsonElement(headerJson) as? JsonObject ?: return emptyMap()
-            root.entries.mapNotNull { entry ->
-                entry.value.jsonPrimitive.contentOrNull?.let { entry.key to it }
-            }.toMap(LinkedHashMap())
-        }.getOrElse { emptyMap() }
-    }
+    private fun parseHeaderJson(headerJson: String): Map<String, String>? =
+        decodeLegacyRequestHeaderJson(headerJson)
 
     private fun normalizeLoginCheckResult(
         jsResult: JsResult,
@@ -1085,10 +1076,6 @@ class SourceRequestExecutor(
 
     private companion object {
         private val FALSE_STRINGS = setOf("false", "0", "null", "undefined")
-        private val json = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
     }
 
 }

@@ -3,18 +3,11 @@ package io.legado.kmp.shared.scripting
 import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.network.SharedCapabilityException
 import io.legado.kmp.shared.network.SourceResponse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 
 class LegacyJsHostSurface(
     val connect: suspend (urlRule: String, headerJson: String?) -> SourceResponse,
     val connectAll: suspend (urlRules: List<String>, headerJson: String?) -> List<SourceResponse> = { urlRules, headerJson ->
-        coroutineScope {
-            urlRules.map { urlRule ->
-                async { connect(urlRule, headerJson) }
-            }.awaitAll()
-        }
+        connectLegacyJsRequestBatch(urlRules, headerJson, connect)
     },
     val rawConnect: suspend (urlRule: String, headerJson: String?) -> SourceResponse = connect,
     val login: suspend () -> Unit = {},
@@ -159,11 +152,7 @@ class LegacyJsHostSurface(
             source: BookSource? = null,
             connect: suspend (urlRule: String, headerJson: String?) -> SourceResponse,
             connectAll: suspend (urlRules: List<String>, headerJson: String?) -> List<SourceResponse> = { urlRules, headerJson ->
-                coroutineScope {
-                    urlRules.map { urlRule ->
-                        async { connect(urlRule, headerJson) }
-                    }.awaitAll()
-                }
+                connectLegacyJsRequestBatch(urlRules, headerJson, connect)
             },
             rawConnect: suspend (urlRule: String, headerJson: String?) -> SourceResponse = connect,
             login: suspend () -> Unit = {},
