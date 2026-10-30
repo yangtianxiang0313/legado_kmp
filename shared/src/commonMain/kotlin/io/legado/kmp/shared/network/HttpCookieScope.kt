@@ -5,8 +5,20 @@ import io.ktor.http.parseServerSetCookieHeader
 import io.legado.kmp.shared.model.StoredHttpCookie
 import io.legado.kmp.shared.util.currentTimeMillis
 
-internal fun httpCookieUrl(url: String): Url? = runCatching { Url(url) }.getOrNull()
-    ?.takeIf { it.protocol.name in setOf("http", "https") && it.host.isNotBlank() }
+internal fun httpCookieUrl(url: String): Url? {
+    val prefixLength = when {
+        url.startsWith("http://", true) -> 7
+        url.startsWith("https://", true) -> 8
+        else -> return null
+    }
+    if (url.any { it < ' ' || it == '\u007f' || it == '\\' }) return null
+    val authority = url.substring(prefixLength).substringBefore('/').substringBefore('?').substringBefore('#')
+    val host = cookieAuthorityHost(authority.substringAfterLast('@'), allowBareIpv6 = false, allowDomainDot = false)
+        ?: return null
+    return runCatching { Url(url) }.getOrNull()?.takeIf {
+        it.protocol.name in setOf("http", "https") && cookieHost(it.host) == host
+    }
+}
 
 internal fun cookieHost(host: String): String = host.lowercase().removePrefix("[").removeSuffix("]")
 
@@ -87,23 +99,84 @@ internal fun parseStoredSetCookie(
 
 /** Legacy rows are opaque request strings, not Set-Cookie values with inferred attributes. */
 internal fun legacyCookieMatchesHost(key: String, host: String): Boolean {
-    val parsed = absoluteCookieKeyUrl(key)
+    val parsed = httpCookieUrl(key)
     if (parsed != null) return cookieHost(parsed.host) == host
-    if (key.isBlank() || key.any { it.isWhitespace() || it in "/\\;|" }) return false
-    val domain = cookieHost(key.removePrefix("."))
+    val domain = cookieScopeHost(key) ?: return false
     if (domain == host) return true
     val site = CookiePublicSuffixes.registrableDomain(host) ?: host
     return (domain == site || domain.endsWith(".$site")) && cookieDomainMatches(host, domain)
 }
 
-internal fun cookieScopeHost(url: String): String? = absoluteCookieKeyUrl(url)?.let { cookieHost(it.host) }
-    ?: url.takeIf { it.isNotBlank() && it.none { char -> char.isWhitespace() || char in "/\\;|" } }
-        ?.let { cookieHost(it.removePrefix(".")) }
+internal fun cookieScopeHost(url: String): String? = httpCookieUrl(url)?.let { cookieHost(it.host) }
+    ?: cookieAuthorityHost(url)
 
-// Ktor resolves a bare key as a relative URL with a default host; domain keys are not URLs.
-private fun absoluteCookieKeyUrl(value: String): Url? = value
-    .takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
-    ?.let(::httpCookieUrl)
+// A bare cookie label is an authority, never a relative URL (Ktor defaults those to localhost).
+private fun cookieAuthorityHost(
+    value: String,
+    allowBareIpv6: Boolean = true,
+    allowDomainDot: Boolean = true,
+): String? {
+    if (value.isEmpty()) return null
+    if (value.startsWith('[')) {
+        val end = value.indexOf(']')
+        if (end < 0) return null
+        val host = value.substring(1, end).lowercase()
+        if (!host.isCookieIpv6Address() || !validCookiePortSuffix(value.substring(end + 1))) return null
+        return host
+    }
+    if (value.count { it == ':' } > 1) {
+        return value.lowercase().takeIf { allowBareIpv6 && it.isCookieIpv6Address() }
+    }
+    val separator = value.indexOf(':')
+    val rawHost = if (separator < 0) value else {
+        if (!validCookiePortSuffix(value.substring(separator))) return null
+        value.substring(0, separator)
+    }
+    val host = (if (allowDomainDot) rawHost.removePrefix(".") else rawHost).lowercase()
+    if (host.isEmpty() || host.length > 253) return null
+    if (host.all { it in '0'..'9' || it == '.' }) return host.takeIf { it.isCookieIpv4Address() }
+    return host.takeIf {
+        it.removeSuffix(".").split('.').all { label ->
+            label.isNotEmpty() && label.length <= 63 && label.first().isCookieHostLetterOrDigit() &&
+                label.last().isCookieHostLetterOrDigit() && label.all { char ->
+                    char.isCookieHostLetterOrDigit() || char == '-'
+                }
+        }
+    }
+}
+
+private fun validCookiePortSuffix(value: String): Boolean = value.isEmpty() ||
+    (value.startsWith(':') && value.length > 1 && value.drop(1).all { it in '0'..'9' } &&
+        value.drop(1).toIntOrNull()?.let { it in 0..65535 } == true)
+
+private fun Char.isCookieHostLetterOrDigit(): Boolean = this in 'a'..'z' || this in '0'..'9' ||
+    (code > 127 && isLetterOrDigit())
+
+private fun String.isCookieIpv4Address(): Boolean = split('.').let { parts ->
+    parts.size == 4 && parts.all { part ->
+        part.isNotEmpty() && part.length <= 3 && part.all { it in '0'..'9' } &&
+            part.toIntOrNull()?.let { it in 0..255 } == true
+    }
+}
+
+private fun String.isCookieIpv6Address(): Boolean {
+    if (":::" in this || indexOf("::") != lastIndexOf("::")) return false
+    if (startsWith(':') && !startsWith("::") || endsWith(':') && !endsWith("::")) return false
+    val compressed = "::" in this
+    if (!compressed && (startsWith(':') || endsWith(':'))) return false
+    val parts = split(':').filter { it.isNotEmpty() }
+    var groups = 0
+    for ((index, part) in parts.withIndex()) {
+        if ('.' in part) {
+            if (index != parts.lastIndex || endsWith(':') || !part.isCookieIpv4Address()) return false
+            groups += 2
+        } else {
+            if (part.length !in 1..4 || part.any { it !in '0'..'9' && it !in 'a'..'f' }) return false
+            groups++
+        }
+    }
+    return if (compressed) groups < 8 else groups == 8
+}
 
 internal val storedCookieRequestOrder: Comparator<StoredHttpCookie> =
     compareByDescending<StoredHttpCookie> { it.path.length }

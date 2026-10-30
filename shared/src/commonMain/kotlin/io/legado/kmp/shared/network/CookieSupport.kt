@@ -1,16 +1,15 @@
 package io.legado.kmp.shared.network
 
-import io.ktor.http.Url
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 fun extractCookieDomain(url: String): String {
-    if (url.isBlank()) return url
-    val host = runCatching { Url(url).host }.getOrDefault(url).ifBlank { url }
-    if (host.isBlank()) return url
+    val parsed = httpCookieUrl(url) ?: return cookieScopeHost(url) ?: url
+    val host = cookieHost(parsed.host)
     if (host.isIpAddress()) return host
-    return CookiePublicSuffixes.registrableDomain(cookieHost(host)) ?: host
+    // Android's old CookieStore groups URL keys by site, but keeps bare subdomain tags distinct.
+    return CookiePublicSuffixes.registrableDomain(host) ?: host
 }
 
 fun mergeCookieStrings(vararg cookies: String?): String? {

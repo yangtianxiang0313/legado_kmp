@@ -392,17 +392,19 @@ class SourceRequestExecutor(
                 )
             }
         }
-        return ConcurrentRateLimiter(source).withLimit {
-            finalizeResponse(
-                response = transport.executeText(context, allowRedirectResponse),
-                source = source,
-                request = request,
-                ruleData = ruleData,
-                chapter = chapter,
-                cookieDomain = context.cookieDomain,
-                applyLoginCheck = applyLoginCheck,
-            )
+        val response = ConcurrentRateLimiter(source).withLimit {
+            transport.executeText(context, allowRedirectResponse)
         }
+        // Release the network slot before normalization or login scripts can issue nested requests.
+        return finalizeResponse(
+            response = response,
+            source = source,
+            request = request,
+            ruleData = ruleData,
+            chapter = chapter,
+            cookieDomain = context.cookieDomain,
+            applyLoginCheck = applyLoginCheck,
+        )
     }
 
     private suspend fun finalizeResponse(
@@ -680,24 +682,15 @@ class SourceRequestExecutor(
         variables["status"] = response.statusCode
         variables["statusText"] = response.statusText
         variables["allHeaders"] = response.allHeaders
-        variables["cookie"] = cookieRepository.requestCookieHeader(response.url.ifBlank { request.url }).orEmpty()
         variables["headerMap"] = requestHeaders
         variables["result"] = response.toJsMap()
         variables["response"] = response.toJsMap()
-        variables["source"] = source?.let {
-            mapOf(
-                "bookSourceUrl" to it.bookSourceUrl,
-                "bookSourceName" to it.bookSourceName,
-                "loginUrl" to it.loginUrl,
-                "loginCheckJs" to it.loginCheckJs,
-                "enabledCookieJar" to it.enabledCookieJar
-            )
-        }
         source?.let {
             variables["sourceHeaderMap"] = buildSourceHeaders(it, request, includeLoginHeader = false)
             variables["sourceHeaderMapWithLogin"] = buildSourceHeaders(it, request, includeLoginHeader = true)
         }
-        variables.putAll(ruleData)
+        // Keep the native source/CookieStore APIs, including source.login(), available to checks.
+        variables.putAll(ruleData.filterKeys { it != "source" && it != "cookie" })
         chapter?.let {
             variables["chapter"] = mapOf(
                 "url" to it.url,

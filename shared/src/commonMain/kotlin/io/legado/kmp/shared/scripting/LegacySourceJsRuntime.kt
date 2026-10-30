@@ -44,6 +44,7 @@ class LegacySourceJsRuntime(
     private val compiledExecution = LegacyCompiledExecution()
     private val librarySupport = LegacySourceJsLibrarySupport(sourceStateStore)
     private val sourceSnapshotCache = LegacySourceSnapshotCache()
+    private val cookieLookup = cookieRepository?.let(::LegacyCookieLookup)
 
     internal suspend fun executePrimitiveRule(
         script: String,
@@ -861,65 +862,29 @@ class LegacySourceJsRuntime(
                     }
                     function("__legacyRemoveCookie") { args ->
                         val url = args.firstOrNull()?.toString().orEmpty()
-                        if (url.isNotBlank() && cookieRepository != null) {
-                            val domain = io.legado.kmp.shared.network.extractCookieDomain(url)
-                            hostCall {
-                                cookieRepository.delete(domain)
-                            }
-                            io.legado.kmp.shared.network.SessionCookieStore.remove(domain)
-                        }
+                        hostCall { cookieLookup?.removeCookie(url) }
                         null
                     }
                     function("__legacyGetCookie") { args ->
                         val url = args.firstOrNull()?.toString().orEmpty()
-                        if (url.isBlank() || cookieRepository == null) {
-                            ""
-                        } else {
-                            hostCall { cookieRepository.requestCookieHeader(url) } ?: ""
-                        }
+                        hostCall { cookieLookup?.getCookie(url) }.orEmpty()
                     }
                     function("__legacySetCookie") { args ->
                         val url = args.firstOrNull()?.toString().orEmpty()
                         val cookie = args.getOrNull(1)?.toString().orEmpty()
-                        if (url.isNotBlank() && cookieRepository != null) {
-                            val domain = io.legado.kmp.shared.network.extractCookieDomain(url)
-                            hostCall {
-                                cookieRepository.insert(
-                                    io.legado.kmp.shared.model.Cookie(domain, cookie)
-                                )
-                            }
-                        }
+                        hostCall { cookieLookup?.setCookie(url, cookie) }
                         null
                     }
                     function("__legacyReplaceCookie") { args ->
                         val url = args.firstOrNull()?.toString().orEmpty()
                         val cookie = args.getOrNull(1)?.toString().orEmpty()
-                        if (url.isNotBlank() && cookie.isNotBlank() && cookieRepository != null) {
-                            val domain = io.legado.kmp.shared.network.extractCookieDomain(url)
-                            val oldCookie = hostCall { cookieRepository.get(domain)?.cookie }
-                            val merged = io.legado.kmp.shared.network.mergeCookieStrings(oldCookie, cookie)
-                            if (!merged.isNullOrBlank()) {
-                                hostCall {
-                                    cookieRepository.insert(
-                                        io.legado.kmp.shared.model.Cookie(domain, merged)
-                                    )
-                                }
-                            }
-                        }
+                        hostCall { cookieLookup?.replaceCookie(url, cookie) }
                         null
                     }
                     function("__legacyCookieGetKey") { args ->
                         val url = args.firstOrNull()?.toString().orEmpty()
                         val key = args.getOrNull(1)?.toString().orEmpty()
-                        if (url.isBlank() || key.isBlank() || cookieRepository == null) {
-                            ""
-                        } else {
-                            val cookie = hostCall { cookieRepository.requestCookieHeader(url) }.orEmpty()
-                            cookie.split(';').firstNotNullOfOrNull { part ->
-                                val separator = part.indexOf('=')
-                                if (separator > 0 && part.substring(0, separator).trim() == key) part.substring(separator + 1) else null
-                            } ?: ""
-                        }
+                        hostCall { cookieLookup?.getKey(url, key) }.orEmpty()
                     }
                     function("__legacyHexEncodeToString") { args ->
                         val utf8 = args.firstOrNull()?.toString().orEmpty()
