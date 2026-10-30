@@ -16,6 +16,8 @@ struct PreparedLocalBookFile: Sendable {
 enum LocalBookFileStore {
     private static let queue = DispatchQueue(label: "io.legado.local-book-files", qos: .utility)
     private static let importLeases = ImportFileLeases()
+    private static let archiveImportLimitGiB = 16
+    private static let archiveImportByteLimit = archiveImportLimitGiB * 1024 * 1024 * 1024
 
     static func prepare(from url: URL) async throws -> PreparedLocalBookFile {
         try await prepareCopy(from: url, forUpload: false)
@@ -147,7 +149,7 @@ enum LocalBookFileStore {
             cancellation: cancellation,
             byteLimit: forUpload
                 ? 2 * 1024 * 1024 * 1024
-                : (LocalBookArchiveType.isArchive(fileExtension: fileExtension) ? 128 * 1024 * 1024 : nil),
+                : (LocalBookArchiveType.isArchive(fileExtension: fileExtension) ? archiveImportByteLimit : nil),
             limitError: forUpload ? .uploadTooLarge : .archiveTooLarge
         )
         // Upload snapshots never share a mutable retained book or another filename's deduplicated original.
@@ -381,7 +383,7 @@ enum LocalBookFileStore {
             case .emptyFile: return "不能导入空文件"
             case .invalidStorage: return "本地书籍目录异常，无法导入"
             case .cannotCreateFile: return "无法创建本地书籍文件"
-            case .archiveTooLarge: return "压缩包超过 128 MiB，无法导入"
+            case .archiveTooLarge: return "压缩包超过 \(LocalBookFileStore.archiveImportLimitGiB) GiB，无法导入"
             case .uploadTooLarge: return "上传文件超过 2 GiB 限制"
             case .fileOperationFailed: return "本地文件导入失败，请重试"
             }

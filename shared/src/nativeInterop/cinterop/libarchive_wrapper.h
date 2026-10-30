@@ -124,4 +124,59 @@ static inline int legado_epub_entry_encrypted(void *entry) { return archive_entr
 static inline int legado_epub_close(void *a) { return archive_read_close(a); }
 static inline int legado_epub_free(void *a) { return archive_read_free(a); }
 
+/* File-backed book archives have separate format policy and callback entry points.
+ * Format IDs: 1 = 7z, 2 = RAR4/RAR5, 3 = seekable ZIP (including ZIP64).
+ * Only the declared container is registered; no external or automatic filters.
+ */
+static inline void *legado_archive_file_new(void) { return archive_read_new(); }
+static inline int legado_archive_file_enable(void *a, int format) {
+    if (archive_read_support_filter_none(a) != 0) return -30;
+    if (format == 1) return archive_read_support_format_7zip(a);
+    if (format == 2) {
+        if (archive_read_support_format_rar(a) != 0) return -30;
+        return archive_read_support_format_rar5(a);
+    }
+    if (format != 3 || archive_read_support_format_zip_seekable(a) != 0) return -30;
+    /* Do not guess a locale-dependent encoding for unflagged ZIP pathnames. */
+    if (archive_read_set_format_option(a, "zip", "hdrcharset", "UTF-8") != 0) return -30;
+    /* Enumerate AppleDouble as ordinary entries, without hidden eager inflation. */
+    if (archive_read_set_format_option(a, "zip", "mac-ext", NULL) != 0) return -30;
+    /* NULL explicitly enables CRC verification; a nonempty value disables it. */
+    return archive_read_set_format_option(a, "zip", "ignorecrc32", NULL);
+}
+static inline int legado_archive_file_matches(void *a, int format) {
+    int detected = archive_format(a) & 0xFF0000;
+    if (format == 1) return detected == 0xE0000;
+    if (format == 2) return detected == 0xD0000 || detected == 0x100000;
+    return format == 3 && detected == 0x50000;
+}
+static inline int legado_archive_file_open_callbacks(void *a, void *client,
+    legado_epub_read_callback *read_cb, legado_epub_skip_callback *skip_cb,
+    legado_epub_seek_callback *seek_cb) {
+    if (archive_read_set_seek_callback(a, seek_cb) != 0) return -30;
+    return archive_read_open2(a, client, NULL, read_cb, skip_cb, NULL);
+}
+static inline void legado_archive_file_callback_error(void *a) {
+    archive_set_error(a, EIO, "Archive file byte source callback failed");
+}
+static inline int legado_archive_file_next(void *a, void **entry) {
+    return archive_read_next_header(a, (struct archive_entry **)entry);
+}
+static inline int64_t legado_archive_file_read(void *a, void *bytes, size_t size) {
+    return (int64_t)archive_read_data(a, bytes, size);
+}
+static inline int legado_archive_file_skip(void *a) { return archive_read_data_skip(a); }
+static inline int legado_archive_file_encrypted(void *a) { return archive_read_has_encrypted_entries(a) > 0; }
+static inline const char *legado_archive_file_path(void *entry) { return archive_entry_pathname_utf8(entry); }
+static inline int64_t legado_archive_file_size(void *entry) { return archive_entry_size(entry); }
+static inline int legado_archive_file_size_known(void *entry) { return archive_entry_size_is_set(entry); }
+static inline int legado_archive_file_kind(void *entry) {
+    if (archive_entry_symlink(entry) || archive_entry_hardlink(entry)) return 0;
+    mode_t kind = archive_entry_filetype(entry);
+    return kind == S_IFREG ? 1 : kind == S_IFDIR ? 2 : 0;
+}
+static inline int legado_archive_file_entry_encrypted(void *entry) { return archive_entry_is_encrypted(entry) > 0; }
+static inline int legado_archive_file_close(void *a) { return archive_read_close(a); }
+static inline int legado_archive_file_free(void *a) { return archive_read_free(a); }
+
 #endif

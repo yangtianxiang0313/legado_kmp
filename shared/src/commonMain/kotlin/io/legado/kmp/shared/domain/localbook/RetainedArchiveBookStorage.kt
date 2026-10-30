@@ -3,9 +3,7 @@ package io.legado.kmp.shared.domain.localbook
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.platform.AppFilesDirectory
 import io.legado.kmp.shared.platform.FileAccess
-import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -22,6 +20,7 @@ class RetainedArchiveBookStorage(
     private val directory: AppFilesDirectory,
 ) : ArchiveBookRecovery {
     private val mutex = Mutex()
+    private val archiveFiles = RetainedArchiveBookFiles(files)
 
     suspend fun prepare(path: String): ArchiveBookListing = withContext(Dispatchers.Default) {
         mutex.withLock { prepareLocked(path) }
@@ -30,22 +29,30 @@ class RetainedArchiveBookStorage(
     private suspend fun prepareLocked(path: String): ArchiveBookListing {
         val format = path.substringAfterLast('.', "").lowercase()
         require(format in RetainedArchiveOrigins.FORMATS) { "仅支持 ZIP、RAR 和 7z 压缩包" }
-        val bytes = readBounded(path)
         val context = currentCoroutineContext()
-        val archive = openBookArchive(bytes, format) { context.ensureActive() }
-        val entries = validatedEntries(archive) { context.ensureActive() }.mapNotNull { entry ->
+        val staged = archiveFiles.copy(path, "${root()}/Archives")
+        return archiveFiles.withStaged(staged) {
+            val entries = archiveFiles.withReader(staged.path, format) { archive, source ->
+                val selected = validatedEntries(archive) { context.ensureActive() }.mapNotNull { entry ->
+                    context.ensureActive()
+                    val extension = entry.path.substringAfterLast('.', "").lowercase()
+                    if (extension !in RetainedArchiveOrigins.BOOK_FORMATS ||
+                        entry.path.split('/').any { it == "__MACOSX" } ||
+                        entry.path.substringAfterLast('/').startsWith("._")) return@mapNotNull null
+                    ArchiveBookEntry(entry.path, entry.path.substringAfterLast('/'), entry.size, extension)
+                }
+                require(hashBookArchiveSource(source, BookFileArchiveLimits.ARCHIVE_BYTES) {
+                    context.ensureActive()
+                } == staged.digest) { "压缩包在预检期间发生变化" }
+                selected
+            }
+            require(entries.isNotEmpty()) { "压缩包内没有可导入的 TXT/EPUB/PDF/UMD/MOBI 书籍" }
+            val id = staged.digest.sha256
             context.ensureActive()
-            val extension = entry.path.substringAfterLast('.', "").lowercase()
-            if (extension !in RetainedArchiveOrigins.BOOK_FORMATS || entry.path.split('/').any { it == "__MACOSX" } ||
-                entry.path.substringAfterLast('/').startsWith("._")) return@mapNotNull null
-            ArchiveBookEntry(entry.path, entry.path.substringAfterLast('/'), entry.size, extension)
+            require(retainedFormats(id).none { it != format }) { "保留的压缩包格式存在歧义，请先处理冲突原包" }
+            archiveFiles.publish(staged, archivePath(id, format), BookFileArchiveLimits.ARCHIVE_BYTES)
+            ArchiveBookListing(id, path.substringAfterLast('/'), entries)
         }
-        require(entries.isNotEmpty()) { "压缩包内没有可导入的 TXT/EPUB/PDF/UMD/MOBI 书籍" }
-        val id = bytes.toByteString().sha256().hex()
-        context.ensureActive()
-        require(retainedFormats(id).none { it != format }) { "保留的压缩包格式存在歧义，请先处理冲突原包" }
-        publish(archivePath(id, format), bytes)
-        return ArchiveBookListing(id, path.substringAfterLast('/'), entries)
     }
 
     /** Share the storage lock across facade instances, through the database commit. */
@@ -69,29 +76,65 @@ class RetainedArchiveBookStorage(
 
     private suspend fun extractLocked(identity: RetainedArchiveIdentity): String {
         identity.validate()
-        val bytes = readBounded(archivePath(identity.archiveId, identity.format))
         val context = currentCoroutineContext()
-        require(bytes.toByteString().sha256().hex() == identity.archiveId) {
-            "保留的原始压缩包校验失败，请重新选择原包"
+        return archiveFiles.withReader(archivePath(identity.archiveId, identity.format), identity.format) { archive, source ->
+            require(hashBookArchiveSource(source, BookFileArchiveLimits.ARCHIVE_BYTES) {
+                context.ensureActive()
+            }.sha256 == identity.archiveId) { "保留的原始压缩包校验失败，请重新选择原包" }
+            val entry = validatedEntries(archive) { context.ensureActive() }.firstOrNull { it.path == identity.entryPath }
+                ?: error("压缩包中不存在选中的书籍：${identity.entryPath}")
+            require(entry.size > 0L) { "不能导入空书籍" }
+            val path = extractedPath(identity.archiveId, identity.entryPath)
+            val staged = extractEntry(archive, entry, path.substringBeforeLast('/'))
+            archiveFiles.withStaged(staged) {
+                require(hashBookArchiveSource(source, BookFileArchiveLimits.ARCHIVE_BYTES) {
+                    context.ensureActive()
+                }.sha256 == identity.archiveId) { "保留的原始压缩包在解压期间发生变化" }
+                if (identity.entryPath.endsWith(".epub", ignoreCase = true)) {
+                    archiveFiles.withReader(staged.path, "zip") { epub, _ -> epub.validateAll() }
+                }
+                context.ensureActive()
+                archiveFiles.publish(staged, path, BookFileArchiveLimits.ENTRY_BYTES)
+                path
+            }
         }
-        context.ensureActive()
-        val archive = openBookArchive(bytes, identity.format) { context.ensureActive() }
-        val entry = validatedEntries(archive) { context.ensureActive() }.firstOrNull { it.path == identity.entryPath }
-            ?: error("压缩包中不存在选中的书籍：${identity.entryPath}")
-        val extracted = archive.read(identity.entryPath)
-        context.ensureActive()
-        require(extracted.size.toLong() == entry.size && extracted.size <= BookArchiveLimits.ENTRY_BYTES) {
-            "压缩书籍实际长度与目录不一致或超过 64 MiB"
+    }
+
+    private suspend fun extractEntry(
+        archive: BookFileArchiveReader,
+        entry: BookArchiveMember,
+        parent: String,
+    ): StagedArchiveBookFile {
+        val context = currentCoroutineContext()
+        val temporary = archiveFiles.temporary(parent)
+        val output = BookArchiveFileOutput(temporary, BookFileArchiveLimits.ENTRY_BYTES)
+        var handedOff = false
+        var primary: Throwable? = null
+        try {
+            val length = archive.extract(entry.path) { bytes ->
+                context.ensureActive()
+                output.write(bytes)
+            }
+            require(length == entry.size) { "压缩书籍实际长度与目录不一致" }
+            context.ensureActive()
+            output.finish()
+            val digest = hashBookArchiveFile(files, temporary, BookFileArchiveLimits.ENTRY_BYTES) {
+                context.ensureActive()
+            }
+            require(digest.size == entry.size) { "压缩书籍写入不完整" }
+            return StagedArchiveBookFile(temporary, digest).also { handedOff = true }
+        } catch (error: Throwable) {
+            primary = error
+            throw error
+        } finally {
+            if (!handedOff) {
+                try { output.abort() } catch (cleanup: Throwable) {
+                    val original = primary
+                    if (original == null) throw cleanup
+                    original.addSuppressed(cleanup)
+                }
+            }
         }
-        require(extracted.isNotEmpty()) { "不能导入空书籍" }
-        if (identity.entryPath.endsWith(".epub", ignoreCase = true)) {
-            // Validate every inner ZIP entry before publishing an extracted EPUB.
-            val epub = BookArchiveZipReader(extracted) { context.ensureActive() }
-            epub.entries().forEach { epub.read(it.path) }
-        }
-        val path = extractedPath(identity.archiveId, identity.entryPath)
-        publish(path, extracted)
-        return path
     }
 
     override suspend fun recover(book: Book): Book? = withContext(Dispatchers.Default) {
@@ -148,9 +191,9 @@ class RetainedArchiveBookStorage(
         return formats
     }
 
-    private fun validatedEntries(archive: BookArchiveReader, checkCancelled: () -> Unit): List<BookArchiveMember> {
+    private fun validatedEntries(archive: BookFileArchiveReader, checkCancelled: () -> Unit): List<BookArchiveMember> {
         val entries = archive.entries()
-        require(entries.size <= BookArchiveLimits.ENTRIES) { "压缩包超过 4096 项" }
+        require(entries.size <= BookFileArchiveLimits.ENTRIES) { "压缩包条目数量超过限制" }
         val names = mutableSetOf<String>()
         var total = 0L
         for (entry in entries) {
@@ -158,89 +201,14 @@ class RetainedArchiveBookStorage(
             validateRetainedArchivePath(entry.path)
             require(!entry.path.endsWith('/')) { "压缩包书籍目录包含非文件项" }
             require(names.add(entry.path.lowercase())) { "压缩包包含重名或大小写冲突的路径：${entry.path}" }
-            require(entry.size in 0..BookArchiveLimits.ENTRY_BYTES.toLong()) {
-                "压缩包文件长度无效或超过 64 MiB：${entry.path}"
+            require(entry.size in 0L..BookFileArchiveLimits.ENTRY_BYTES) {
+                "压缩包文件长度无效或超过 2 GiB：${entry.path}"
             }
+            require(entry.size <= BookFileArchiveLimits.TOTAL_BYTES - total) { "压缩包解压总量超过 16 GiB" }
             total += entry.size
-            require(total <= BookArchiveLimits.TOTAL_BYTES) { "压缩包解压总量超过 256 MiB" }
         }
         checkCancelled()
         return entries
-    }
-
-    private suspend fun readBounded(path: String): ByteArray {
-        currentCoroutineContext().ensureActive()
-        val source = files.openRead(path)
-        var failure: Throwable? = null
-        try {
-            require(source.size in 1..BookArchiveLimits.ARCHIVE_BYTES.toLong()) { "压缩归档文件为空或超过 128 MiB" }
-            val result = ByteArray(source.size.toInt())
-            var offset = 0
-            while (offset < result.size) {
-                currentCoroutineContext().ensureActive()
-                val length = minOf(1024 * 1024, result.size - offset)
-                val chunk = source.read(offset.toLong(), length)
-                require(chunk.isNotEmpty() && chunk.size <= length) { "压缩归档文件在读取期间被截断或长度异常" }
-                chunk.copyInto(result, offset)
-                offset += chunk.size
-            }
-            currentCoroutineContext().ensureActive()
-            return result
-        } catch (error: Throwable) {
-            failure = error
-            throw error
-        } finally {
-            try {
-                source.closeSource()
-            } catch (closeError: Throwable) {
-                val original = failure
-                if (original == null) throw closeError
-                original.addSuppressed(closeError)
-            }
-        }
-    }
-
-    private suspend fun publish(path: String, bytes: ByteArray) {
-        currentCoroutineContext().ensureActive()
-        if (files.exists(path)) {
-            require(files.getSize(path) == bytes.size.toLong() && readBounded(path).contentEquals(bytes)) {
-                "已存在的本地归档文件内容异常，未覆盖原文件"
-            }
-            return
-        }
-        val parent = path.substringBeforeLast('/')
-        check(files.createDirectory(parent)) { "无法创建本地归档目录" }
-        currentCoroutineContext().ensureActive()
-        var temporary: String
-        do {
-            currentCoroutineContext().ensureActive()
-            temporary = "$parent/.archive-${Random.nextLong().toULong().toString(16)}-" +
-                "${Random.nextLong().toULong().toString(16)}.part"
-        } while (files.exists(temporary))
-        var failure: Throwable? = null
-        try {
-            currentCoroutineContext().ensureActive()
-            check(files.write(temporary, bytes)) { "无法保存本地归档文件" }
-            currentCoroutineContext().ensureActive()
-            check(files.getSize(temporary) == bytes.size.toLong()) { "本地归档文件写入不完整" }
-            currentCoroutineContext().ensureActive()
-            if (!files.move(temporary, path)) {
-                require(files.exists(path) && readBounded(path).contentEquals(bytes)) { "保存归档失败，未覆盖已有文件" }
-            }
-        } catch (error: Throwable) {
-            failure = error
-            throw error
-        } finally {
-            try {
-                withContext(NonCancellable) {
-                    check(!files.exists(temporary) || files.delete(temporary)) { "无法清理本次归档临时文件" }
-                }
-            } catch (cleanupError: Throwable) {
-                val original = failure
-                if (original == null) throw cleanupError
-                original.addSuppressed(cleanupError)
-            }
-        }
     }
 
     private fun isDigest(value: String): Boolean = value.length == 64 && value.all { it in "0123456789abcdef" }

@@ -69,7 +69,7 @@ internal object RetainedArchiveOrigins {
 
 internal fun validateRetainedArchivePath(path: String) {
     try {
-        BookArchiveZipReader.validatePath(path)
+        requireBookFileArchivePath(path)
     } catch (error: IllegalArgumentException) {
         throw IllegalArgumentException("压缩包路径无效：$path", error)
     }
