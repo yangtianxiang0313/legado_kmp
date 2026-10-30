@@ -52,16 +52,14 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     private var contentErrorMessage: String?
     private var needsWebReload = false
     private var isWebContentReady = false
-    private var remotePageURL: URL?
     private var currentNavigation: WKNavigation?
     private lazy var browser = RssArticleWebSession(article: article)
-    private var navigationTask: Task<Void, Never>?
-    private var navigationRequestID = UUID()
+    private var cookiePersistenceTask: Task<Void, Never>?
+    private var sessionResumeTask: Task<Void, Never>?
     private var waitsForRefresh = false
     private var articleReturnOffset: CGPoint?
     private var restoresArticleOffset = false
     private var resourcePolicy: RssArticleResourcePolicy?
-    private var programmaticURL: URL?
     private var imagePageID: UUID?
     private weak var imageLongPress: UILongPressGestureRecognizer?
     private lazy var imageActions = RssArticleImageCoordinator(
@@ -80,6 +78,31 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     private lazy var linkActions = RssArticleLinkActionCoordinator(owner: self) { [weak self] in
         self?.canUseArticleActions == true
     }
+    private lazy var navigationCoordinator = RssArticleNavigationCoordinator(
+        article: article, browser: browser,
+        isActive: { [weak self] in
+            guard let self else { return false }
+            return self.isPageActive && !self.waitsForRefresh
+                && UIApplication.shared.applicationState == .active
+                && self.viewIfLoaded?.window?.isKeyWindow == true
+                && AppLockManager.shared.isUnlocked(in: self.viewIfLoaded?.window)
+        },
+        canUseActions: { [weak self] in self?.canUseArticleActions == true },
+        allowsMainDocument: { [weak self] in self?.resourcePolicy?.allowsMainDocument($0) != false },
+        onActions: { [weak self] in self?.linkActions.perform($0) },
+        onMessage: { [weak self] in self?.showTransientMessage($0) },
+        onLoad: { [weak self] in self?.loadWebRequest($0) },
+        onLinkActivated: { [weak self] in
+            guard let self, self.renderedContent != nil, self.articleReturnOffset == nil else { return }
+            self.articleReturnOffset = self.webView.scrollView.contentOffset
+        },
+        onExternal: { [weak self] url in
+            if ["legado", "yuedu"].contains(url.scheme?.lowercased() ?? "") {
+                self?.linkActions.open(url)
+            } else {
+                self?.linkActions.offerExternal(url)
+            }
+        })
 
     private var canUseArticleActions: Bool {
         isPageActive && canPerformNavigationAction && presentedViewController == nil
@@ -113,7 +136,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         contentTask?.cancel()
         favoriteTask?.cancel()
         favoritesSubscription?.cancel()
-        navigationTask?.cancel()
+        cookiePersistenceTask?.cancel()
+        sessionResumeTask?.cancel()
         progressObservation?.invalidate()
         stopReadAloud()
     }
@@ -144,15 +168,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         isPageActive = true
         refreshFavoriteState()
         observeFavorites()
-        if contentErrorMessage == nil, !waitsForRefresh {
-            if let renderedContent {
-                if needsWebReload { renderHTML(renderedContent) }
-            } else if usesRemoteWebPage {
-                if needsWebReload || !isWebContentReady { loadContent() }
-            } else if contentTask == nil {
-                loadContent()
-            }
-        }
+        resumeArticle()
         updateReadAloudButton()
     }
 
@@ -161,17 +177,13 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         isPageActive = false
         pageID = UUID()
         cancelContentLoad()
-        navigationRequestID = UUID()
-        navigationTask?.cancel()
-        navigationTask = nil
+        navigationCoordinator.cancel()
+        cookiePersistenceTask?.cancel()
+        sessionResumeTask?.cancel()
         browser.cancel()
         imageActions.cancel()
-        programmaticURL = nil
         stopObservingFavorites()
         needsWebReload = needsWebReload || webView.isLoading || !isWebContentReady
-        if usesRemoteWebPage, let url = webView.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-            remotePageURL = url
-        }
         currentNavigation = nil
         webView.stopLoading()
         progressView.isHidden = true
@@ -315,7 +327,6 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     @objc private func refreshArticle() {
         guard canUseArticleActions else { return }
         waitsForRefresh = false
-        remotePageURL = nil
         loadContent(refresh: true)
     }
 
@@ -323,8 +334,9 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         guard canUseArticleActions, source != nil else { return }
         waitsForRefresh = true
         cancelContentLoad()
-        navigationRequestID = UUID()
-        navigationTask?.cancel()
+        navigationCoordinator.cancel()
+        cookiePersistenceTask?.cancel()
+        sessionResumeTask?.cancel()
         browser.cancel()
         currentNavigation = nil
         webView.stopLoading()
@@ -347,10 +359,10 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         articleReturnOffset = nil
         restoresArticleOffset = false
         imageActions.cancel()
-        programmaticURL = nil
         cancelContentLoad()
-        navigationRequestID = UUID()
-        navigationTask?.cancel()
+        navigationCoordinator.cancel()
+        cookiePersistenceTask?.cancel()
+        sessionResumeTask?.cancel()
         browser.cancel()
         currentNavigation = nil
         webView.stopLoading()
@@ -374,6 +386,13 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
                 try Task.checkCancellation()
                 guard self.isPageActive, self.contentRequestID == requestID else { return }
                 self.source = resolution.source
+                if !self.browser.isPrepared, let url = self.linkURL,
+                    ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+                {
+                    try await self.browser.prepareAnonymous(webView: self.webView)
+                    try Task.checkCancellation()
+                    guard self.isPageActive, self.contentRequestID == requestID else { return }
+                }
                 let policy = try await RssArticleResourcePolicy.prepare(
                     contentBlacklist: self.source?.contentBlacklist, contentWhitelist: self.source?.contentWhitelist)
                 try Task.checkCancellation()
@@ -439,7 +458,6 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         }
         stopReadAloud()
         imageActions.cancel()
-        programmaticURL = nil
         currentNavigation = nil
         webView.stopLoading()
         needsWebReload = false
@@ -470,7 +488,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     }
 
     private func loadWebRequest(_ request: URLRequest) {
-        programmaticURL = request.url
+        navigationCoordinator.markProgrammatic(request)
         currentNavigation = webView.load(request)
     }
 
@@ -478,19 +496,33 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         guard isPageActive else { return }
         needsWebReload = needsWebReload || contentTask != nil || webView.isLoading || !isWebContentReady
         cancelContentLoad()
-        navigationRequestID = UUID()
-        navigationTask?.cancel()
-        navigationTask = nil
+        navigationCoordinator.cancel()
+        cookiePersistenceTask?.cancel()
+        sessionResumeTask?.cancel()
         browser.cancel()
-        programmaticURL = nil
         webView.stopLoading()
         stopReadAloud()
         linkActions.cancel()
     }
 
     @objc private func resumeArticle() {
-        guard canUseArticleActions, needsWebReload, !waitsForRefresh, contentErrorMessage == nil else { return }
-        if let renderedContent { renderHTML(renderedContent) } else { loadContent() }
+        guard isPageActive, !waitsForRefresh, contentErrorMessage == nil, contentTask == nil else { return }
+        if renderedContent == nil, !isWebContentReady { loadContent(); return }
+        sessionResumeTask?.cancel()
+        let page = pageID
+        sessionResumeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                if !self.browser.isPrepared { try await self.browser.resume(webView: self.webView) }
+                try Task.checkCancellation()
+                guard self.isPageActive, self.pageID == page, !self.waitsForRefresh else { return }
+                if self.needsWebReload {
+                    if let content = self.renderedContent { self.renderHTML(content) } else { self.loadContent() }
+                }
+            } catch {
+                if !Task.isCancelled, self.isPageActive, self.pageID == page { self.showContentError(error.userFacingMessage) }
+            }
+        }
     }
 
     @objc private func handleBack() {
@@ -644,6 +676,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         currentNavigation = navigation
         isWebContentReady = false
         pageID = UUID()
+        cookiePersistenceTask?.cancel()
         imageActions.cancel()
         stopReadAloud()
     }
@@ -667,6 +700,19 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
             topBar.setTitle(pageTitle)
             title = pageTitle
         }
+        guard browser.isPrepared else { return }
+        let page = pageID
+        cookiePersistenceTask?.cancel()
+        cookiePersistenceTask = Task { @MainActor [weak self, weak webView] in
+            guard let self, let webView else { return }
+            do {
+                try await self.browser.persist(webView: webView)
+            } catch {
+                if !Task.isCancelled, self.isPageActive, self.pageID == page {
+                    self.showTransientMessage("订阅网页会话保存失败，请刷新重试")
+                }
+            }
+        }
     }
 
     func webView(_: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -684,85 +730,22 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         showContentError(error.userFacingMessage)
     }
 
+    func webViewWebContentProcessDidTerminate(_: WKWebView) {
+        guard isPageActive else { return }
+        navigationCoordinator.cancel()
+        cookiePersistenceTask?.cancel()
+        browser.cancel()
+        showContentError("订阅网页已停止运行，请刷新重试")
+    }
+
     func webView(
         _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
         preferences: WKWebpagePreferences,
         decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
         preferences.allowsContentJavaScript = source?.enableJs ?? true
-        let decide: (WKNavigationActionPolicy) -> Void = { decisionHandler($0, preferences) }
-        guard isPageActive, !waitsForRefresh, let url = navigationAction.request.url else { decide(.cancel); return }
-        if url.scheme == "about" {
-            decide(url.absoluteString.hasPrefix("about:blank") ? .allow : .cancel)
-            return
-        }
-        if navigationAction.navigationType == .linkActivated, renderedContent != nil, articleReturnOffset == nil {
-            articleReturnOffset = webView.scrollView.contentOffset
-        }
-        let bypassHook = navigationAction.navigationType == .other && programmaticURL == url
-        if bypassHook { programmaticURL = nil }
-        navigationTask?.cancel()
-        let id = UUID()
-        navigationRequestID = id
-        navigationTask = Task { @MainActor [weak self, weak webView] in
-            guard let self, let webView else { decide(.cancel); return }
-            defer { if self.navigationRequestID == id { self.navigationTask = nil } }
-            do {
-                var actions: [RssArticleNavigationAction] = []
-                if !bypassHook {
-                    let facade = try RssArticleNavigationFacade.companion.create()
-                    let result: RssArticleNavigationResult = try await SharedCancellableAsync.value { completion in
-                        facade.evaluateRequest(article: self.article, targetUrl: url.absoluteString) { result in
-                            completion(result.isCancelled ? nil : result, result.isCancelled ? CancellationError() : nil)
-                        }
-                    }
-                    try Task.checkCancellation()
-                    guard self.canUseArticleActions, self.navigationRequestID == id else { decide(.cancel); return }
-                    actions = result.actions
-                    if let message = result.errorMessage { self.showTransientMessage(message) }
-                    if result.isOverridden {
-                        decide(.cancel)
-                        self.linkActions.perform(actions)
-                        return
-                    }
-                }
-                let scheme = url.scheme?.lowercased() ?? ""
-                guard ["http", "https"].contains(scheme) else {
-                    decide(.cancel)
-                    if !actions.isEmpty {
-                        self.linkActions.perform(actions)
-                    } else if ["legado", "yuedu"].contains(scheme) {
-                        self.linkActions.open(url)
-                    } else {
-                        self.linkActions.offerExternal(url)
-                    }
-                    return
-                }
-                guard self.resourcePolicy?.allowsMainDocument(url.absoluteString) != false else {
-                    decide(.cancel)
-                    self.linkActions.perform(actions)
-                    self.showTransientMessage("订阅源的内容规则已拦截此链接")
-                    return
-                }
-                let request = try await self.browser.prepareNavigation(navigationAction.request, webView: webView)
-                try Task.checkCancellation()
-                guard self.isPageActive, self.navigationRequestID == id, !self.waitsForRefresh else {
-                    decide(.cancel)
-                    return
-                }
-                if request.allHTTPHeaderFields != navigationAction.request.allHTTPHeaderFields {
-                    decide(.cancel)
-                    self.loadWebRequest(request)
-                } else {
-                    decide(.allow)
-                }
-                self.linkActions.perform(actions)
-            } catch {
-                decide(.cancel)
-                if !(error is CancellationError), self.isPageActive, self.navigationRequestID == id {
-                    self.showTransientMessage(error.userFacingMessage)
-                }
-            }
+        navigationCoordinator.decide(navigationAction, in: webView) {
+            decisionHandler($0, preferences)
         }
     }
 
@@ -771,7 +754,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         guard navigationAction.targetFrame == nil, canUseArticleActions else { return nil }
-        loadWebRequest(navigationAction.request)
+        // WebKit can ask for a window before issuing a navigation-policy callback.
+        navigationCoordinator.decide(navigationAction, in: webView) { _ in }
         return nil
     }
 

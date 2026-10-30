@@ -65,18 +65,20 @@ internal class IosSourceWebNavigationSession(
     private var cancelled = false
     private var persisted = false
 
-    suspend fun prepareInitial(view: WKWebView) = operation(view) {
+    suspend fun prepareInitial(view: WKWebView, includeCurrentDocument: Boolean = false) = operation(view) {
         val initial = initialUrl?.takeIf { it.isNotBlank() }?.let {
             requireNotNull(target(it)) { "Invalid initial WebView URL" }
         }
         // A source key can be a logical identifier; it never grants headers to another origin.
-        val targets = listOfNotNull(initial, target(sourceUrl)).distinctBy { it.host }
+        val document = if (includeCurrentDocument) target(view.URL?.absoluteString) else null
+        val targets = listOfNotNull(initial, target(sourceUrl), document).distinctBy { it.host }
         cookieWork.withLock {
             for (target in targets) {
                 checkActive()
                 val owner = requireNotNull(owner(target)) { "Too many WebView cookie owners" }
                 seed(view, owner, target)
             }
+            if (document != null) remember(document)
         }
     }
 
@@ -149,6 +151,34 @@ internal class IosSourceWebNavigationSession(
         }
     }
 
+    /** Only for a popup already approved by the caller's hook and deliberately loaded as main-frame. */
+    suspend fun prepareTopLevelRequest(view: WKWebView, request: NSURLRequest): IosSourceWebNavigationDecision = operation(view) {
+        val target = target(request.URL?.absoluteString) ?: return@operation IosSourceWebNavigationDecision.Cancel
+        val owner = owner(target) ?: return@operation IosSourceWebNavigationDecision.Cancel
+        if (request.HTTPBodyStream != null ||
+            (request.HTTPMethod ?: "GET").uppercase() !in setOf("GET", "HEAD") && request.HTTPBody == null
+        ) return@operation IosSourceWebNavigationDecision.Cancel
+        val removed = sourceHeaderNames(request, target).toMutableSet()
+        if (target.origin != headerOrigin) {
+            request.allHTTPHeaderFields.orEmpty().keys.filterIsInstance<String>()
+                .filterTo(removed) { it.lowercase() in setOf("cookie", "authorization", "proxy-authorization") }
+        }
+        cookieWork.withLock {
+            checkActive()
+            seed(view, owner, target)
+        }
+        checkActive()
+        val prepared = if (removed.isEmpty()) request else cleanRequest(request, removed)
+        pendingReload = prepared
+        // The following WKNavigationAction, not the popup's mere preparation, records the visit.
+        IosSourceWebNavigationDecision.Reload(prepared)
+    }
+
+    fun discardPendingReload(request: NSURLRequest) {
+        checkMain()
+        if (pendingReload === request) pendingReload = null
+    }
+
     /** Records an approved in-memory document whose HTTP fetch was already performed by the caller. */
     fun recordDocument(url: String?) {
         checkMain()
@@ -157,44 +187,56 @@ internal class IosSourceWebNavigationSession(
         if (owner(target) != null) remember(target)
     }
 
-    /** Call after stopping navigation; only actual visited owners are exported, never source aliases. */
-    suspend fun persist(view: WKWebView) = operation(view) {
+    /** Defaults retain the background consumers' one-shot terminal export and persistence policy. */
+    suspend fun persist(
+        view: WKWebView,
+        finalSnapshot: Boolean = true,
+        persistSession: Boolean = persistCookies,
+        commitOnMain: Boolean = false,
+    ) = operation(view) {
         cookieWork.withLock {
+            checkActive()
             if (persisted) return@withLock
             target(view.URL?.absoluteString)?.let { target -> if (owner(target) != null) remember(target) }
+            // Navigation policy can run while getAllCookies is suspended; freeze attribution first.
+            val visited = visitedOwners.values.map { target ->
+                val owner = checkNotNull(owners[target.host])
+                ExportOwner(target, owner.seeded, owner.cookies.associateBy { it.identity() })
+            }
             val nativeCookies = cookies(view)
             checkActive()
-            val snapshots = visitedOwners.values.map { target ->
-                val owner = checkNotNull(owners[target.host])
-                val previous = owner.cookies.associateBy { it.identity() }
+            val snapshots = visited.map { owner ->
                 Snapshot(
-                    target.url,
+                    owner.target.url,
                     owner.seeded,
-                    IosWebViewCookieBridge.exportCookiesForHost(nativeCookies, target.url).map { cookie ->
-                        previous[cookie.identity()]?.let { cookie.copy(creationTimeMillis = it.creationTimeMillis) } ?: cookie
+                    IosWebViewCookieBridge.exportCookiesForHost(nativeCookies, owner.target.url).map { cookie ->
+                        owner.cookies[cookie.identity()]?.let { cookie.copy(creationTimeMillis = it.creationTimeMillis) } ?: cookie
                     },
                 )
             }
-            withContext(Dispatchers.Default) {
+            // A live browser serializes cancel with repository commits on main. Its repository lock
+            // remains cancellable; a synchronous commit cannot start after main-confined cancel.
+            withContext(if (commitOnMain) Dispatchers.Main.immediate else Dispatchers.Default) {
                 for (snapshot in snapshots) {
                     ensureActive()
                     if (snapshot.seeded) {
                         cookieRepository.replaceCookiesForHost(
                             snapshot.url, snapshot.cookies,
-                            persistSession = persistCookies, persistCookies = persistCookies,
+                            persistSession = persistSession, persistCookies = persistCookies,
                         )
                     } else {
                         // An unprepared owner (e.g. an already-finished redirect) is not an authoritative jar.
                         cookieRepository.saveCookies(
                             snapshot.url, snapshot.cookies,
-                            persistSession = persistCookies, persistCookies = persistCookies,
+                            persistSession = persistSession, persistCookies = persistCookies,
                         )
                     }
                     ensureActive()
                 }
             }
             checkActive()
-            persisted = true
+            for ((index, owner) in visited.withIndex()) owners[owner.target.host]?.cookies = snapshots[index].cookies
+            if (finalSnapshot) persisted = true
         }
     }
 
@@ -349,6 +391,7 @@ internal class IosSourceWebNavigationSession(
     private data class Origin(val scheme: String, val host: String, val port: Int)
     private class Owner(var seeded: Boolean = false, var cookies: List<StoredHttpCookie> = emptyList())
     private data class Seed(val cookies: List<StoredHttpCookie>, val header: String?)
+    private data class ExportOwner(val target: Target, val seeded: Boolean, val cookies: Map<Triple<String, String, String>, StoredHttpCookie>)
     private data class Snapshot(val url: String, val seeded: Boolean, val cookies: List<StoredHttpCookie>)
 
     private companion object {

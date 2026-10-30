@@ -68,10 +68,11 @@ class CookieRepositoryImpl(
         val host = cookieScopeHost(url) ?: return
         withCookieLock {
             val jar = readJar()
+            val previousPersistent = jar.persistent.toMap()
             val previous = jar.all().associateBy { it.key() }
             jar.persistent.entries.removeAll { it.value.matchesHost(host) }
             jar.session.entries.removeAll { it.value.matchesHost(host) }
-            mergeCookies(jar, host, cookies, persistSession, persistCookies, previous)
+            mergeCookies(jar, host, cookies, persistSession, persistCookies, previous, previousPersistent)
             // Opaque strings cannot be reconciled against an attributed snapshot.
             // An absent WK cookie must not revive through the compatibility channel.
             database.cacheQueries.transaction {
@@ -178,7 +179,8 @@ class CookieRepositoryImpl(
         cookies: List<StoredHttpCookie>,
         persistSession: Boolean,
         persistCookies: Boolean,
-        previous: Map<CookieKey, StoredHttpCookie> = jar.all().associateBy { it.key() }
+        previous: Map<CookieKey, StoredHttpCookie> = jar.all().associateBy { it.key() },
+        previousPersistent: Map<CookieKey, StoredHttpCookie> = jar.persistent.toMap(),
     ) {
         val now = currentTimeMillis()
         cookies.forEach { incoming ->
@@ -189,7 +191,16 @@ class CookieRepositoryImpl(
             jar.session.remove(key)
             if (cookie.expiresAtMillis?.let { it <= now } == true) return@forEach
             val replacement = cookie.copy(creationTimeMillis = existing?.creationTimeMillis ?: cookie.creationTimeMillis)
-            if (persistCookies && (replacement.expiresAtMillis != null || persistSession)) {
+            // Foundation canonicalizes SameSite casing without changing its cookie semantics.
+            val unchangedPersistent = previousPersistent[key]?.let { stored ->
+                stored.copy(sameSite = stored.sameSite?.lowercase()) ==
+                    replacement.copy(sameSite = replacement.sameSite?.lowercase())
+            } == true
+            // Ordinary browser synchronization must not demote an unchanged explicitly retained login cookie.
+            // New/changed values remain memory-only; deleted or replaced identities cannot revive on restart.
+            if (persistCookies && (replacement.expiresAtMillis != null || persistSession) ||
+                unchangedPersistent
+            ) {
                 jar.persistent[key] = replacement
             } else {
                 jar.session[key] = replacement

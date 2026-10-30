@@ -226,6 +226,7 @@
 		E10000000000000000000001 /* RssScreenAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* RssScreenAdapter.swift */; };
 		F028B1010000000000000001 /* RssArticleHTMLRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028B1020000000000000001; };
 		F028B1010000000000000002 /* RssArticleWebSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028B1020000000000000002; };
+		F030D1010000000000000001 /* RssArticleNavigationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F030D1020000000000000001; };
 		F02A31010000000000000001 /* RssArticleContentResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A31020000000000000001; };
 		F02A35010000000000000001 /* RssArticleResourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A35020000000000000001; };
 		F02A35010000000000000002 /* RssArticleImageCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A35020000000000000002; };
@@ -952,6 +953,7 @@
 		E20000000000000000000001 /* RssScreenAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssScreenAdapter.swift; sourceTree = "<group>"; };
 		F028B1020000000000000001 /* RssArticleHTMLRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleHTMLRenderer.swift; sourceTree = "<group>"; };
 		F028B1020000000000000002 /* RssArticleWebSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleWebSession.swift; sourceTree = "<group>"; };
+		F030D1020000000000000001 /* RssArticleNavigationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleNavigationCoordinator.swift; sourceTree = "<group>"; };
 		F02A31020000000000000001 /* RssArticleContentResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleContentResolver.swift; sourceTree = "<group>"; };
 		F02A35020000000000000001 /* RssArticleResourcePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleResourcePolicy.swift; sourceTree = "<group>"; };
 		F02A35020000000000000002 /* RssArticleImageCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleImageCoordinator.swift; sourceTree = "<group>"; };
@@ -1880,6 +1882,7 @@
 			children = (
 				F028B1020000000000000001,
 				F028B1020000000000000002,
+				F030D1020000000000000001,
 				F02A31020000000000000001,
 				F02A35020000000000000001,
 				F02A35020000000000000002,
@@ -2842,6 +2845,7 @@
 				E10000000000000000000001 /* RssScreenAdapter.swift in Sources */,
 				F028B1010000000000000001 /* RssArticleHTMLRenderer.swift in Sources */,
 				F028B1010000000000000002 /* RssArticleWebSession.swift in Sources */,
+				F030D1010000000000000001 /* RssArticleNavigationCoordinator.swift in Sources */,
 				F02A31010000000000000001 /* RssArticleContentResolver.swift in Sources */,
 				F02A35010000000000000001 /* RssArticleResourcePolicy.swift in Sources */,
 				F02A35010000000000000002 /* RssArticleImageCoordinator.swift in Sources */,
