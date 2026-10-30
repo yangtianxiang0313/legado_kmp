@@ -166,8 +166,10 @@ internal val LEGACY_JS_JAVA_SHIM = """
       $LEGACY_JS_JAVA_CRYPTO
       $LEGACY_JS_JAVA_CIPHER
       $LEGACY_JS_JAVA_URL
+      $LEGACY_JS_JAVA_JSOUP
 
       registerClass('org.jsoup.Jsoup', org.jsoup.Jsoup);
+      registerClass('org.jsoup.Connection', JJsoupConnection);
       registerClass('java.util.ArrayList', JArrayList);
       registerClass('java.util.LinkedList', JLinkedList);
       registerClass('java.util.HashMap', JHashMap);

@@ -6,6 +6,7 @@ import io.legado.kmp.shared.model.Cache
 import io.legado.kmp.shared.model.ExploreKind
 import io.legado.kmp.shared.network.LegacyJsConnectGateway
 import io.legado.kmp.shared.scripting.JsResult
+import io.legado.kmp.shared.scripting.LegacyJsHostSurface
 import io.legado.kmp.shared.scripting.LegacySourceJsRuntime
 import io.legado.kmp.shared.scripting.SourceJsRuntime
 import io.legado.kmp.shared.source.SourceStateStore
@@ -83,7 +84,12 @@ class GetExploreKindsUseCase(
             },
             rawConnect = { urlRule, headerJson ->
                 executor.executeForLegacyJsRaw(urlRule, source, headerJson)
-            }
+            },
+            host = LegacyJsHostSurface.fromCallbacks(
+                source = source,
+                connect = { urlRule, headerJson -> executor.executeForLegacyJs(urlRule, source, headerJson) },
+                jsoupExecute = executor::executeJsoupForLegacyJs,
+            ),
         )) {
             is JsResult.JsString -> result.value
             is JsResult.JsError -> throw IllegalStateException(result.message, result.exception)

@@ -12,6 +12,7 @@ import io.legado.kmp.shared.network.JsExecutor
 import io.legado.kmp.shared.network.SourceHeaderResolver
 import io.legado.kmp.shared.network.SourceRequestExecutor
 import io.legado.kmp.shared.scripting.JsResult
+import io.legado.kmp.shared.scripting.LegacyJsHostSurface
 import io.legado.kmp.shared.scripting.LegacySourceJsRuntime
 import io.legado.kmp.shared.scripting.SourceJsRuntime
 import io.legado.kmp.shared.source.SourceStateStore
@@ -144,7 +145,14 @@ class RssService(
                     ruleData = emptyMap(),
                     chapter = null
                 )
-            }
+            },
+            host = LegacyJsHostSurface.fromCallbacks(
+                source = source.asBookSourceShim(),
+                connect = { urlRule, headerJson ->
+                    requestExecutor.executeForLegacyJs(urlRule, source.asBookSourceShim(), headerJson)
+                },
+                jsoupExecute = requestExecutor::executeJsoupForLegacyJs,
+            ),
         )
         return when (result) {
             is JsResult.JsString -> result.value

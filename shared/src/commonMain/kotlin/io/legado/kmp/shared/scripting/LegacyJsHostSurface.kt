@@ -4,6 +4,10 @@ import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.network.SharedCapabilityException
 import io.legado.kmp.shared.network.SourceResponse
 
+private fun unavailableLegacyJsoupNetwork(): Nothing = throw SharedCapabilityException(
+    "legacy_js_jsoup_network_unsupported", "当前脚本执行环境不支持 Jsoup 网络请求",
+)
+
 class LegacyJsHostSurface(
     val connect: suspend (urlRule: String, headerJson: String?) -> SourceResponse,
     val connectAll: suspend (urlRules: List<String>, headerJson: String?) -> List<SourceResponse> = { urlRules, headerJson ->
@@ -113,6 +117,7 @@ class LegacyJsHostSurface(
     val getZipStringContent: suspend (url: String, path: String, charsetName: String?) -> String = { _, _, _ -> "" },
     val rssSearchBook: (suspend (key: String) -> Unit)? = null,
     val rssAddBook: (suspend (bookUrl: String) -> Unit)? = null,
+    val jsoupExecute: suspend (requestJson: String) -> String = { unavailableLegacyJsoupNetwork() },
 ) {
 
     suspend fun cacheFile(url: String): String {
@@ -262,6 +267,7 @@ class LegacyJsHostSurface(
             getZipStringContent: suspend (url: String, path: String, charsetName: String?) -> String = { _, _, _ -> "" },
             rssSearchBook: (suspend (key: String) -> Unit)? = null,
             rssAddBook: (suspend (bookUrl: String) -> Unit)? = null,
+            jsoupExecute: suspend (requestJson: String) -> String = { unavailableLegacyJsoupNetwork() },
         ): LegacyJsHostSurface {
             return LegacyJsHostSurface(
                 connect = connect,
@@ -303,6 +309,7 @@ class LegacyJsHostSurface(
                 getZipStringContent = getZipStringContent,
                 rssSearchBook = rssSearchBook,
                 rssAddBook = rssAddBook,
+                jsoupExecute = jsoupExecute,
             )
         }
 

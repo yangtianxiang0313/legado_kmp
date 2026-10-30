@@ -108,6 +108,7 @@ class ExecuteLoginUrlUseCase(
         val libraryHost = LegacyJsHostSurface.fromCallbacks(
             source = source,
             connect = { url, header -> inRequest { connectGateway.executeForLegacyJs(url, source, header) } },
+            jsoupExecute = { requestJson -> inRequest { connectGateway.executeJsoupForLegacyJs(requestJson) } },
         )
         val library = source.jsLib?.takeIf { it.isNotBlank() }
             ?.let { librarySupport.load(it, source.bookSourceUrl, libraryHost) }.orEmpty()
@@ -160,6 +161,7 @@ class ExecuteLoginUrlUseCase(
                 inRequest { connectGateway.executeWebViewForLegacyJs(source, url, html, js, overrideUrlRegex = regex) }
             },
             readLocalScript = { path -> inRequest { connectGateway.readLocalScriptForLegacyJs(path) } },
+            host = libraryHost,
         )
         currentCoroutineContext().ensureActive()
         if (result is JsResult.JsError) {

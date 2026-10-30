@@ -153,6 +153,7 @@ class LegacySourceJsRuntime(
                     getZipStringContent = host.getZipStringContent,
                     rssSearchBook = host.rssSearchBook,
                     rssAddBook = host.rssAddBook,
+                    jsoupExecute = host.jsoupExecute,
                 )
                 quickJs(Dispatchers.Default) {
                     val sourceKey = source?.bookSourceUrl
@@ -394,6 +395,11 @@ class LegacySourceJsRuntime(
                             ?.takeUnless { it.isBlank() }
                             ?: "Legacy JS host helper is not implemented in shared runtime"
                         throw SharedCapabilityException(capabilityGapKey, message)
+                    }
+                    function("__legacyJsoupExecute") { args ->
+                        require(args.size == 1) { "Expected one Jsoup request" }
+                        val requestJson = args[0] as? String ?: error("Expected a Jsoup request JSON string")
+                        hostCall { effectiveHost.jsoupExecute(requestJson) }
                     }
                     function("__legacyConnect") { args ->
                         val urlRule = args.firstOrNull()?.toString().orEmpty()

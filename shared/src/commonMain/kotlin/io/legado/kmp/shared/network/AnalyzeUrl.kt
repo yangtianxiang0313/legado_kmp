@@ -723,6 +723,7 @@ class AnalyzeUrl(
             },
             host = io.legado.kmp.shared.scripting.LegacyJsHostSurface.fromCallbacks(
                 source = context.source,
+                jsoupExecute = context.gateway::executeJsoupForLegacyJs,
                 connect = { urlRule, headerJson ->
                     context.gateway.executeForLegacyJs(
                         urlRule = urlRule,

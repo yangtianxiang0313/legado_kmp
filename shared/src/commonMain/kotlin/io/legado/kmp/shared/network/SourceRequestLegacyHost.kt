@@ -17,6 +17,7 @@ internal fun createSourceRequestLegacyHost(
 ): LegacyJsHostSurface {
     return LegacyJsHostSurface.fromCallbacks(
         source = source,
+        jsoupExecute = gateway::executeJsoupForLegacyJs,
         connect = { urlRule, headerJson ->
             gateway.executeForLegacyJs(
                 urlRule = urlRule,

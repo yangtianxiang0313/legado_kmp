@@ -68,6 +68,7 @@ class SourceRequestExecutor(
     private val fileAccess: FileAccess? = null,
     private val appFilesDirectory: AppFilesDirectory? = null,
 ) : LegacyJsConnectGateway {
+    private val jsoupRequests = LegacyJsoupRequestExecutor()
     private val transport = SourceRequestTransport(
         httpUseCase, cookieRepository, interactiveCapability, webViewRequestExecutor,
         proxyRequestExecutor, mediaRequestExecutor, uploadRequestExecutor, ::defaultUserAgent,
@@ -89,6 +90,8 @@ class SourceRequestExecutor(
     )
 
     override suspend fun defaultUserAgent(): String = headerResolver.defaultUserAgent()
+
+    override suspend fun executeJsoupForLegacyJs(requestJson: String): String = jsoupRequests.execute(requestJson)
 
     /** Builds one file-download intent, without probing or sending its final HTTP request. */
     internal suspend fun prepareFileRequest(

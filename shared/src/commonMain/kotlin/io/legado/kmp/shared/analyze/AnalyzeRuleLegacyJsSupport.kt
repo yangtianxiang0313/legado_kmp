@@ -154,6 +154,10 @@ internal class AnalyzeRuleLegacyJsSupport(
             },
             host = LegacyJsHostSurface.fromCallbacks(
                 source = legacySource,
+                jsoupExecute = { requestJson ->
+                    val availableGateway = gateway ?: throw missingLegacyJsNetworkCapability()
+                    availableGateway.executeJsoupForLegacyJs(requestJson)
+                },
                 connect = { urlRule, headerJson ->
                     val availableGateway = gateway ?: throw missingLegacyJsNetworkCapability()
                     availableGateway.executeForLegacyJs(

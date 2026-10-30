@@ -42,6 +42,7 @@ internal fun createRssArticleNavigationHost(
     actions: RssArticleNavigationActions,
 ): LegacyJsHostSurface = LegacyJsHostSurface.fromCallbacks(
     source = source,
+    jsoupExecute = executor::executeJsoupForLegacyJs,
     connect = { urlRule, headerJson ->
         executor.executeForLegacyJs(
             urlRule = urlRule,

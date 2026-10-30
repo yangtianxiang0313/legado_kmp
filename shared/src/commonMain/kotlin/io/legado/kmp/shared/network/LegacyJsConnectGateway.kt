@@ -7,6 +7,11 @@ import io.legado.kmp.shared.preferences.AppRuntimeConfig
 interface LegacyJsConnectGateway {
     suspend fun defaultUserAgent(): String = AppRuntimeConfig.DEFAULT_USER_AGENT
 
+    /** A direct Jsoup connection has its own headers and in-memory cookie session. */
+    suspend fun executeJsoupForLegacyJs(requestJson: String): String {
+        throw SharedCapabilityException("legacy_js_jsoup_network_unsupported", "当前网关不支持 Jsoup 网络请求")
+    }
+
     /**
      * Resolves the final media HTTP intent without sending it. AnalyzeUrl/header JS retain their existing semantics.
      * This is NOT executeText: native media responses do not run source.loginCheckJs or write cookies back here.
