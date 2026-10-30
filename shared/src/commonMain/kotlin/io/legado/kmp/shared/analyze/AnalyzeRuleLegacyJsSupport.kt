@@ -8,6 +8,7 @@ import io.legado.kmp.shared.network.LegacyJsConnectGateway
 import io.legado.kmp.shared.network.SharedCapabilityException
 import io.legado.kmp.shared.network.SourceHeaderResolver
 import io.legado.kmp.shared.scripting.LegacyJsHostSurface
+import io.legado.kmp.shared.scripting.LEGACY_NATIVE_DOM_INPUT_BINDING
 import io.legado.kmp.shared.scripting.LegacySourceJsRuntime
 import io.legado.kmp.shared.scripting.SourceJsRuntime
 import io.legado.kmp.shared.source.SourceStateStore
@@ -403,6 +404,9 @@ internal class AnalyzeRuleLegacyJsSupport(
         // Bind only after all variable merges; clear stale or user-supplied metadata, too.
         put(LEGACY_HTML_RESULT_KIND_BINDING, legacyHtmlResultKind(effectiveRawResult)?.bindingValue)
         put(LEGACY_DOM_INPUT_DESCRIPTORS_BINDING, legacyDomInputDescriptors(effectiveRawResult))
+        val nativeInputs = legacyNativeDomInputs(effectiveRawResult)
+        if (nativeInputs == null) remove(LEGACY_NATIVE_DOM_INPUT_BINDING)
+        else put(LEGACY_NATIVE_DOM_INPUT_BINDING, nativeInputs)
         put(LEGACY_JSON_INPUT_DESCRIPTORS_BINDING, legacyJsonInputDescriptors(effectiveRawResult))
     }
 

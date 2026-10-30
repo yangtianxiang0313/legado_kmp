@@ -4,6 +4,8 @@ import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Document
 import com.fleeksoft.ksoup.select.Elements
 import io.legado.kmp.shared.analyze.parser.JsonPathRetainedValue
+import io.legado.kmp.shared.scripting.LEGACY_NATIVE_DOM_INPUT_BINDING
+import io.legado.kmp.shared.scripting.LegacyJsDomInputs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -110,6 +112,31 @@ internal fun legacyDomInputDescriptors(rawResult: Any?): List<Map<String, Any?>>
     return descriptors
 }
 
+internal fun legacyNativeDomInputs(rawResult: Any?): LegacyJsDomInputs? {
+    val descriptors = legacyDomInputDescriptors(rawResult)
+    if (descriptors.isEmpty()) return null
+    fun unwrap(value: Any?): Any? = if (value is AnalyzeResult) jsPipelineValue(value) else value
+    val inputs = descriptors.map { descriptor ->
+        val path = (descriptor["path"] as List<*>).map { requireNotNull(it) }
+        var value = unwrap(rawResult)
+        for (key in path) {
+            value = unwrap(when (val parent = value) {
+                is Map<*, *> -> parent.entries.firstOrNull { it.key?.toString() == key }?.value
+                is List<*> -> parent[(key as Number).toInt()]
+                else -> error("Invalid native DOM input path")
+            })
+        }
+        val elements = when (val selected = value) {
+            is Element -> listOf(selected)
+            is Elements -> selected.toList()
+            is List<*> -> selected.map { it as Element }
+            else -> error("Invalid native DOM input")
+        }
+        LegacyJsDomInputs.Input(path, elements, descriptor["kind"] == LegacyHtmlResultKind.ELEMENT.bindingValue)
+    }
+    return LegacyJsDomInputs(inputs)
+}
+
 internal fun analyzeResultFromRaw(raw: Any?): AnalyzeResult {
     return when (raw) {
         null -> AnalyzeResult.Null
@@ -160,7 +187,7 @@ internal fun jsPipelineValue(result: AnalyzeResult): Any? {
 }
 
 internal fun legacyJsElementPayload(value: Any?): Map<String, Any?>? {
-    return when (value) {
+    val payload = when (value) {
         null -> null
         is com.fleeksoft.ksoup.select.Elements -> linkedMapOf(
             "elements" to value.map { element ->
@@ -220,6 +247,18 @@ internal fun legacyJsElementPayload(value: Any?): Map<String, Any?>? {
             "outerHtml" to value.toString(),
             "attrs" to emptyMap<String, String>()
         )
+    } ?: return null
+    val elements = when (value) {
+        is Element -> listOf(value)
+        is Elements -> value.toList()
+        is List<*> -> value.filterIsInstance<Element>()
+        else -> emptyList()
+    }
+    if (value !is Element && value !is Elements && elements.isEmpty()) return payload
+    return LinkedHashMap(payload).apply {
+        put(LEGACY_NATIVE_DOM_INPUT_BINDING, LegacyJsDomInputs(listOf(
+            LegacyJsDomInputs.Input(emptyList(), elements, value is Element)
+        )))
     }
 }
 

@@ -5,6 +5,9 @@ internal val LEGACY_JS_DOM_SHIM = """
       var registry = new WeakMap();
       var lookup = Function.prototype.call.bind(WeakMap.prototype.get, registry);
       var register = Function.prototype.call.bind(WeakMap.prototype.set, registry);
+      var adopted = new WeakMap();
+      var adoptedGet = Function.prototype.call.bind(WeakMap.prototype.get, adopted);
+      var adoptedSet = Function.prototype.call.bind(WeakMap.prototype.set, adopted);
       var own = Function.prototype.call.bind(Object.prototype.hasOwnProperty);
       var isArray = Array.isArray;
       var keys = Object.keys;
@@ -19,12 +22,16 @@ internal val LEGACY_JS_DOM_SHIM = """
       var integer = Number.isInteger;
       var fail = TypeError;
       var outOfBounds = RangeError;
-      var parseHtml = __legacyDomParse;
-      var selectHtml = __legacyDomSelect;
-      var htmlAttribute = __legacyDomAttribute;
+      var domError = Error;
+      var domRegexTest = Function.prototype.call.bind(RegExp.prototype.test);
+      var domNonBlankText = /[^ \t\n\f\r]/;
+      var nativeParse = __legacyDomParse;
+      var nativeAdopt = __legacyDomAdopt;
+      var nativeInvoke = __legacyDomInvoke;
       var getElementPayload = __legacyRuleGetElementPayload;
       var getStringList = __legacyRuleGetStringList;
       var setContent = __legacyRuleSetDomContent;
+      var byHandle = create(null);
 
       function envelope(kind, value) {
         var node = create(null);
@@ -35,149 +42,221 @@ internal val LEGACY_JS_DOM_SHIM = """
       function field(target, key, value) {
         define(target, key, { value: value, enumerable: true, configurable: true, writable: true });
       }
-      function copyRaw(raw) {
-        return parse(stringify(raw));
+      function domMethod(target, key, value) {
+        define(target, key, { value: value, enumerable: false, configurable: true, writable: true });
       }
+      function domArity(args, minimum, maximum, name) {
+        if (args.length < minimum || args.length > maximum) throw new fail('Unsupported DOM ' + name + ' overload');
+      }
+      function domString(value, label) {
+        if (value === null || value === undefined) throw new fail('DOM ' + label + ' must not be null');
+        return string(value);
+      }
+      function domDescriptor(raw) {
+        return raw !== null && typeof raw === 'object' && !isArray(raw) &&
+          own(raw, 'handle') && typeof raw.handle === 'string' && raw.handle !== '' &&
+          own(raw, 'document') && typeof raw.document === 'boolean';
+      }
+      function domReply(raw) {
+        if (typeof raw !== 'string') throw new fail('Invalid DOM host JSON response');
+        return parse(raw);
+      }
+      function domCall(target, operation, args) {
+        var state = lookup(target);
+        if (!state || state.kind !== 'element') throw new fail('Expected a registered DOM Element');
+        var reply = domReply(nativeInvoke(state.handle, operation, stringify(args)));
+        if (!reply || typeof reply !== 'object' || !own(reply, 'value')) throw new fail('Invalid DOM host envelope');
+        if (reply.kind === 'value') return reply.value;
+        if (reply.kind === 'element') {
+          if (reply.value === null) return null;
+          if (!domDescriptor(reply.value)) throw new fail('Invalid DOM host Element descriptor');
+          return element(reply.value);
+        }
+        if (reply.kind === 'elements') {
+          if (!isArray(reply.value)) throw new fail('Invalid DOM host Elements descriptor');
+          for (var i = 0; i < reply.value.length; i++) {
+            if (!domDescriptor(reply.value[i])) throw new fail('Invalid DOM host collection member');
+          }
+          return elements(reply.value);
+        }
+        throw new fail('Unknown DOM host envelope kind');
+      }
+      // Only native replies, trusted input descriptors and rule-host results enter this function.
       function element(raw) {
         if (raw == null || typeof raw !== 'object') return raw;
         var existing = lookup(raw);
-        if (existing) return raw;
-        raw = copyRaw(raw);
-        var wrapped = {
-          __raw: copyRaw(raw),
-          text: function() { return raw.text != null ? string(raw.text) : ''; },
-          html: function() { return raw.innerHtml != null ? string(raw.innerHtml) : ''; },
-          outerHtml: function() { return raw.outerHtml != null ? string(raw.outerHtml) : ''; },
-          baseUri: function() { return raw.baseUri != null ? string(raw.baseUri) : ''; },
-          attr: function(name) {
-            if (name == null) return '';
-            var key = string(name);
-            if (key.slice(0, 4) === 'abs:') return htmlAttribute(stringify(raw), key);
-            return raw.attrs != null && own(raw.attrs, key) ? string(raw.attrs[key]) : '';
-          },
-          select: function(selector) {
-            return elements(parse(selectHtml(stringify(raw), string(selector))));
-          },
-          toString: function() { return raw.outerHtml != null ? string(raw.outerHtml) : ''; }
-        };
-        register(wrapped, { kind: 'element', raw: raw });
+        if (existing && existing.kind === 'element') return raw;
+        if (!domDescriptor(raw)) {
+          var previous = adoptedGet(raw);
+          if (previous) return previous;
+          var descriptor = domReply(nativeAdopt(stringify(raw)));
+          if (!domDescriptor(descriptor)) throw new fail('Invalid adopted DOM descriptor');
+          var adoptedElement = element(descriptor);
+          adoptedSet(raw, adoptedElement);
+          return adoptedElement;
+        }
+        var handle = raw.handle;
+        if (own(byHandle, handle)) return byHandle[handle];
+        var wrapped = {};
+        register(wrapped, { kind: 'element', handle: handle, document: raw.document });
+        byHandle[handle] = wrapped;
+        // Compatibility/debug data is deliberately not the export authority.
+        field(wrapped, '__raw', { handle: handle, document: raw.document });
+        function read(name) {
+          domMethod(wrapped, name, function() {
+            domArity(arguments, 0, 0, name);
+            return domCall(wrapped, name, []);
+          });
+        }
+        function readWrite(name) {
+          domMethod(wrapped, name, function(value) {
+            domArity(arguments, 0, 1, name);
+            return domCall(wrapped, name, arguments.length ? [domString(value, name)] : []);
+          });
+        }
+        function unary(name) {
+          domMethod(wrapped, name, function(value) {
+            domArity(arguments, 1, 1, name);
+            return domCall(wrapped, name, [domString(value, name)]);
+          });
+        }
+        var reads = ['parent', 'parents', 'children', 'siblingElements', 'nextElementSibling',
+          'previousElementSibling', 'ownText', 'wholeText', 'outerHtml', 'data', 'baseUri', 'className',
+          'nodeName', 'normalName', 'childrenSize', 'empty', 'clone', 'unwrap'];
+        for (var i = 0; i < reads.length; i++) read(reads[i]);
+        var writes = ['text', 'html', 'tagName', 'id'];
+        for (var i = 0; i < writes.length; i++) readWrite(writes[i]);
+        var unaryNames = ['select', 'selectFirst', 'hasAttr', 'hasClass', 'absUrl', 'getElementsByTag',
+          'getElementsByClass', 'getElementById', 'addClass', 'removeClass', 'toggleClass', 'removeAttr',
+          'append', 'prepend', 'before', 'after', 'wrap', 'appendElement', 'prependElement'];
+        for (var i = 0; i < unaryNames.length; i++) unary(unaryNames[i]);
+        domMethod(wrapped, 'child', function(index) {
+          domArity(arguments, 1, 1, 'child');
+          index = number(index);
+          if (!integer(index) || index < 0 || index > 2147483647) throw new outOfBounds('DOM child index out of bounds: ' + index);
+          return domCall(wrapped, 'child', [index]);
+        });
+        domMethod(wrapped, 'attr', function(name, value) {
+          domArity(arguments, 1, 2, 'attr');
+          var args = [domString(name, 'attribute name')];
+          if (arguments.length === 2) args[1] = typeof value === 'boolean' ? value : domString(value, 'attribute value');
+          return domCall(wrapped, 'attr', args);
+        });
+        domMethod(wrapped, 'classNames', function(values) {
+          domArity(arguments, 0, 1, 'classNames');
+          if (!arguments.length) return new domLinkedHashSet(domCall(wrapped, 'classNames', []));
+          var items = domListValues(values), names = [];
+          for (var i = 0; i < items.length; i++) names[i] = domString(items[i], 'class name');
+          return domCall(wrapped, 'classNames', [names]);
+        });
+        domMethod(wrapped, 'hasText', function() {
+          domArity(arguments, 0, 0, 'hasText');
+          // Jsoup TextNode.isBlank uses the five HTML whitespace characters, not JS \s.
+          return domRegexTest(domNonBlankText, domCall(wrapped, 'wholeText', []));
+        });
+        domMethod(wrapped, 'remove', function() {
+          domArity(arguments, 0, 0, 'remove');
+          domCall(wrapped, 'remove', []);
+        });
+        domMethod(wrapped, 'equals', function(other) { return wrapped === other; });
+        domMethod(wrapped, 'toString', function() { return domCall(wrapped, 'outerHtml', []); });
+        if (raw.document) {
+          read('head'); read('body'); read('location');
+          domMethod(wrapped, 'title', function(value) {
+            domArity(arguments, 0, 1, 'title');
+            if (!arguments.length) return domCall(wrapped, 'title', []);
+            domCall(wrapped, 'title', [domString(value, 'title')]);
+          });
+        }
         return wrapped;
       }
       function elements(rawList) {
-        if (rawList != null && lookup(rawList)) return rawList;
+        var registered = rawList != null && typeof rawList === 'object' ? lookup(rawList) : null;
+        if (registered && registered.kind === 'elements') return rawList;
         rawList = isArray(rawList) ? rawList : [];
         var wrapped = [];
         for (var i = 0; i < rawList.length; i++) wrapped[i] = element(rawList[i]);
-        wrapped.size = function() { return wrapped.length; };
-        wrapped.isEmpty = function() { return wrapped.length === 0; };
-        wrapped.get = function(index) {
-          index = number(index);
-          if (!integer(index) || index < 0 || index >= wrapped.length) {
-            throw new outOfBounds('Element index out of bounds: ' + index);
-          }
-          return wrapped[index];
-        };
-        wrapped.first = function() { return wrapped.length === 0 ? null : wrapped[0]; };
-        wrapped.last = function() { return wrapped.length === 0 ? null : wrapped[wrapped.length - 1]; };
-        wrapped.text = function() {
-          var text = '';
-          for (var i = 0; i < wrapped.length; i++) {
-            var itemText = wrapped[i].text();
-            if (itemText !== '') text += (text === '' ? '' : ' ') + itemText;
-          }
-          return text;
-        };
-        wrapped.html = function() {
-          var html = '';
-          for (var i = 0; i < wrapped.length; i++) {
-            if (html !== '') html += '\n';
-            html += wrapped[i].html();
-          }
-          return html;
-        };
-        wrapped.attr = function(name) { return wrapped.length > 0 ? wrapped[0].attr(name) : ''; };
-        wrapped.select = function(selector) {
-          var selected = [];
-          for (var i = 0; i < wrapped.length; i++) {
-            var nested = wrapped[i].select(selector);
-            for (var j = 0; j < nested.length; j++) selected[selected.length] = nested[j];
-          }
-          return elements(selected);
-        };
-        wrapped.toArray = function() {
-          var array = [];
-          for (var i = 0; i < wrapped.length; i++) array[i] = wrapped[i];
-          return array;
-        };
-        wrapped.toString = function() {
-          var html = '';
-          for (var i = 0; i < wrapped.length; i++) {
-            if (html !== '') html += '\n';
-            html += wrapped[i].outerHtml();
-          }
-          return html;
-        };
-        register(wrapped, { kind: 'elements' });
-        return wrapped;
+        return domElementsList(wrapped);
       }
       function emptyElement() {
         return { text: '', innerHtml: '', outerHtml: '', tag: 'span', baseUri: '', attrs: {} };
       }
       function hostElements(raw) {
         if (isArray(raw)) return elements(raw);
-        if (raw != null && isArray(raw.elements)) return elements(raw.elements);
+        if (raw != null && typeof raw === 'object') {
+          var members = raw.elements;
+          if (isArray(members)) return elements(members);
+        }
         return elements(raw != null ? [raw] : []);
+      }
+      function hostPayload(raw) {
+        if (typeof raw !== 'string') return raw;
+        try { return parse(raw); }
+        catch (e) { return { text: raw, innerHtml: raw, outerHtml: raw, attrs: {} }; }
       }
       java.getElement = function(rule) {
         var raw = getElementPayload(string(rule));
         if (raw == null || raw === '') return element(emptyElement());
-        try {
-          var parsed = parse(string(raw));
-          if (isArray(parsed) || (parsed != null && isArray(parsed.elements))) return hostElements(parsed);
-          return element(parsed);
-        } catch (e) {
-          var fallback = string(raw);
-          return element({ text: fallback, innerHtml: fallback, outerHtml: fallback, attrs: {} });
+        var payload = hostPayload(raw);
+        if (isArray(payload) || (payload != null && typeof payload === 'object' && isArray(payload.elements))) {
+          return hostElements(payload);
         }
+        return element(payload);
       };
       java.getElements = function(rule) {
         var raw = getElementPayload(string(rule));
-        if (raw == null || raw === '') {
-          var list = getStringList(string(rule));
-          if (list != null && list !== '') {
-            try {
-              var parsedList = parse(string(list));
-              if (isArray(parsedList)) {
-                var payloads = [];
-                for (var i = 0; i < parsedList.length; i++) {
-                  var text = parsedList[i] != null ? string(parsedList[i]) : '';
-                  payloads[i] = { text: text, innerHtml: text, outerHtml: text, attrs: {} };
-                }
-                return elements(payloads);
-              }
-            } catch (e) {}
-          }
-          return elements([]);
+        if (raw != null && raw !== '') return hostElements(hostPayload(raw));
+        var list = getStringList(string(rule));
+        if (list == null || list === '') return elements([]);
+        var parsedList;
+        try { parsedList = typeof list === 'string' ? parse(list) : list; }
+        catch (e) { return elements([]); }
+        if (!isArray(parsedList)) return elements([]);
+        var payloads = [];
+        for (var i = 0; i < parsedList.length; i++) {
+          var text = parsedList[i] != null ? string(parsedList[i]) : '';
+          payloads[i] = { text: text, innerHtml: text, outerHtml: text, attrs: {} };
         }
-        try { return hostElements(parse(string(raw))); }
-        catch (e) {
-          var fallback = string(raw);
-          return elements([{ text: fallback, innerHtml: fallback, outerHtml: fallback, attrs: {} }]);
-        }
+        return elements(payloads);
       };
       org.jsoup.Jsoup = {
         parse: function(html, baseUri) {
-          return element(parse(parseHtml(html != null ? string(html) : '', baseUri != null ? string(baseUri) : '')));
+          domArity(arguments, 1, 2, 'Jsoup.parse');
+          return element(domReply(nativeParse(html != null ? string(html) : '', baseUri != null ? string(baseUri) : '')));
         }
       };
+
+      // The HTTP charset detector still consumes this private legacy shape. Selection
+      // resolves the registered handle and reads meta attributes; it never reparses outerHtml.
+      function parseHtml(html, baseUri) {
+        var document = element(domReply(nativeParse(html, baseUri)));
+        var state = lookup(document);
+        return stringify({ handle: state.handle, document: state.document, outerHtml: domCall(document, 'outerHtml', []) });
+      }
+      function selectHtml(payload, selector) {
+        var descriptor = parse(payload);
+        if (!domDescriptor(descriptor) || !own(byHandle, descriptor.handle)) throw new fail('Unknown DOM charset document');
+        var selected = domCall(byHandle[descriptor.handle], 'select', [selector]);
+        var metas = [];
+        var names = ['http-equiv', 'content', 'charset'];
+        for (var i = 0; i < selected.length; i++) {
+          var attrs = create(null);
+          for (var j = 0; j < names.length; j++) {
+            if (domCall(selected[i], 'hasAttr', [names[j]])) field(attrs, names[j], domCall(selected[i], 'attr', [names[j]]));
+          }
+          metas[i] = { attrs: attrs };
+        }
+        return stringify(metas);
+      }
       $LEGACY_JS_JAVA_SHIM
+      $LEGACY_JS_DOM_COLLECTIONS
 
       function wrapInput(value, kind) {
         if (value != null && typeof value === 'object' && lookup(value)) return value;
         if (kind === 'element') return element(value);
         return hostElements(value);
       }
-      // Paths are relative to result, with [] designating the root. Never inspect JSON shapes for provenance.
+      // Paths are relative to result. JSON shapes alone never establish DOM provenance.
       var descriptors = typeof __legacyDomInputDescriptors !== 'undefined' ? __legacyDomInputDescriptors : null;
       var rootWrapped = false;
       var hasDomInput = false;
@@ -197,12 +276,11 @@ internal val LEGACY_JS_DOM_SHIM = """
           for (var pi = 0; pi < path.length; pi++) {
             var key = path[pi];
             if ((typeof key !== 'string' && !(typeof key === 'number' && integer(key) && key >= 0)) ||
-                parent == null || typeof parent !== 'object' || !own(parent, key)) {
-              break;
-            }
+                parent == null || typeof parent !== 'object' || !own(parent, key)) break;
             if (pi === path.length - 1) {
-              parent[key] = wrapInput(parent[key], descriptor.kind);
-              hasDomInput = hasDomInput || (parent[key] != null && lookup(parent[key]) != null);
+              var wrappedInput = wrapInput(parent[key], descriptor.kind);
+              parent[key] = wrappedInput;
+              hasDomInput = hasDomInput || (wrappedInput != null && lookup(wrappedInput) != null);
             } else parent = parent[key];
           }
         }
@@ -226,7 +304,9 @@ internal val LEGACY_JS_DOM_SHIM = """
         }
         var registered = lookup(value);
         if (registered && registered.kind === 'element') {
-          return { wire: envelope('element', registered.raw), containsDom: true };
+          var reference = create(null);
+          reference.handle = registered.handle;
+          return { wire: envelope('element', reference), containsDom: true };
         }
         var array = isArray(value);
         var prototype = array ? null : prototypeOf(value);
@@ -255,7 +335,7 @@ internal val LEGACY_JS_DOM_SHIM = """
           var names = keys(value);
           for (var i = 0; i < names.length; i++) {
             var name = names[i];
-            // Read each enumerable property once, including getters. The bridge sees only the snapshot/envelopes.
+            // Evaluate each enumerable getter once, before the bridge sees the snapshot.
             var child = encode(value[name], ancestors);
             children[i] = [name, child.wire];
             field(snapshot, name, child.raw);

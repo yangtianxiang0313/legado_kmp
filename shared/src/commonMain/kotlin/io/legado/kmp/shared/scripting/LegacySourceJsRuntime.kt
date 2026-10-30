@@ -108,6 +108,9 @@ class LegacySourceJsRuntime(
         try {
             withTimeout(executionTimeoutMs) {
                 val executionContext = currentCoroutineContext()
+                val domSession = LegacyJsDomSession()
+                val executionVariables = (variables[LEGACY_NATIVE_DOM_INPUT_BINDING] as? LegacyJsDomInputs)
+                    ?.bindVariables(variables, domSession) ?: variables
                 fun <T> hostCall(block: suspend CoroutineScope.() -> T): T =
                     runBlocking(executionContext.minusKey(ContinuationInterceptor)) {
                         ensureActive()
@@ -501,7 +504,9 @@ class LegacySourceJsRuntime(
                             null
                         } else {
                             hostCall { effectiveHost.getElementPayload(rule) }?.let { payload ->
-                                json.encodeToString(payload.toJsonElement())
+                                val retained = (payload[LEGACY_NATIVE_DOM_INPUT_BINDING] as? LegacyJsDomInputs)
+                                    ?.hostPayload(domSession) ?: payload
+                                json.encodeToString(retained.toJsonElement())
                             }
                         }
                     }
@@ -517,7 +522,7 @@ class LegacySourceJsRuntime(
                     }
                     function("__legacyRuleSetDomContent") { args ->
                         val baseUrl = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }
-                        hostCall { effectiveHost.setContent(legacyJsDomContent(args.firstOrNull()), baseUrl) }
+                        hostCall { effectiveHost.setContent(legacyJsDomContent(args.firstOrNull(), domSession), baseUrl) }
                         null
                     }
                     function("__legacyRuleSetBaseUrl") { args ->
@@ -547,7 +552,17 @@ class LegacySourceJsRuntime(
                     function("__legacyDomParse") { args ->
                         val html = args.firstOrNull()?.toString().orEmpty()
                         val baseUri = args.getOrNull(1)?.toString().orEmpty()
-                        json.encodeToString(legacyJsDomParse(html, baseUri).toJsonElement())
+                        json.encodeToString(domSession.parse(html, baseUri).toJsonElement())
+                    }
+                    function("__legacyDomAdopt") { args ->
+                        json.encodeToString(domSession.adopt(args.firstOrNull()?.toString().orEmpty()).toJsonElement())
+                    }
+                    function("__legacyDomInvoke") { args ->
+                        json.encodeToString(domSession.invoke(
+                            args.firstOrNull()?.toString().orEmpty(),
+                            args.getOrNull(1)?.toString().orEmpty(),
+                            args.getOrNull(2)?.toString().orEmpty(),
+                        ).toJsonElement())
                     }
                     function("__legacyDomSelect") { args ->
                         val payload = args.firstOrNull()?.toString().orEmpty()
@@ -920,7 +935,7 @@ class LegacySourceJsRuntime(
                         jsLibTrimmed?.let { librarySupport.load(it, sourceKey, effectiveHost) }.orEmpty()
                     }
                     val inputs = buildString {
-                        append(buildVariablesCode(variables))
+                        append(buildVariablesCode(executionVariables))
                         appendLine()
                         append(sourceSnapshotCache.code(source))
                         appendLine()
@@ -928,15 +943,15 @@ class LegacySourceJsRuntime(
                     val execution = buildLegacyJsDomExecution(library, cachedNormalized)
                     // Private-name inputs can shadow hoisted shim declarations in the original
                     // single script. Keep that rare collision path in the same eval.
-                    val shadowsShim = variables.keys.any {
+                    val shadowsShim = executionVariables.keys.any {
                         it.startsWith("__legacy") && it !in SHIM_INPUT_METADATA
                     }
                     if (shadowsShim) {
-                        legacyJsDomResult(evaluate<Any?>(inputs + LEGACY_SHIM + "\n\n" + execution))
+                        legacyJsDomResult(evaluate<Any?>(inputs + LEGACY_SHIM + "\n\n" + execution), domSession)
                     } else {
                         evaluate<Any?>(inputs + "void 0;")
                         LegacyCompiledShim.install(this)
-                        legacyJsDomResult(compiledExecution.evaluate(this, execution, preambleKey))
+                        legacyJsDomResult(compiledExecution.evaluate(this, execution, preambleKey), domSession)
                     }
                 }
             }

@@ -15,8 +15,8 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /** Only the private shim exporter supplies envelopes; raw user maps are never decoded recursively. */
-internal fun legacyJsDomResult(wire: Any?): JsResult {
-    val decoded = decodeLegacyJsDomValue(wire)
+internal fun legacyJsDomResult(wire: Any?, session: LegacyJsDomSession? = null): JsResult {
+    val decoded = decodeLegacyJsDomValue(wire, session)
     return if (decoded.containsDom) {
         JsResult.JsNativeValue(decoded.value)
     } else {
@@ -24,7 +24,8 @@ internal fun legacyJsDomResult(wire: Any?): JsResult {
     }
 }
 
-internal fun legacyJsDomContent(wire: Any?): Any? = decodeLegacyJsDomValue(wire).value
+internal fun legacyJsDomContent(wire: Any?, session: LegacyJsDomSession? = null): Any? =
+    decodeLegacyJsDomValue(wire, session).value
 
 private data class LegacyJsDomValue(
     val value: Any?,
@@ -32,17 +33,20 @@ private data class LegacyJsDomValue(
     val present: Boolean = true,
 )
 
-private fun decodeLegacyJsDomValue(wire: Any?): LegacyJsDomValue {
+private fun decodeLegacyJsDomValue(wire: Any?, session: LegacyJsDomSession?): LegacyJsDomValue {
     val envelope = wire as? Map<*, *> ?: error("Invalid legacy DOM envelope")
     return when (envelope["kind"]) {
         "raw", "value" -> LegacyJsDomValue(envelope["value"], present = envelope.containsKey("value"))
         "element" -> LegacyJsDomValue(
-            legacyJsDomElement(envelope["value"] as? Map<*, *> ?: error("Invalid legacy DOM element")),
+            (envelope["value"] as? Map<*, *> ?: error("Invalid legacy DOM element")).let { payload ->
+                val handle = payload["handle"] as? String
+                if (session != null && handle != null) session.resolve(handle) else legacyJsDomElement(payload)
+            },
             containsDom = true,
         )
         "array", "elements" -> {
             val children = (envelope["value"] as? List<*>)
-                ?.map(::decodeLegacyJsDomValue)
+                ?.map { decodeLegacyJsDomValue(it, session) }
                 ?: error("Invalid legacy DOM array")
             val values = children.map { it.value }
             if (envelope["kind"] == "elements") {
@@ -59,7 +63,7 @@ private fun decodeLegacyJsDomValue(wire: Any?): LegacyJsDomValue {
             for (entry in entries) {
                 val pair = entry as? List<*> ?: error("Invalid legacy DOM property")
                 val key = pair.getOrNull(0) as? String ?: error("Invalid legacy DOM property name")
-                val child = decodeLegacyJsDomValue(pair.getOrNull(1))
+                val child = decodeLegacyJsDomValue(pair.getOrNull(1), session)
                 if (child.present) value[key] = child.value
                 containsDom = containsDom || child.containsDom
             }
@@ -92,7 +96,7 @@ private fun legacyJsDomPayload(element: Element): Map<String, Any?> = linkedMapO
     "attrs" to element.attributes().associate { it.key to it.value },
 )
 
-private fun legacyJsDomElement(payload: Map<*, *>): Element {
+internal fun legacyJsDomElement(payload: Map<*, *>): Element {
     val baseUri = payload["baseUri"] as? String ?: ""
     val outerHtml = payload["outerHtml"] as? String ?: ""
     val tag = payload["tag"] as? String
@@ -121,7 +125,7 @@ private fun legacyJsDomElement(payload: Map<*, *>): Element {
     return element
 }
 
-private fun legacyJsDomPayloadFromJson(payload: String): Map<*, *> =
+internal fun legacyJsDomPayloadFromJson(payload: String): Map<*, *> =
     legacyJsDomJsonValue(Json.parseToJsonElement(payload)) as? Map<*, *>
         ?: error("Invalid legacy DOM payload")
 
