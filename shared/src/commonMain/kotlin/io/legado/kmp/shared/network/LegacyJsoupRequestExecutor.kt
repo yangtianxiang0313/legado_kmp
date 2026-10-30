@@ -16,13 +16,21 @@ internal class LegacyJsoupRequestExecutor {
         val context = currentCoroutineContext()
         context.ensureActive()
         val request = json.decodeFromString<LegacyJsoupRequest>(requestJson)
+        val response = execute(request)
+        context.ensureActive()
+        return json.encodeToString(response).also { context.ensureActive() }
+    }
+
+    suspend fun execute(request: LegacyJsoupRequest): LegacyJsoupResponse {
+        val context = currentCoroutineContext()
+        context.ensureActive()
         val prepared = request.prepare { context.ensureActive() }
         val session = LegacyJsoupCookieSession(request.cookieStore)
         val response = if (request.timeoutMillis == 0) execute(request, prepared, session) else {
             withTimeout(request.timeoutMillis.toLong()) { execute(request, prepared, session) }
         }
         context.ensureActive()
-        return json.encodeToString(response).also { context.ensureActive() }
+        return response
     }
 
     private suspend fun execute(

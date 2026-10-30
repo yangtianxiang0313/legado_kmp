@@ -3,6 +3,7 @@ package io.legado.kmp.shared.scripting
 // HttpConnection / Connection at https://github.com/jhy/jsoup/tree/jsoup-1.16.2.
 internal val LEGACY_JS_JAVA_JSOUP_SUPPORT = """
     var jsoupHostExecute = typeof __legacyJsoupExecute === 'function' ? __legacyJsoupExecute : null;
+    var jsoupHostDecodeBytes = __legacyJsoupDecodeBytes;
     var jsoupSetPrototype = Object.setPrototypeOf;
     var jsoupPrivate = new WeakMap();
     var jsoupPrivateGet = Function.prototype.call.bind(WeakMap.prototype.get, jsoupPrivate);
@@ -135,16 +136,22 @@ internal val LEGACY_JS_JAVA_JSOUP_SUPPORT = """
     }
     function jsoupDecodeBytes(bytes, charset) {
       var codec = jsoupCodecName(charset);
-      if (codec === 'UTF-8') return bytesToStr(stringify(jsoupJsonCopy(bytes, 0)), null);
-      if (codec === 'SHIFT_JIS' || codec === 'EUC-JP') return bytesToStr(stringify(jsoupJsonCopy(bytes, 0)), codec);
+      function decode(part, name) {
+        var decoded = parse(jsoupHostDecodeBytes(stringify(jsoupJsonCopy(part, 0)), name));
+        if (typeof decoded !== 'string') throw new fail('Invalid Jsoup decoded text response');
+        return decoded;
+      }
+      if (codec === 'UTF-8') return decode(bytes, null);
+      if (codec === 'SHIFT_JIS' || codec === 'EUC-JP') return decode(bytes, codec);
       if (stringIndex(codec, 'UTF-16') === 0) return formDecodeUtf16(bytes, codec);
       if (codec === 'ASCII' || codec === 'ISO-8859-1') return formDecodeBytes(bytes, codec);
       var output = '';
       for (var i = 0; i < bytes.length;) {
+        if (bytes[i] < 128) { output += fromCharCode(bytes[i++]); continue; }
         var count = legacyFormUnit(bytes, i, codec);
         if (!count) { output += fromCharCode(65533); i++; continue; }
         var part = slice(bytes, i, i + count);
-        var decoded = bytesToStr(stringify(jsoupJsonCopy(part, 0)), codec);
+        var decoded = decode(part, codec);
         output += sameFormBytes(part, byteArray(strToBytes(decoded, codec))) ? decoded : fromCharCode(65533);
         i += count;
       }

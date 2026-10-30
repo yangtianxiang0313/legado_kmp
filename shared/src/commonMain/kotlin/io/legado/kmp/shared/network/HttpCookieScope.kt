@@ -87,7 +87,7 @@ internal fun parseStoredSetCookie(
 
 /** Legacy rows are opaque request strings, not Set-Cookie values with inferred attributes. */
 internal fun legacyCookieMatchesHost(key: String, host: String): Boolean {
-    val parsed = httpCookieUrl(key)
+    val parsed = absoluteCookieKeyUrl(key)
     if (parsed != null) return cookieHost(parsed.host) == host
     if (key.isBlank() || key.any { it.isWhitespace() || it in "/\\;|" }) return false
     val domain = cookieHost(key.removePrefix("."))
@@ -96,9 +96,14 @@ internal fun legacyCookieMatchesHost(key: String, host: String): Boolean {
     return (domain == site || domain.endsWith(".$site")) && cookieDomainMatches(host, domain)
 }
 
-internal fun cookieScopeHost(url: String): String? = httpCookieUrl(url)?.let { cookieHost(it.host) }
+internal fun cookieScopeHost(url: String): String? = absoluteCookieKeyUrl(url)?.let { cookieHost(it.host) }
     ?: url.takeIf { it.isNotBlank() && it.none { char -> char.isWhitespace() || char in "/\\;|" } }
         ?.let { cookieHost(it.removePrefix(".")) }
+
+// Ktor resolves a bare key as a relative URL with a default host; domain keys are not URLs.
+private fun absoluteCookieKeyUrl(value: String): Url? = value
+    .takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+    ?.let(::httpCookieUrl)
 
 internal val storedCookieRequestOrder: Comparator<StoredHttpCookie> =
     compareByDescending<StoredHttpCookie> { it.path.length }

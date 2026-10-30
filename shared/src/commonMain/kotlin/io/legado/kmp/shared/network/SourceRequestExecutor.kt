@@ -69,6 +69,7 @@ class SourceRequestExecutor(
     private val appFilesDirectory: AppFilesDirectory? = null,
 ) : LegacyJsConnectGateway {
     private val jsoupRequests = LegacyJsoupRequestExecutor()
+    private val rawJsoupRequests = LegacyJsoupRawRequestExecutor(jsoupRequests, cookieRepository)
     private val transport = SourceRequestTransport(
         httpUseCase, cookieRepository, interactiveCapability, webViewRequestExecutor,
         proxyRequestExecutor, mediaRequestExecutor, uploadRequestExecutor, ::defaultUserAgent,
@@ -214,19 +215,7 @@ class SourceRequestExecutor(
         chapter: BookChapter?
     ): SourceResponse {
         val builtRequest = prepareLegacyRequest(source, urlRule, baseUrl, ruleData, chapter)
-        val defaultHeaders = headerJson?.let(::parseHeaderJson) ?: buildDefaultHeaders(source, builtRequest)
-        return SourceResponse.fromHttpResponse(
-            executeTextInternal(
-                request = builtRequest,
-                source = source,
-                defaultHeaders = defaultHeaders,
-                ruleData = ruleData,
-                chapter = chapter,
-                applyLoginCheck = false,
-                followRedirects = false,
-                allowRedirectResponse = true
-            ).response
-        )
+        return rawJsoupRequests.execute(builtRequest, source, headerJson)
     }
 
     override suspend fun startBrowserForLegacyJs(

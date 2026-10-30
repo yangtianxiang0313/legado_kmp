@@ -167,6 +167,7 @@ internal val LEGACY_JS_JAVA_SHIM = """
       $LEGACY_JS_JAVA_CIPHER
       $LEGACY_JS_JAVA_URL
       $LEGACY_JS_JAVA_JSOUP
+      $LEGACY_JS_JAVA_RAW_RESPONSE
 
       registerClass('org.jsoup.Jsoup', org.jsoup.Jsoup);
       registerClass('org.jsoup.Connection', JJsoupConnection);
@@ -301,6 +302,8 @@ internal val LEGACY_JS_JAVA_SHIM = """
         if (own(java, name) && java[name] !== javaPackages[name]) throw new fail('Conflicting java host member: ' + name);
         method(java, name, javaPackages[name]);
       }
-      return { snapshot: snapshot };
+      var interop = { snapshot: snapshot, rawResponse: jsoupRawResponse, rawHeaderJson: jsoupRawHeaderJson };
+      jsoupInstallRawHttp(interop);
+      return interop;
     })();
 """.trimIndent()

@@ -26,21 +26,6 @@ internal val LEGACY_SHIM = """
               if (header == null) return null;
               return typeof header === 'string' ? header : JSON.stringify(header);
             }
-            function __legacyRawHeaderJson(header) {
-              if (header == null || typeof header !== 'object' || Array.isArray(header)) {
-                throw new TypeError('Request headers must be a map');
-              }
-              var headers = Object.create(null);
-              Object.keys(header).forEach(function(key) {
-                var value = header[key];
-                if (key === '' || value !== null && typeof value !== 'string') {
-                  throw new TypeError('Request headers must have string names and values');
-                }
-                // Jsoup's raw Map overload turns null entry values into empty strings.
-                headers[key] = value === null ? '' : value;
-              });
-              return JSON.stringify(headers);
-            }
             function __legacyCryptoArg(value) {
               if (value === undefined || value === null) return null;
               return Array.isArray(value) ? JSON.stringify(value) : String(value);
@@ -87,17 +72,13 @@ internal val LEGACY_SHIM = """
             java.__headerMap = __legacyMutableHeaderMap(typeof headerMap === 'object' && headerMap != null ? headerMap : {});
             $LEGACY_FONT_SHIM
             java.__ruleState = __legacyPlainObject(typeof __legacyRuleSeed === 'object' && __legacyRuleSeed != null ? __legacyRuleSeed : {});
-            java.get = function(arg1, arg2) {
-              if (arguments.length <= 1 || arg2 === undefined) {
-                var key = String(arg1);
-                if (Object.prototype.hasOwnProperty.call(java.__ruleState, key)) {
-                  var stateValue = java.__ruleState[key];
-                  return stateValue == null ? '' : String(stateValue);
-                }
-                return __legacyGet(key);
+            java.get = function(key) {
+              key = String(key);
+              if (Object.prototype.hasOwnProperty.call(java.__ruleState, key)) {
+                var stateValue = java.__ruleState[key];
+                return stateValue == null ? '' : String(stateValue);
               }
-              var raw = __legacyConnectRaw(String(arg1), __legacyRawHeaderJson(arg2));
-              return __legacyWrapRawResponse(raw);
+              return __legacyGet(key);
             };
             java.put = function(key, value) {
               var name = String(key);
@@ -185,14 +166,6 @@ internal val LEGACY_SHIM = """
                 regex !== '' ? regex : null,
                 JSON.stringify(java.__headerMap.toJSON())
               ));
-            };
-            java.head = function(url, headers) {
-              var raw = __legacyConnectRaw(String(url) + ',{"method":"HEAD"}', __legacyRawHeaderJson(headers));
-              return __legacyWrapRawResponse(raw);
-            };
-            java.post = function(url, body, header) {
-              var raw = __legacyPost(String(url), body != null ? String(body) : '', __legacyRawHeaderJson(header));
-              return __legacyWrapRawResponse(raw);
             };
             java.log = function(msg) { return __legacyLog(msg); };
             java.logType = function(value) {

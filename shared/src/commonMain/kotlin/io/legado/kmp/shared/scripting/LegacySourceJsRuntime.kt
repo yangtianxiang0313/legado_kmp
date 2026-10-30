@@ -10,6 +10,7 @@ import io.legado.kmp.shared.analyze.LEGACY_JSON_INPUT_DESCRIPTORS_BINDING
 import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.network.SharedCapabilityException
 import io.legado.kmp.shared.network.SourceResponse
+import io.legado.kmp.shared.network.toLegacyJsoupResponseJson
 import io.legado.kmp.shared.platform.TextCodec
 import io.legado.kmp.shared.source.SourceStateStore
 import io.legado.kmp.shared.util.ChineseConverter
@@ -430,7 +431,7 @@ class LegacySourceJsRuntime(
                             it.isBlank() || it == "undefined" || it == "null"
                         }
                         hostCall {
-                            effectiveHost.rawConnect(urlRule, headerJson).toLegacyJsMap().toJsObject()
+                            effectiveHost.rawConnect(urlRule, headerJson).toLegacyJsMap(includeJsoupResponse = true).toJsObject()
                         }
                     }
                     function("__legacyPost") { args ->
@@ -452,7 +453,7 @@ class LegacySourceJsRuntime(
                             append("}")
                         }
                         hostCall {
-                            effectiveHost.rawConnect(postUrl, headerJson).toLegacyJsMap().toJsObject()
+                            effectiveHost.rawConnect(postUrl, headerJson).toLegacyJsMap(includeJsoupResponse = true).toJsObject()
                         }
                     }
                     function("__legacyGetResponse") { args ->
@@ -814,6 +815,15 @@ class LegacySourceJsRuntime(
                             TextCodec.decode(bytes, charset)
                         }
                     }
+                    function("__legacyJsoupDecodeBytes") { args ->
+                        require(args.size == 2 && args[0] is String) { "Expected Jsoup bytes and charset" }
+                        val bytes = legacyJavaCryptoBytes(args[0] as String)
+                        require(args[1] == null || args[1] is String) { "Expected Jsoup charset or null" }
+                        val charset = args[1] as? String
+                        val decoded = if (charset == null) bytes.decodeToString() else TextCodec.decode(bytes, charset)
+                        // Transfer escaped JSON: a direct native string can truncate at an embedded NUL.
+                        json.encodeToString(decoded)
+                    }
                     function("__legacyT2s") { args ->
                         ChineseConverter.t2s(args.firstOrNull()?.toString().orEmpty())
                     }
@@ -990,8 +1000,8 @@ class LegacySourceJsRuntime(
     }
 }
 
-internal fun SourceResponse.toLegacyJsMap(): Map<String, Any?> {
-    return linkedMapOf(
+internal suspend fun SourceResponse.toLegacyJsMap(includeJsoupResponse: Boolean = false): Map<String, Any?> {
+    val result = linkedMapOf(
         "url" to url,
         "body" to bodyText,
         "statusCode" to statusCode,
@@ -1003,4 +1013,9 @@ internal fun SourceResponse.toLegacyJsMap(): Map<String, Any?> {
         "errorBody" to errorBodyText,
         "isSuccessful" to (statusCode in 200..299)
     )
+    if (includeJsoupResponse) {
+        val context = currentCoroutineContext()
+        result["jsoupResponse"] = toLegacyJsoupResponseJson { context.ensureActive() }
+    }
+    return result
 }
