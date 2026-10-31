@@ -185,7 +185,7 @@ val dataModule = module {
     // Replace rules
     single<ReplaceRuleRepository> { ReplaceRuleRepositoryImpl(get()) }
 
-    single<WebBookRepository> { WebBookRepositoryImpl(get(), get(), get(), get(), get(), get()) }
+    single<WebBookRepository> { WebBookRepositoryImpl(get(), get(), get(), get(), get(), get(), get()) }
     single { RssService(get(), get(), get(), get(), get(), get()) }
 }
 

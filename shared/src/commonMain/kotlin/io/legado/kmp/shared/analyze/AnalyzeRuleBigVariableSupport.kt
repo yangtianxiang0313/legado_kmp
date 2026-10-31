@@ -37,6 +37,14 @@ internal class AnalyzeRuleBigVariableSupport(
     fun bindingVariables(): Map<String, String> = bookData?.getVariables().orEmpty() +
         chapterData?.getVariables().orEmpty()
 
+    fun resetWrittenVariables() {
+        bookData?.resetWrittenVariables()
+        chapterData?.resetWrittenVariables()
+    }
+
+    fun getWrittenVariables(): Map<String, String?> = bookData?.getWrittenVariables().orEmpty() +
+        chapterData?.getWrittenVariables().orEmpty()
+
     fun reset() {
         book = null
         chapter = null

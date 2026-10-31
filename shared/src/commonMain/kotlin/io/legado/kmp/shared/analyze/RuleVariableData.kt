@@ -19,6 +19,7 @@ internal class RuleVariableData(
 ) : RuleDataInterface {
     override val variableMap = linkedMapOf<String, String>()
     private val pendingBig = linkedMapOf<String, String?>()
+    private val writtenKeys = mutableSetOf<String>()
 
     init {
         initialVariables.forEach { (key, value) ->
@@ -27,9 +28,11 @@ internal class RuleVariableData(
             } else if (value.length >= 10000) putBigVariable(key, value)
             else variableMap[key] = value
         }
+        writtenKeys.clear()
     }
 
     override fun putVariable(key: String, value: String?): Boolean {
+        writtenKeys.add(key)
         val existed = variableMap.containsKey(key)
         putBigVariable(key, value?.takeIf { it.length >= 10000 })
         if (value == null || value.length >= 10000) variableMap.remove(key) else variableMap[key] = value
@@ -47,6 +50,7 @@ internal class RuleVariableData(
     }
 
     override fun putBigVariable(key: String, value: String?) {
+        writtenKeys.add(key)
         val identity = scope
         if (identity != null && store != null) {
             blocking { store.putBigVariable(identity, key, value) }
@@ -68,6 +72,13 @@ internal class RuleVariableData(
         if (store == null || scope == null) pendingBig.forEach { (key, value) ->
             if (value != null) put(key, value)
         }
+    }
+
+    fun resetWrittenVariables() = writtenKeys.clear()
+
+    fun getWrittenVariables(): Map<String, String?> {
+        val current = getVariables()
+        return writtenKeys.associateWith { current[it] }
     }
 
     fun <T> blocking(block: suspend () -> T): T =

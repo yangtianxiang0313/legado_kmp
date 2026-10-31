@@ -31,8 +31,14 @@ object BookChapterList {
         val nextUrls: List<String>,
         val reverse: Boolean,
         val formatJs: String?,
-        val variables: Map<String, String> = emptyMap()
-    )
+        val variables: Map<String, String> = emptyMap(),
+        val writtenVariables: Map<String, String?> = emptyMap(),
+    ) {
+        constructor(
+            chapters: List<BookChapter>, nextUrls: List<String>, reverse: Boolean,
+            formatJs: String?, variables: Map<String, String>,
+        ) : this(chapters, nextUrls, reverse, formatJs, variables, emptyMap())
+    }
 
     suspend fun getChapterList(
         bookSource: BookSource,
@@ -108,6 +114,7 @@ object BookChapterList {
         runtimeVariables.forEach { (key, value) ->
             analyzeRule.put(key, value)
         }
+        analyzeRule.resetWrittenVariables()
 
         var listRule = rule.chapterList?.trim().orEmpty()
         var reverse = false
@@ -195,7 +202,8 @@ object BookChapterList {
             nextUrls = nextUrls,
             reverse = reverse,
             formatJs = rule.formatJs,
-            variables = analyzeRule.getVariables()
+            variables = analyzeRule.getVariables(),
+            writtenVariables = analyzeRule.getWrittenVariables(),
         )
     }
 

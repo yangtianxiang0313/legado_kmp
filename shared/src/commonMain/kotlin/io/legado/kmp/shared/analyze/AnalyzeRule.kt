@@ -201,6 +201,7 @@ class AnalyzeRule(
     private var loggedNonStandardJSON: kotlin.Boolean = false
 
     private val variables: MutableMap<kotlin.String, kotlin.String> = mutableMapOf()
+    private val writtenVariableKeys = mutableSetOf<kotlin.String>()
     private val stringRuleCache = hashMapOf<RuleCacheKey, List<SourceRule>>()
     private var cssParser: CssRuleParser? = null
     private var regexParser: RegexRuleParser? = null
@@ -401,6 +402,7 @@ class AnalyzeRule(
             }
             return v
         }
+        writtenVariableKeys.add(key)
         val scopedData = bigVariableSupport.activeData
         if (scopedData != null) {
             scopedData.putVariable(key, value)
@@ -473,6 +475,16 @@ class AnalyzeRule(
             put(key, value)
         }
         putAll(bigVariableSupport.bindingVariables())
+    }
+
+    internal fun resetWrittenVariables() {
+        writtenVariableKeys.clear()
+        bigVariableSupport.resetWrittenVariables()
+    }
+
+    internal fun getWrittenVariables(): Map<kotlin.String, kotlin.String?> {
+        val current = getVariables()
+        return writtenVariableKeys.associateWith { current[it] } + bigVariableSupport.getWrittenVariables()
     }
 
     private fun sourceStateKey(): kotlin.String? = source?.bookSourceUrl?.takeIf { it.isNotBlank() }

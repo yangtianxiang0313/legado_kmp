@@ -22,8 +22,12 @@ data class ChapterContent(
     val content: String,
     val nextUrls: List<String> = emptyList(),
     val title: String? = null,
-    val variables: Map<String, String> = emptyMap()
-)
+    val variables: Map<String, String> = emptyMap(),
+    val writtenVariables: Map<String, String?> = emptyMap(),
+) {
+    constructor(content: String, nextUrls: List<String>, title: String?, variables: Map<String, String>) :
+        this(content, nextUrls, title, variables, emptyMap())
+}
 
 /**
  * Book content parser
@@ -83,6 +87,7 @@ object BookContent {
         book.variableMap.forEach { (key, value) -> analyzeRule.put(key, value) }
         chapter.variableMap.forEach { (key, value) -> analyzeRule.put(key, value) }
         runtimeVariables.forEach { (key, value) -> analyzeRule.put(key, value) }
+        analyzeRule.resetWrittenVariables()
         analyzeRule.setNextChapterUrl(nextChapterUrl?.takeIf { it.isNotBlank() })
 
         coroutineContext.ensureActive()
@@ -103,7 +108,8 @@ object BookContent {
         val contentRule = rule.content ?: return ChapterContent(
             content = body,
             title = title,
-            variables = analyzeRule.getVariables()
+            variables = analyzeRule.getVariables(),
+            writtenVariables = analyzeRule.getWrittenVariables(),
         )
 
         coroutineContext.ensureActive()
@@ -170,7 +176,8 @@ object BookContent {
             content = content,
             nextUrls = nextUrls,
             title = title,
-            variables = analyzeRule.getVariables()
+            variables = analyzeRule.getVariables(),
+            writtenVariables = analyzeRule.getWrittenVariables(),
         )
     }
 
