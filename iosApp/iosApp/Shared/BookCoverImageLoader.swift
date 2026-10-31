@@ -63,7 +63,7 @@ enum BookCoverImageLoader {
             cache.setObject(image, forKey: cacheKey)
             return image
         } catch {
-            SharedRuntime.log("decoded cover load failed for \(book.bookUrl): \(error.localizedDescription)")
+            SharedRuntime.log("decoded cover load failed")
             return nil
         }
     }
@@ -117,8 +117,7 @@ enum BookCoverImageLoader {
             cache.setObject(image, forKey: cacheKey)
             return image
         } catch {
-            SharedRuntime.log(
-                "decoded image load failed for \(bookUrl) \(normalizedUrl): \(error.localizedDescription)")
+            SharedRuntime.log("decoded image load failed")
             return nil
         }
     }

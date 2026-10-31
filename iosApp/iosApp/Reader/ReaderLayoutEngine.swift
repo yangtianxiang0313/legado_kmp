@@ -257,6 +257,22 @@ struct ReaderAttachmentLayoutFragment {
     let frame: CGRect
     let contentMode: UIView.ContentMode
     let source: ReaderAttachmentSource
+    // URL is the UI/cache identity; image request rules must survive URL encoding unchanged.
+    let requestRule: String?
+
+    init(
+        sourceRange: NSRange,
+        frame: CGRect,
+        contentMode: UIView.ContentMode,
+        source: ReaderAttachmentSource,
+        requestRule: String? = nil
+    ) {
+        self.sourceRange = sourceRange
+        self.frame = frame
+        self.contentMode = contentMode
+        self.source = source
+        self.requestRule = requestRule
+    }
 }
 
 enum ReaderAttachmentSource {

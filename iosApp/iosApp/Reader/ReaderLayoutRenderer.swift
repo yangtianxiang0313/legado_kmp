@@ -375,7 +375,11 @@ final class ReaderLayoutRenderer {
         imageStyle: String
     ) {
         guard !isCancelled else { return }
-        guard let urlString = fragment.imageUrl, let url = URL(string: urlString) else { return }
+        guard let urlString = fragment.imageUrl,
+            let url = URL(string: urlString)
+                ?? urlString.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)
+                .flatMap({ URL(string: $0) })
+        else { return }
         let imageHeight = imageFrameHeight(style: imageStyle, contentSize: contentSize, theme: theme)
         let imageWidth = imageFrameWidth(style: imageStyle, contentSize: contentSize, height: imageHeight, theme: theme)
         preparePageForContent(
@@ -396,7 +400,8 @@ final class ReaderLayoutRenderer {
             frame: CGRect(x: imageX, y: page.cursorY, width: imageWidth, height: imageHeight),
             contentMode: imageStyle == "FULL" ? .scaleAspectFill : .scaleAspectFit,
             source: .remoteImage(url: url, altText: fragment.imageAlt),
-            previewText: fragment.imageAlt
+            previewText: fragment.imageAlt,
+            requestRule: urlString
         )
         page.pendingBlockSpacing = max(theme.paragraphSpacing, 0)
     }

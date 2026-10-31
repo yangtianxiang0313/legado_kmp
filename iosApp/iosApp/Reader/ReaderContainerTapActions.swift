@@ -191,22 +191,22 @@ extension ReaderContainerViewController {
 
     func showImagePreviewIfLoaded(at point: CGPoint) -> Bool {
         guard let target = imageTarget(at: point) else { return false }
-        imageInteractionCoordinator.presentPreview(url: target.url, image: target.image)
+        imageInteractionCoordinator.presentPreview(url: target.url, image: target.image, requestRule: target.requestRule)
         return true
     }
 
     func showImageActionMenuIfNeeded(at point: CGPoint) -> Bool {
         guard let target = imageTarget(at: point) else { return false }
         imageInteractionCoordinator.presentMenu(
-            url: target.url, image: target.image, anchor: CGRect(origin: point, size: .zero))
+            url: target.url, image: target.image, anchor: CGRect(origin: point, size: .zero), requestRule: target.requestRule)
         return true
     }
 
-    private func imageTarget(at point: CGPoint) -> (url: URL, image: UIImage?)? {
+    private func imageTarget(at point: CGPoint) -> (url: URL, image: UIImage?, requestRule: String?)? {
         if isScrollPageMode {
             guard let target = scrollPagerView.imageTarget(at: view.convert(point, to: scrollPagerView)) else { return nil }
             currentPageIndex = target.pageIndex
-            return (target.url, target.image)
+            return (target.url, target.image, target.requestRule)
         }
         guard pages.indices.contains(currentPageIndex) else { return nil }
         let pointInRender = renderView.convert(point, from: view)
@@ -217,7 +217,7 @@ extension ReaderContainerViewController {
         else {
             return nil
         }
-        return (url, renderView.loadedImage(for: url, pageOffset: target.pageOffset))
+        return (url, renderView.loadedImage(for: url, pageOffset: target.pageOffset), fragment.requestRule)
     }
 
 }

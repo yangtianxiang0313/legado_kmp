@@ -1,20 +1,14 @@
 package io.legado.kmp.shared.facade
 
-import com.fleeksoft.ksoup.Ksoup
+import io.legado.kmp.shared.content.BookImageMarkup
 import io.legado.kmp.shared.model.BaseMangaPage
 import io.legado.kmp.shared.model.BookChapter
 import io.legado.kmp.shared.model.MangaChapter
 import io.legado.kmp.shared.model.MangaPage
 import io.legado.kmp.shared.model.ReaderLoading
-import io.legado.kmp.shared.network.joinUrl
 import io.legado.kmp.shared.util.unescapeHtml4
 
 internal object MangaChapterParser {
-    // Android's image rule suffix can contain raw JSON quotes inside src, which is not valid HTML.
-    private val legacyImagePattern = Regex(
-        """<img\b[^>]*?\ssrc\s*=\s*['"]([^'"]*(?:['"][^>]+\})?)['"][^>]*>""",
-        RegexOption.IGNORE_CASE,
-    )
     private val ruleSuffix = Regex("""\s*,\s*(?=\{)""")
     private val absoluteScheme = Regex("""^[A-Za-z][A-Za-z0-9+.-]*:""")
 
@@ -43,29 +37,19 @@ internal object MangaChapterParser {
     }
 
     internal fun imageSources(chapter: BookChapter, content: String): List<String> {
-        val legacy = legacyImagePattern.findAll(content).map { it.groupValues[1] }.toList()
-        val sources = if (legacy.any { ruleSuffix.containsMatchIn(unescapeHtml4(it)) }) {
-            legacy.map(::unescapeHtml4)
-        } else {
-            Ksoup.parse(content).select("img[src]").map { it.attr("src") }
-                .ifEmpty { lineImageSources(content) }
-        }
-        val chapterUrl = chapter.getAbsoluteUrl()
-        val base = ruleSuffix.find(chapterUrl)?.let { chapterUrl.substring(0, it.range.first) }
-            ?: chapterUrl.ifBlank { chapter.baseUrl }
+        val sources = BookImageMarkup.images(content).map { it.source }.ifEmpty { lineImageSources(content) }
+        val base = imageBaseUrl(chapter)
         // Keep every occurrence: repeated URLs still represent separate page positions.
         return sources.mapNotNull { raw ->
             val source = raw.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            val separator = ruleSuffix.find(source)
-            val url = separator?.let { source.substring(0, it.range.first) } ?: source
-            val suffix = separator?.let { source.substring(it.range.first) }.orEmpty()
-            val absolute = when {
-                url.startsWith("//") -> (if (base.startsWith("https:")) "https:" else "http:") + url
-                absoluteScheme.containsMatchIn(url) || base.isBlank() -> url
-                else -> base.joinUrl(url)
-            }
-            absolute + suffix
+            BookImageMarkup.absoluteSource(source, base)
         }
+    }
+
+    internal fun imageBaseUrl(chapter: BookChapter): String {
+        val chapterUrl = chapter.getAbsoluteUrl()
+        return ruleSuffix.find(chapterUrl)?.let { chapterUrl.substring(0, it.range.first) }
+            ?: chapterUrl.ifBlank { chapter.baseUrl }
     }
 
     private fun lineImageSources(content: String): List<String> {

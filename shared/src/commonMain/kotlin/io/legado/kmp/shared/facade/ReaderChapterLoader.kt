@@ -371,7 +371,7 @@ internal class ReaderChapterLoader(
             chapter = chapter,
             content = processed.content,
             displayTitle = displayTitle,
-            blocks = buildReaderContentBlocks(displayTitle, processed.content),
+            blocks = buildReaderContentBlocks(displayTitle, processed.content, imageBaseUrl = chapter.getAbsoluteUrl()),
             sameTitleRemoved = processed.sameTitleRemoved,
         ).also { coroutineContext.ensureActive() }
     }

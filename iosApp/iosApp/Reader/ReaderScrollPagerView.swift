@@ -380,7 +380,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         return (view.tag, layoutPoint)
     }
 
-    func imageTarget(at point: CGPoint) -> (pageIndex: Int, url: URL, image: UIImage?)? {
+    func imageTarget(at point: CGPoint) -> (pageIndex: Int, url: URL, image: UIImage?, requestRule: String?)? {
         guard !chapterMessageVisible, scrollView.frame.contains(point) else {
             return nil
         }
@@ -395,7 +395,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         else {
             return nil
         }
-        return (view.tag, url, view.loadedImages[url])
+        return (view.tag, url, view.loadedImages[url], fragment.requestRule)
     }
 
     func refreshImage(url: URL) {

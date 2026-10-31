@@ -185,12 +185,13 @@ final class ReaderPageContentView: UIView {
     }
 
     private func updateImageRequests() {
-        let urls = Set(pageLayout?.attachmentFragments.compactMap { fragment -> URL? in
+        var imageFragments: [URL: ReaderAttachmentLayoutFragment] = [:]
+        for fragment in pageLayout?.attachmentFragments ?? [] {
             if case let .remoteImage(url, _) = fragment.source {
-                return url
+                imageFragments[url] = fragment
             }
-            return nil
-        } ?? [])
+        }
+        let urls = Set(imageFragments.keys)
         loadedImages = loadedImages.filter { urls.contains($0.key) }
         loadingURLs = loadingURLs.filter { urls.contains($0) }
         imageTasks.keys.filter { urls.contains($0) == false }.forEach { url in
@@ -199,25 +200,29 @@ final class ReaderPageContentView: UIView {
             imageRequestIDs.removeValue(forKey: url)
         }
 
-        for url in urls where loadedImages[url] == nil && loadingURLs.contains(url) == false {
+        for (url, fragment) in imageFragments where loadedImages[url] == nil && loadingURLs.contains(url) == false {
             guard window != nil else { continue }
             loadingURLs.insert(url)
             imageTasks[url]?.cancel()
             let requestID = UUID()
             let requestedBookURL = bookURL
+            let requestRule = fragment.requestRule
             imageRequestIDs[url] = requestID
             imageTasks[url] = Task { [weak self] in
                 let image: UIImage?
                 if let requestedBookURL {
                     // A source-aware request must not silently retry without its headers/decoder.
                     image = await BookCoverImageLoader.loadDecodedImage(
-                        bookUrl: requestedBookURL, imageUrl: url.absoluteString, isCover: false)
-                } else {
+                        bookUrl: requestedBookURL, imageUrl: requestRule ?? url.absoluteString, isCover: false)
+                } else if requestRule == nil {
                     image = await withCheckedContinuation { continuation in
                         KingfisherManager.shared.retrieveImage(with: url) { result in
                             continuation.resume(returning: try? result.get().image)
                         }
                     }
+                } else {
+                    // Raw source rules need book context, never a plain-URL network fallback.
+                    image = nil
                 }
                 guard !Task.isCancelled, let self, self.window != nil,
                     self.bookURL == requestedBookURL, self.imageRequestIDs[url] == requestID

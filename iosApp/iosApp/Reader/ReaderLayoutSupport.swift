@@ -80,7 +80,8 @@ struct ReaderPageBuildState {
         frame: CGRect,
         contentMode: UIView.ContentMode,
         source: ReaderAttachmentSource,
-        previewText: String?
+        previewText: String?,
+        requestRule: String? = nil
     ) {
         if firstCharacterOffset == nil {
             firstCharacterOffset = sourceRange.location
@@ -90,7 +91,8 @@ struct ReaderPageBuildState {
                 sourceRange: sourceRange,
                 frame: frame,
                 contentMode: contentMode,
-                source: source
+                source: source,
+                requestRule: requestRule
             )
         )
         cursorY = max(cursorY, frame.maxY)
@@ -136,7 +138,7 @@ struct ReaderPageBuildState {
                 let item = attachments[line.index]
                 attachments[line.index] = ReaderAttachmentLayoutFragment(
                     sourceRange: item.sourceRange, frame: item.frame.offsetBy(dx: 0, dy: offset),
-                    contentMode: item.contentMode, source: item.source)
+                    contentMode: item.contentMode, source: item.source, requestRule: item.requestRule)
             } else {
                 texts[line.index] = texts[line.index].offsetBy(dx: 0, dy: offset)
             }

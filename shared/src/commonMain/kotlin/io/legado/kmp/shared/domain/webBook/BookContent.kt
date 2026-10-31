@@ -1,6 +1,8 @@
 package io.legado.kmp.shared.domain.webBook
 
+import com.fleeksoft.ksoup.nodes.Element
 import io.legado.kmp.shared.analyze.AnalyzeRule
+import io.legado.kmp.shared.content.BookImageMarkup
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.BookChapter
 import io.legado.kmp.shared.model.BookSource
@@ -120,8 +122,8 @@ object BookContent {
                 cause = error
             )
         }
-        content = formatContent(content, redirectUrl)
-        content = unescapeHtml4(content)
+        val requestContext = coroutineContext
+        content = formatContent(content, redirectUrl) { requestContext.ensureActive() }
         debugSink?.log(message = "└${content.previewForDebug()}")
 
         val nextUrls = if (getNextPageUrls) {
@@ -443,24 +445,32 @@ object BookContent {
      * - Normalize paragraphs
      * - Handle common formatting issues
      */
-    private fun formatContent(content: String, redirectUrl: String): String {
+    private fun formatContent(content: String, redirectUrl: String, checkActive: () -> Unit): String {
         if (content.isBlank()) {
             return ""
         }
 
-        return content
+        // Canonical attributes protect URL options from text formatting and retain one entity-decoding step.
+        val images = BookImageMarkup.images(content, checkActive)
+        val normalizedImages = if (images.isEmpty()) content else buildString(content.length) {
+            var cursor = 0
+            for (image in images) {
+                checkActive()
+                append(content, cursor, image.range.first)
+                val element = Element("img").attr("src", BookImageMarkup.absoluteSource(image.source, redirectUrl))
+                image.alt?.let { element.attr("alt", it) }
+                append(element.outerHtml().replace("\r", "&#13;").replace("\n", "&#10;").replace("\t", "&#9;"))
+                cursor = image.range.last + 1
+            }
+            append(content, cursor, content.length)
+        }
+        checkActive()
+        val formatted = normalizedImages
             .replace(Regex("(&nbsp;)+"), " ")
             .replace(Regex("&ensp;|&emsp;"), " ")
             .replace(Regex("&thinsp;|&zwnj;|&zwj;"), "")
             .replace(Regex("(?i)<br\\s*/?>"), "\n")
             .replace(Regex("(?i)</?(div|p|article|dd|dl|h\\d|hr)[^>]*>"), "\n")
-            .replace(
-                Regex("(?i)<img\\b([^>]*?)src\\s*=\\s*['\"]?([^'\">\\s]+)['\"]?([^>]*)>"),
-                { match ->
-                    val src = resolveLegacyAbsoluteUrl(redirectUrl, match.groupValues[2])
-                    """<img src="$src">"""
-                }
-            )
             .replace(Regex("<!--[\\s\\S]*?-->"), "")
             .replace(Regex("(?i)</?(?!img\\b)[a-zA-Z]+(?=[ >])[^<>]*>"), "")
             // Normalize line endings
@@ -473,5 +483,18 @@ object BookContent {
             .joinToString("\n") { it.trim() }
             // Remove leading/trailing whitespace from content
             .trim()
+        // Text entities are display text; attribute entities must survive until the image consumer parses them.
+        val formattedImages = BookImageMarkup.images(formatted, checkActive)
+        if (formattedImages.isEmpty()) return unescapeHtml4(formatted)
+        return buildString(formatted.length) {
+            var cursor = 0
+            for (image in formattedImages) {
+                checkActive()
+                append(unescapeHtml4(formatted.substring(cursor, image.range.first)))
+                append(formatted, image.range.first, image.range.last + 1)
+                cursor = image.range.last + 1
+            }
+            append(unescapeHtml4(formatted.substring(cursor)))
+        }
     }
 }

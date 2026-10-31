@@ -5,6 +5,7 @@ import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.nodes.TextNode
 import com.fleeksoft.ksoup.parser.Parser
+import io.legado.kmp.shared.content.BookImageMarkup
 import io.legado.kmp.shared.model.BookChapter
 
 /** An inert, ordered snapshot; image URLs never reach exported markup or TXT image references. */
@@ -109,7 +110,6 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
             "img", "br", "span", "a", "b", "i", "em", "strong", "u", "s", "small", "sub", "sup",
             "ruby", "rt", "rp", "code", "tt", "font", "center", "td", "th", "picture", "wbr",
         )
-        private val legacyOptions = Regex("""\s*,\s*(?=\{)""")
 
         fun parse(
             chapter: BookChapter,
@@ -122,7 +122,8 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
                 "导出章节超过 16 MiB"
             }
             checkActive()
-            val document = Ksoup.parse(content)
+            val markup = imageMarkup(chapter, content, checkActive)
+            val document = Ksoup.parse(html = markup.content, parser = Parser.htmlParser().setTrackPosition(true))
             checkActive()
             val body = document.body()
             val elements = document.getAllElements()
@@ -133,7 +134,7 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
                 checkActive()
                 val name = element.tagName().lowercase()
                 name in blockTags || name in inlineTags || name in removedTags && name != "head"
-            } || Ksoup.parse(html = content, parser = Parser.xmlParser()).getAllElements().any {
+            } || Ksoup.parse(html = markup.content, parser = Parser.xmlParser()).getAllElements().any {
                 checkActive()
                 it.tagName().lowercase() in setOf("html", "head", "body")
             }
@@ -156,14 +157,6 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
                 return BookExportDocument(parts, checkActive)
             }
 
-            // Reuse the reader's legacy ,{options} repair rather than a second HTML regex parser.
-            // Ksoup still determines node order, paragraph boundaries and which subtrees are inert.
-            val images = body.select("img[src]").toList()
-            val repaired = if (legacyOptions.containsMatchIn(content)) {
-                MangaChapterParser.imageSources(chapter, content).takeIf { it.size == images.size }
-            } else null
-            checkActive()
-            val repairedSources = if (repaired == null) emptyMap() else images.zip(repaired).toMap()
             val result = mutableListOf<Part>()
             val pending = ArrayDeque<Visit>()
             body.childNodes().reversed().forEach {
@@ -186,9 +179,9 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
                         if (name in removedTags || isHidden(node)) continue
                         when (name) {
                             "img" -> {
-                                val source = repairedSources[node] ?: MangaChapterParser.imageSources(chapter, node.outerHtml()).firstOrNull()
-                                checkActive()
-                                result += Part.Image(source, node.attr("alt"))
+                                val range = node.sourceRange()
+                                val image = if (range.isTracked()) markup.images[range.startPos()] else null
+                                result += image ?: Part.Image(null, node.attr("alt"))
                             }
                             "br", "wbr" -> result += Part.LineBreak
                             else -> {
@@ -207,6 +200,37 @@ internal class BookExportDocument private constructor(private val parts: List<Pa
             }
             checkActive()
             return BookExportDocument(result, checkActive)
+        }
+
+        private data class ImageMarkup(val content: String, val images: Map<Int, Part.Image>)
+
+        private fun imageMarkup(chapter: BookChapter, content: String, checkActive: () -> Unit): ImageMarkup {
+            val images = BookImageMarkup.images(content, checkActive)
+            require(images.size <= MAX_NODES) { "导出章节图片超过 100000 项" }
+            if (images.isEmpty()) return ImageMarkup(content, emptyMap())
+            val base = MangaChapterParser.imageBaseUrl(chapter)
+            val identities = mutableMapOf<Int, Part.Image>()
+            var cursor = 0
+            val normalized = buildString(content.length) {
+                images.forEach { image ->
+                    checkActive()
+                    val range = image.range
+                    require(!range.isEmpty() && range.first >= cursor && range.last < content.length) {
+                        "导出章节图片位置无效"
+                    }
+                    append(content, cursor, range.first)
+                    val source = image.source.trim().takeIf(String::isNotEmpty)?.let {
+                        BookImageMarkup.absoluteSource(it, base)
+                    }
+                    // Sources and alt never round-trip through DOM attributes; offsets identify occurrences.
+                    identities[length] = Part.Image(source, image.alt.orEmpty())
+                    append(if (image.hidden) "<img hidden>" else "<img>")
+                    cursor = range.last + 1
+                }
+                append(content, cursor, content.length)
+            }
+            checkActive()
+            return ImageMarkup(normalized, identities)
         }
 
         private data class Visit(val node: Node, val depth: Int, val closeBlock: Boolean = false)

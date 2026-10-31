@@ -8,6 +8,7 @@ final class ReaderImageInteractionCoordinator {
         let origin: String
         let chapterURL: String?
         let imageURL: URL
+        let requestRule: String?
     }
 
     private weak var reader: ReaderContainerViewController?
@@ -21,8 +22,8 @@ final class ReaderImageInteractionCoordinator {
 
     init(reader: ReaderContainerViewController) { self.reader = reader }
 
-    func presentPreview(url: URL, image: UIImage?) {
-        guard let selected = begin(url: url), let reader else { return }
+    func presentPreview(url: URL, image: UIImage?, requestRule: String? = nil) {
+        guard let selected = begin(url: url, requestRule: requestRule), let reader else { return }
         if let image {
             reader.present(ImagePreviewViewController(image: image, imageURL: url), animated: true)
         } else {
@@ -30,8 +31,8 @@ final class ReaderImageInteractionCoordinator {
         }
     }
 
-    func presentMenu(url: URL, image: UIImage?, anchor: CGRect) {
-        guard let selected = begin(url: url), let reader else { return }
+    func presentMenu(url: URL, image: UIImage?, anchor: CGRect, requestRule: String? = nil) {
+        guard let selected = begin(url: url, requestRule: requestRule), let reader else { return }
         let popup = ReaderImageActionMenuView { [weak self] action in
             guard let self, self.accepts(selected), let reader = self.reader else { return }
             switch action {
@@ -72,7 +73,7 @@ final class ReaderImageInteractionCoordinator {
         exporter?.suspend()
     }
 
-    private func begin(url: URL) -> Context? {
+    private func begin(url: URL, requestRule: String?) -> Context? {
         guard task == nil, let reader, reader.canNavigateReaderPages,
             reader.presentedViewController == nil, let book = reader.book,
             book.bookUrl == reader.bookURL, reader.viewIfLoaded?.window != nil
@@ -81,7 +82,9 @@ final class ReaderImageInteractionCoordinator {
         reader.setMenuVisible(false)
         reader.dismissTextSelectionMenu(clearSelection: true)
         reader.stopAutoPage(showMessage: false)
-        let selected = Context(bookURL: book.bookUrl, origin: book.origin, chapterURL: reader.currentChapterURL, imageURL: url)
+        let selected = Context(
+            bookURL: book.bookUrl, origin: book.origin, chapterURL: reader.currentChapterURL, imageURL: url,
+            requestRule: requestRule)
         context = selected
         return selected
     }
@@ -107,7 +110,8 @@ final class ReaderImageInteractionCoordinator {
             }
             do {
                 let data = try await BookCoverImageLoader.loadImageData(
-                    bookUrl: selected.bookURL, imageUrl: selected.imageURL.absoluteString, refresh: action == .refresh)
+                    bookUrl: selected.bookURL, imageUrl: selected.requestRule ?? selected.imageURL.absoluteString,
+                    refresh: action == .refresh)
                 try Task.checkCancellation()
                 guard let self, self.accepts(selected), let reader = self.reader else { return }
                 guard let data, let image = UIImage(data: data) else {
@@ -122,7 +126,9 @@ final class ReaderImageInteractionCoordinator {
                     reader.scrollPagerView.cacheLoadedImage(image, for: selected.imageURL)
                     reader.showToast(ReaderImageActionText.refreshed)
                 case .save:
-                    self.exporter?.save(imageData: data, sourceURL: selected.imageURL)
+                    self.exporter?.save(
+                        imageData: data,
+                        sourceURL: Self.exportSourceURL(requestRule: selected.requestRule, fallback: selected.imageURL))
                 case .mainMenu, .selectFolder:
                     break
                 }
@@ -131,5 +137,19 @@ final class ReaderImageInteractionCoordinator {
                 self.reader?.showToast(error.userFacingMessage)
             }
         }
+    }
+
+    static func exportSourceURL(requestRule: String?, fallback: URL) -> URL {
+        guard let requestRule else { return fallback }
+        let end =
+            requestRule.range(of: "\\s*,\\s*(?=\\{)", options: .regularExpression)?.lowerBound
+            ?? requestRule.endIndex
+        let address = requestRule[..<end].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: address),
+            let scheme = url.scheme?.lowercased(),
+            ["http", "https", "file", "epub-resource", "mobi-resource"].contains(scheme)
+        else { return URL(string: "image")! }
+        // The filename needs the resource address, never credentials or script text in its rule suffix.
+        return url
     }
 }

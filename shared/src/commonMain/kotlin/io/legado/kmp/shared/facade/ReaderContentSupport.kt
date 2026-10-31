@@ -1,11 +1,14 @@
 package io.legado.kmp.shared.facade
 
+import io.legado.kmp.shared.content.BookImageMarkup
+
 private val noReaderContentCancellationCheck: () -> Unit = {}
 
 internal fun buildReaderContentBlocks(
     chapterTitle: String,
     content: String,
     checkActive: () -> Unit = noReaderContentCancellationCheck,
+    imageBaseUrl: String = "",
 ): List<ReaderContentBlock> {
     checkActive()
     val blocks = mutableListOf<ReaderContentBlock>()
@@ -29,50 +32,45 @@ internal fun buildReaderContentBlocks(
         }
     }
 
-    val imageRegex = Regex("""<img[^>]+src=['"]([^'"]+)['"][^>]*?(?:alt=['"]([^'"]*)['"])?[^>]*>""", RegexOption.IGNORE_CASE)
-    val paragraphCandidates = Regex("""\n\s*\n+""")
-        .splitToSequence(normalized.withReaderCancellationChecks(checkActive))
-        .map { it.withReaderCancellationChecks(checkActive).trim().toString() }
-        .filter { it.isNotEmpty() }
+    val paragraphSeparator = Regex("""\n\s*\n+""")
 
     fun appendTextParagraphs(rawText: String) {
         checkActive()
-        splitReadableParagraphs(rawText.stripSimpleHtml(checkActive), checkActive).forEach { paragraph ->
-            checkActive()
-            blocks += ReaderContentBlock(
-                blockIndex = nextBlockIndex++,
-                type = ReaderContentBlockType.PARAGRAPH,
-                text = paragraph,
-            )
+        val paragraphCandidates = paragraphSeparator
+            .splitToSequence(rawText.normalizeReaderLineEndings(checkActive).withReaderCancellationChecks(checkActive))
+            .map { it.withReaderCancellationChecks(checkActive).trim().toString() }
+            .filter { it.isNotEmpty() }
+        paragraphCandidates.forEach { rawParagraph ->
+            splitReadableParagraphs(rawParagraph.stripSimpleHtml(checkActive), checkActive).forEach { paragraph ->
+                checkActive()
+                blocks += ReaderContentBlock(
+                    blockIndex = nextBlockIndex++,
+                    type = ReaderContentBlockType.PARAGRAPH,
+                    text = paragraph,
+                )
+            }
         }
     }
 
     // Android ContentProcessor drops blank lines; paragraph spacing belongs to layout, not spacer blocks.
-    paragraphCandidates.forEach { rawBlock ->
+    var cursor = 0
+    for (image in BookImageMarkup.images(content, checkActive)) {
         checkActive()
-        var cursor = 0
-        val imageMatches = imageRegex.findAll(rawBlock.withReaderCancellationChecks(checkActive))
-        for (match in imageMatches) {
-            checkActive()
-            if (match.range.first > cursor) {
-                appendTextParagraphs(rawBlock.substring(cursor, match.range.first))
-            }
-            val imageUrl = match.groupValues.getOrNull(1)
-                ?.withReaderCancellationChecks(checkActive)?.trim()?.toString().orEmpty()
-            if (imageUrl.isNotEmpty()) {
-                blocks += ReaderContentBlock(
-                    blockIndex = nextBlockIndex++,
-                    type = ReaderContentBlockType.IMAGE,
-                    imageUrl = imageUrl,
-                    imageAlt = match.groupValues.getOrNull(2)
-                        ?.withReaderCancellationChecks(checkActive)?.trim()?.toString()?.ifEmpty { null },
-                )
-            }
-            cursor = match.range.last + 1
+        if (image.range.first > cursor) {
+            appendTextParagraphs(content.substring(cursor, image.range.first))
         }
-        if (cursor < rawBlock.length) {
-            appendTextParagraphs(rawBlock.substring(cursor))
+        if (image.source.withReaderCancellationChecks(checkActive).isNotBlank()) {
+            blocks += ReaderContentBlock(
+                blockIndex = nextBlockIndex++,
+                type = ReaderContentBlockType.IMAGE,
+                imageUrl = BookImageMarkup.absoluteSource(image.source, imageBaseUrl),
+                imageAlt = image.alt?.withReaderCancellationChecks(checkActive)?.trim()?.toString()?.ifEmpty { null },
+            )
         }
+        cursor = image.range.last + 1
+    }
+    if (cursor < content.length) {
+        appendTextParagraphs(content.substring(cursor))
     }
 
     checkActive()

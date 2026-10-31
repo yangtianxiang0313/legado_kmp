@@ -146,6 +146,7 @@ final class ReaderPaginationCache<Key: Hashable> {
 
             for fragment in page.attachmentFragments {
                 guard !isCancelled() else { return nil }
+                if let requestRule = fragment.requestRule, cost.addText(requestRule) == false { return nil }
                 if case .remoteImage(let url, let altText) = fragment.source {
                     guard cost.addText(url.absoluteString) else { return nil }
                     if let altText, cost.addText(altText) == false { return nil }
