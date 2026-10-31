@@ -90,9 +90,10 @@ class ZipEpubBookParser(
         val context = currentCoroutineContext()
         val checkActive = { context.ensureActive() }
         checkActive()
-        val modified = fileStore.lastModified(book.bookUrl)
+        val path = LocalBookFileBinding.path(book)
+        val modified = fileStore.lastModified(path)
         checkActive()
-        val source = fileStore.openRead(book.bookUrl)
+        val source = fileStore.openRead(path)
         var reader: EpubArchiveReader? = null
         var failure: Throwable? = null
         try {
@@ -101,12 +102,12 @@ class ZipEpubBookParser(
             require(size in 22L..EpubArchiveReadLimits.ARCHIVE_BYTES) {
                 "EPUB 为空、损坏或超过归档读取限额"
             }
-            validateSourceSnapshot(book.bookUrl, source, size, modified, checkActive)
+            validateSourceSnapshot(path, source, size, modified, checkActive)
             val opened = NativeEpubArchiveReader(BoundedEpubReadSource(source, size, checkActive), checkActive)
             reader = opened
             val result = action(EpubArchive(opened, checkActive), checkActive)
             checkActive()
-            validateSourceSnapshot(book.bookUrl, source, size, modified, checkActive)
+            validateSourceSnapshot(path, source, size, modified, checkActive)
             checkActive()
             return result
         } catch (error: Throwable) {

@@ -101,14 +101,15 @@ class PalmDocMobiBookParser(
     override suspend fun readImage(book: Book, imageUrl: String): ByteArray? = mutex.withLock {
         val context = currentCoroutineContext()
         context.ensureActive()
-        val modified = fileStore.lastModified(book.bookUrl)
-        val source = fileStore.openRead(book.bookUrl)
+        val path = LocalBookFileBinding.path(book)
+        val modified = fileStore.lastModified(path)
+        val source = fileStore.openRead(path)
         try {
             val records = MobiRecordReader(source)
             // Read the header even on a cache hit so DRM/header rejection is never bypassed.
             val header = records.readHeader()
             val flows = if (header.kf8 != null) {
-                load(book.bookUrl, modified, source.size, records, header) { context.ensureActive() }.flows
+                load(path, modified, source.size, records, header) { context.ensureActive() }.flows
             } else null
             MobiEmbeddedImage.read(records, header, imageUrl, { context.ensureActive() }, flows)
         } finally {
@@ -119,12 +120,13 @@ class PalmDocMobiBookParser(
     private suspend fun load(book: Book): MobiDocument {
         val context = currentCoroutineContext()
         context.ensureActive()
-        val modified = fileStore.lastModified(book.bookUrl)
-        val source = fileStore.openRead(book.bookUrl)
+        val path = LocalBookFileBinding.path(book)
+        val modified = fileStore.lastModified(path)
+        val source = fileStore.openRead(path)
         try {
             val records = MobiRecordReader(source)
             val header = records.readHeader()
-            return load(book.bookUrl, modified, source.size, records, header) { context.ensureActive() }
+            return load(path, modified, source.size, records, header) { context.ensureActive() }
         } finally {
             source.closeSource()
         }

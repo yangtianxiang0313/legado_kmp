@@ -104,6 +104,28 @@ interface BookRepository {
     suspend fun insertLocalBookIfAbsent(book: Book, chapters: List<BookChapter>): Book
 
     /**
+     * Rebind an existing, still-local book at the same URL in one synchronous SQL transaction.
+     * Compare origin/type/TOC/name/author/charset/raw variable, reverseToc, all four progress
+     * fields and every stored chapter field against the expected snapshots. Missing/nonlocal/
+     * changed state or a different nonempty directory returns null without writes.
+     * Chapters must be nonempty with complete zero-based indices, unique nonblank URLs and
+     * matching book URLs; stored progress must be in range. Invalid input throws.
+     * Only variable (stored verbatim), totalChapterNum and latestChapterTime (fileModified)
+     * change; insert chapters only when the stored directory is empty. Preserve all other
+     * latest columns, raw read_config, bookmarks and caches. Own the transaction (no enclosing
+     * transaction); cancellation/failure before commit rolls back every write. Return the
+     * committed book without a post-commit query or cancellation check.
+     */
+    @Throws(Exception::class)
+    suspend fun relinkLocalFileIfUnchanged(
+        expected: Book,
+        expectedChapters: List<BookChapter>,
+        variable: String,
+        chapters: List<BookChapter>,
+        fileModified: Long,
+    ): Book?
+
+    /**
      * Merge web-file metadata into an imported local book in one synchronous database transaction.
      * Recheck the online book's URL, origin, isWebFile and original name/author/coverUrl/intro
      * against expectedOnlineBook, and require its source to still have the FILE type.

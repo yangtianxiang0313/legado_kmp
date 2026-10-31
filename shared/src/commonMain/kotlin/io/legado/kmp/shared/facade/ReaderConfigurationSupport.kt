@@ -1,5 +1,6 @@
 package io.legado.kmp.shared.facade
 
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.usecase.GetBookSourcesUseCase
 import io.legado.kmp.shared.domain.usecase.SaveBookUseCase
 import io.legado.kmp.shared.model.Book
@@ -22,7 +23,8 @@ internal class ReaderConfigurationSupport(
     }
 
     suspend fun upWebBook(book: Book) {
-        val isPdf = book.bookUrl.substringAfterLast('.', "").lowercase() == "pdf"
+        val isPdf = if (book.isLocal) LocalBookFileBinding.format(book) == "pdf" else
+            book.bookUrl.substringAfterLast('.', "").lowercase() == "pdf"
         if (book.isLocal) {
             if (book.config.imageStyle.isNullOrBlank() && (book.isImage || isPdf)) {
                 val updated = book.copy(

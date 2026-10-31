@@ -157,7 +157,20 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
             self.book = updated
             if self.isDetailActive { self.renderBook() }
         },
-        onRefresh: { [weak self] in self?.refreshInfo() })
+        onRefresh: { [weak self] in self?.refreshInfo() },
+        canContinueRelink: { [weak self] in self?.canInteract(allowing: .menu, in: $0) == true },
+        onRelinkCommitted: { [weak self] updated in
+            guard let self, self.bookURL == updated.bookUrl else { return }
+            self.directorySessionID = nil
+            self.chapterFailureID = nil
+            self.book = updated
+            self.chapters = []
+            self.needsInfo = false
+            self.needsChapters = true
+            self.needsAppearanceLoad = true
+            self.catalogState = .loading
+            if self.isDetailActive { self.renderBook() }
+        })
 
     private var displayedChapterCount: Int {
         chapters.isEmpty ? max(Int(book?.totalChapterNum ?? 0), 0) : chapters.count
@@ -181,7 +194,10 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         guard let scene = notification.object as? UIWindowScene, scene === detailScene else { return }
         isSceneActive = notification.name == UIScene.didActivateNotification
         // Revoke pending presentations, not callbacks belonging to an already presented directory or alert.
-        if !isSceneActive { interactionGeneration &+= 1 }
+        if !isSceneActive {
+            interactionGeneration &+= 1
+            overflowActions.sceneDidDeactivate()
+        }
         updateActions()
         if isSceneActive { resumeAppearanceLoadIfNeeded() }
     }
@@ -255,6 +271,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         guard isMovingFromParent || isBeingDismissed || navigationController?.isBeingDismissed == true || leavingStack
         else { return }
         isDetailActive = false
+        overflowActions.cancelRelink()
         interactionGeneration &+= 1
         directorySessionID = nil
         chapterFailureID = nil
@@ -776,14 +793,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
 
     @objc private func shareBook() {
         guard canInteract(), book != nil else { return }
-        var items: [Any] = []
-        if let name = book?.name ?? seed?.name {
-            items.append(name)
-        }
-        items.append(book?.bookUrl ?? bookURL)
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        controller.popoverPresentationController?.sourceView = shareButton
-        controller.popoverPresentationController?.sourceRect = shareButton.bounds
-        present(controller, animated: true)
+        BookDetailShareAction.present(
+            name: book?.name ?? seed?.name, bookURL: book?.bookUrl ?? bookURL, from: self, anchor: shareButton)
     }
 }

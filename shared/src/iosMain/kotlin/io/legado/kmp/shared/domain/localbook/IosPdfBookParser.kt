@@ -17,8 +17,8 @@ import platform.UIKit.UIImagePNGRepresentation
 
 class IosPdfBookParser : PdfBookParser {
     override suspend fun documentPath(book: Book): String {
-        require('\u0000' !in book.bookUrl) { "Invalid PDF path" }
-        val path = book.bookUrl
+        val path = LocalBookFileBinding.path(book)
+        require('\u0000' !in path) { "Invalid PDF path" }
         return if (NSFileManager.defaultManager.fileExistsAtPath(path)) path
         else reboundSandboxPath(path) ?: path
     }

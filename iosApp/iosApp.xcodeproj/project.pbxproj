@@ -735,6 +735,7 @@
 		F027B1000000000000000002 /* LocalBookArchivePreparation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027B2000000000000000002 /* LocalBookArchivePreparation.swift */; };
 		F027B1000000000000000003 /* LocalBookArchiveSelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027B2000000000000000003 /* LocalBookArchiveSelectionViewController.swift */; };
 		F027B1000000000000000004 /* LocalBookImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027B2000000000000000004 /* LocalBookImportCoordinator.swift */; };
+		D81CD0010000000000000001 /* LocalBookRelinkCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81CD0020000000000000001 /* LocalBookRelinkCoordinator.swift */; };
 		F028D1010000000000000001 /* LocalBookDirectoryScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D1020000000000000001 /* LocalBookDirectoryScanner.swift */; };
 		F028D1010000000000000002 /* LocalBookDirectorySelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D1020000000000000002 /* LocalBookDirectorySelectionViewController.swift */; };
 		F028D1010000000000000003 /* LocalBookDirectoryImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D1020000000000000003 /* LocalBookDirectoryImportCoordinator.swift */; };
@@ -1480,6 +1481,7 @@
 		F027B2000000000000000002 /* LocalBookArchivePreparation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookArchivePreparation.swift; sourceTree = "<group>"; };
 		F027B2000000000000000003 /* LocalBookArchiveSelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookArchiveSelectionViewController.swift; sourceTree = "<group>"; };
 		F027B2000000000000000004 /* LocalBookImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookImportCoordinator.swift; sourceTree = "<group>"; };
+		D81CD0020000000000000001 /* LocalBookRelinkCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookRelinkCoordinator.swift; sourceTree = "<group>"; };
 		F028D1020000000000000001 /* LocalBookDirectoryScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookDirectoryScanner.swift; sourceTree = "<group>"; };
 		F028D1020000000000000002 /* LocalBookDirectorySelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookDirectorySelectionViewController.swift; sourceTree = "<group>"; };
 		F028D1020000000000000003 /* LocalBookDirectoryImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookDirectoryImportCoordinator.swift; sourceTree = "<group>"; };
@@ -1802,6 +1804,7 @@
 				F027B2000000000000000002 /* LocalBookArchivePreparation.swift */,
 				F027B2000000000000000003 /* LocalBookArchiveSelectionViewController.swift */,
 				F027B2000000000000000004 /* LocalBookImportCoordinator.swift */,
+				D81CD0020000000000000001 /* LocalBookRelinkCoordinator.swift */,
 				F028D1020000000000000001 /* LocalBookDirectoryScanner.swift */,
 				F028D1020000000000000002 /* LocalBookDirectorySelectionViewController.swift */,
 				F028D1020000000000000003 /* LocalBookDirectoryImportCoordinator.swift */,
@@ -2679,6 +2682,7 @@
 				F027B1000000000000000002 /* LocalBookArchivePreparation.swift in Sources */,
 				F027B1000000000000000003 /* LocalBookArchiveSelectionViewController.swift in Sources */,
 				F027B1000000000000000004 /* LocalBookImportCoordinator.swift in Sources */,
+				D81CD0010000000000000001 /* LocalBookRelinkCoordinator.swift in Sources */,
 				F028D1010000000000000001 /* LocalBookDirectoryScanner.swift in Sources */,
 				F028D1010000000000000002 /* LocalBookDirectorySelectionViewController.swift in Sources */,
 				F028D1010000000000000003 /* LocalBookDirectoryImportCoordinator.swift in Sources */,

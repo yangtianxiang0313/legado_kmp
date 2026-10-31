@@ -20,7 +20,9 @@ enum BookReadingDestination {
                 AudioPlayViewController(
                     bookUrl: book.bookUrl, initialChapterIndex: chapterIndex,
                     initialChapterPosition: chapterPosition), animated: true)
-        } else if book.isLocal && book.bookUrl.lowercased().hasSuffix(".pdf"), let navigation = presenter.navigationController {
+        } else if book.isLocal && LocalBookFileBinding.shared.format(book: book) == "pdf",
+            let navigation = presenter.navigationController
+        {
             let controller = PdfReaderViewController(bookURL: book.bookUrl, initialChapterIndex: chapterIndex)
             navigation.pushViewController(controller.configuredForDrillDownPresentation(), animated: true)
         } else if book.isImage, let navigation = presenter.navigationController {

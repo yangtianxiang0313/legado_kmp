@@ -200,7 +200,7 @@ final class PdfBookmarkClient {
         }
         try Task.checkCancellation()
         guard let book, book.bookUrl == bookURL else { throw failure("书籍已移除，请返回书架重新打开") }
-        guard book.isLocal, book.bookUrl.lowercased().hasSuffix(".pdf"),
+        guard book.isLocal, LocalBookFileBinding.shared.format(book: book) == "pdf",
             !book.isAudio, !book.isImage, !book.isEpub
         else { throw failure("当前书籍不是可用的本地 PDF") }
         guard Int(book.totalChapterNum) == pageCount else {

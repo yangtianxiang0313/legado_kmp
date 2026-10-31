@@ -18,7 +18,7 @@ internal data class MobiReadingSpan(val start: Long, val end: Long, val volume: 
 }
 
 internal fun Book.isMobiLocalBook(): Boolean = isLocal &&
-    bookUrl.substringAfterLast('.').lowercase() in setOf("mobi", "azw", "azw3")
+    LocalBookFileBinding.format(this) in setOf("mobi", "azw", "azw3")
 
 /** An index in a legacy URL is an identity, not the current position after a directory reorder. */
 internal object MobiChapterIdentity {

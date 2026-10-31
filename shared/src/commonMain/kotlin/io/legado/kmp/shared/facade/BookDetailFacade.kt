@@ -12,6 +12,7 @@ import io.legado.kmp.shared.domain.usecase.LoadChapterContentUseCase
 import io.legado.kmp.shared.domain.usecase.ObserveBookChaptersUseCase
 import io.legado.kmp.shared.domain.usecase.ParseEpubLocalFileUseCase
 import io.legado.kmp.shared.domain.localbook.EpubCatalogReflowPlan
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.usecase.EpubCatalogReflowPreparer
 import io.legado.kmp.shared.domain.usecase.ParseTxtLocalFileUseCase
 import io.legado.kmp.shared.domain.usecase.ParseMobiLocalFileUseCase
@@ -347,14 +348,15 @@ class BookDetailFacade(
 
     private suspend fun parseLocalChapters(book: Book): BookDetailRefreshResult? {
         coroutineContext.ensureActive()
+        val localFormat = if (book.isLocal) LocalBookFileBinding.format(book) else ""
         val parsed = when {
             book.isTxtLocalBook -> parseTxtLocalFileUseCase(book).let { BookDetailRefreshResult(it.book, it.chapters) }
-            book.isLocal && book.isEpub -> parseEpubLocalFileUseCase(book).let { BookDetailRefreshResult(it.book, it.chapters) }
-            book.isLocal && book.bookUrl.substringAfterLast('.').lowercase() in setOf("mobi", "azw", "azw3") ->
+            localFormat == "epub" -> parseEpubLocalFileUseCase(book).let { BookDetailRefreshResult(it.book, it.chapters) }
+            localFormat in setOf("mobi", "azw", "azw3") ->
                 parseMobiLocalFileUseCase(book).let { BookDetailRefreshResult(it.book, it.chapters) }
-            book.isLocal && book.bookUrl.endsWith(".pdf", true) ->
+            localFormat == "pdf" ->
                 parsePdfLocalFileUseCase(book).let { BookDetailRefreshResult(it.book, it.chapters) }
-            book.isLocal && book.bookUrl.endsWith(".umd", true) ->
+            localFormat == "umd" ->
                 parseUmdLocalFileUseCase(book).let { BookDetailRefreshResult(it.book, it.chapters) }
             else -> null
         }

@@ -24,39 +24,45 @@ class LocalBookFileResolver(
     private val remoteBookDownloader: RemoteBookDownloader
 ) {
     suspend fun resolve(book: Book): Book {
-        if (fileStore.lastModified(book.bookUrl) != null) return book
+        if (fileStore.lastModified(LocalBookFileBinding.path(book)) != null) return book
+        check(LocalBookFileBinding.boundPath(book) == null) { "Retained local book file is missing" }
         return recover(book)
     }
 
     suspend fun read(book: Book): ResolvedLocalBook {
+        val path = LocalBookFileBinding.path(book)
         try {
-            return ResolvedLocalBook(book, fileStore.read(book.bookUrl))
+            return ResolvedLocalBook(book, fileStore.read(path))
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if (LocalBookFileBinding.boundPath(book) != null) throw error
             // Resolve a moved/archive/remote book only after an actual read failure.
         }
 
         val resolvedBook = resolve(book)
-        val bytes = fileStore.read(resolvedBook.bookUrl)
+        val bytes = fileStore.read(LocalBookFileBinding.path(resolvedBook))
         return ResolvedLocalBook(resolvedBook, bytes)
     }
 
     suspend fun openRead(book: Book): ResolvedLocalBookSource {
+        val path = LocalBookFileBinding.path(book)
         try {
-            return ResolvedLocalBookSource(book, fileStore.openRead(book.bookUrl))
+            return ResolvedLocalBookSource(book, fileStore.openRead(path))
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if (LocalBookFileBinding.boundPath(book) != null) throw error
             val resolvedBook = resolve(book)
-            return ResolvedLocalBookSource(resolvedBook, fileStore.openRead(resolvedBook.bookUrl))
+            return ResolvedLocalBookSource(resolvedBook, fileStore.openRead(LocalBookFileBinding.path(resolvedBook)))
         }
     }
 
     suspend fun lastModified(book: Book): Long? {
-        fileStore.lastModified(book.bookUrl)?.let { return it }
+        fileStore.lastModified(LocalBookFileBinding.path(book))?.let { return it }
+        if (LocalBookFileBinding.boundPath(book) != null) return null
         val recoveredBook = resolve(book)
-        return fileStore.lastModified(recoveredBook.bookUrl)
+        return fileStore.lastModified(LocalBookFileBinding.path(recoveredBook))
     }
 
     private suspend fun recover(book: Book): Book {
@@ -65,7 +71,7 @@ class LocalBookFileResolver(
         } else {
             null
         }
-        if (archiveRecovered != null && fileStore.lastModified(archiveRecovered.bookUrl) != null) {
+        if (archiveRecovered != null && fileStore.lastModified(LocalBookFileBinding.path(archiveRecovered)) != null) {
             return archiveRecovered
         }
 

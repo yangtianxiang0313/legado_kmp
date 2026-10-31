@@ -1,5 +1,6 @@
 package io.legado.kmp.shared.facade
 
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.repository.ChapterContentRepository
 import io.legado.kmp.shared.domain.usecase.ApplyReplaceRulesUseCase
 import io.legado.kmp.shared.domain.usecase.ContentProcessor
@@ -107,7 +108,7 @@ internal class ReaderChapterLoader(
             )
         }
         if (book.isLocal) {
-            when (book.bookUrl.substringAfterLast('.', "").lowercase()) {
+            when (LocalBookFileBinding.format(book)) {
                 "pdf" -> return loadLocalBookChapter(
                     book, chapterIndex, refreshContent,
                     parse = { parsePdfLocalFileUseCase(it).let { p -> PreparedBook(p.book, p.chapters) } },

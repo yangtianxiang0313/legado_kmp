@@ -1,6 +1,7 @@
 package io.legado.kmp.shared.facade
 
 import io.legado.kmp.shared.domain.localbook.LocalBookFileNameResolver
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.usecase.FetchChapterListContractUseCase
 import io.legado.kmp.shared.domain.usecase.DeleteBookUseCase
 import io.legado.kmp.shared.domain.usecase.DeleteBookGroupUseCase
@@ -894,8 +895,13 @@ class BookshelfFacade(
                 val existing = getBookUseCase.get(bookUrl) ?: error("Book not found: $bookUrl")
                 if (deleteLocalFiles && existing.isLocal) {
                     val access = requireNotNull(fileAccess) { "File access is unavailable" }
-                    if (access.exists(existing.bookUrl)) {
-                        require(access.delete(existing.bookUrl)) { "Failed to delete local file: ${existing.bookUrl}" }
+                    val path = LocalBookFileBinding.path(existing)
+                    val key = LocalBookFileBinding.retainedKey(path)
+                    val sharedOriginal = key != null && getBooksUseCase.getAll().any {
+                        it.bookUrl != existing.bookUrl && it.isLocal && LocalBookFileBinding.retainedKeyForBook(it) == key
+                    }
+                    if (!sharedOriginal && access.exists(path)) {
+                        require(access.delete(path)) { "Failed to delete local original" }
                     }
                 }
                 deleteBookUseCase(existing)

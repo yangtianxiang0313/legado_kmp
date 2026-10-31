@@ -14,12 +14,15 @@ enum BookDetailOverflowAction: String {
     case deleteAlert = "menu_delete_alert"
     case clearCache = "menu_clear_cache"
     case log = "menu_log"
+    case relinkOriginalFile = "menu_relink_original_file"
 
-    static func visibleActions(hasSource: Bool, loginURL: String?, loginUI: String? = nil) -> [Self] {
+    static func visibleActions(
+        hasSource: Bool, loginURL: String?, loginUI: String? = nil, isLocalShelf: Bool = false
+    ) -> [Self] {
         let hasLogin =
             loginURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             || loginUI?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        return [.refresh]
+        return [.refresh] + (isLocalShelf ? [.relinkOriginalFile] : [])
             + (hasSource && hasLogin ? [.login] : [])
             + [.pin] + (hasSource ? [.sourceVariable, .bookVariable] : [])
             + [.copyBookURL, .copyTocURL] + (hasSource ? [.canUpdate] : []) + [.deleteAlert, .clearCache, .log]
@@ -38,6 +41,7 @@ enum BookDetailOverflowAction: String {
         case .deleteAlert: return "删除提醒"
         case .clearCache: return L10n.BookDetail.clearCache
         case .log: return L10n.Bookshelf.logTitle
+        case .relinkOriginalFile: return "重新选择原文件"
         }
     }
 }
@@ -57,6 +61,12 @@ final class BookDetailOverflowMenuCoordinator {
     private let onBusyChange: (Bool) -> Void
     private let onCommitted: (Book) -> Void
     private let onRefresh: () -> Void
+    private let canContinueRelink: (UIViewController?) -> Bool
+    private let onRelinkCommitted: (Book) -> Void
+    private lazy var relink = LocalBookRelinkCoordinator(
+        presenter: presenter, currentBook: currentBook, canPresent: canPresent,
+        canContinue: canContinueRelink, waitForDetailLoad: waitForDetailLoad,
+        onBusyChange: onBusyChange, onCommitted: onRelinkCommitted)
     private var menu: ReaderOverflowMenuView?
     private var preparationTask: Task<Void, Never>?
     private var preparationID: UUID?
@@ -68,7 +78,9 @@ final class BookDetailOverflowMenuCoordinator {
         currentBook: @escaping () -> Book?, canPresent: @escaping () -> Bool,
         waitForDetailLoad: @escaping () async -> Void,
         onBusyChange: @escaping (Bool) -> Void,
-        onCommitted: @escaping (Book) -> Void, onRefresh: @escaping () -> Void
+        onCommitted: @escaping (Book) -> Void, onRefresh: @escaping () -> Void,
+        canContinueRelink: @escaping (UIViewController?) -> Bool,
+        onRelinkCommitted: @escaping (Book) -> Void
     ) {
         self.presenter = presenter
         self.adapter = adapter
@@ -78,9 +90,18 @@ final class BookDetailOverflowMenuCoordinator {
         self.onBusyChange = onBusyChange
         self.onCommitted = onCommitted
         self.onRefresh = onRefresh
+        self.canContinueRelink = canContinueRelink
+        self.onRelinkCommitted = onRelinkCommitted
     }
 
     deinit { preparationTask?.cancel() }
+
+    func cancelRelink() { relink.cancel() }
+
+    func sceneDidDeactivate() {
+        dismiss()
+        relink.sceneDidDeactivate()
+    }
 
     func dismiss() {
         preparationID = nil
@@ -127,7 +148,8 @@ final class BookDetailOverflowMenuCoordinator {
 
     private func show(book: Book, source: BookSource?, context: Context, anchor: UIView, presenter: UIViewController) {
         let actions = BookDetailOverflowAction.visibleActions(
-            hasSource: source != nil, loginURL: source?.loginUrl, loginUI: source?.loginUi)
+            hasSource: source != nil, loginURL: source?.loginUrl, loginUI: source?.loginUi,
+            isLocalShelf: book.isLocal && !book.isNotShelf)
         let items = actions.map { action in
             ReaderOverflowMenuView.Item(
                 identifier: "bookDetail.\(action.rawValue)", title: action.title,
@@ -152,6 +174,7 @@ final class BookDetailOverflowMenuCoordinator {
         guard let presenter, let book = currentBook(), accepts(context), operationTask == nil else { return }
         switch action {
         case .refresh: onRefresh()
+        case .relinkOriginalFile: relink.present()
         case .copyBookURL:
             UIPasteboard.general.string = book.bookUrl
             presenter.showTransientMessage(L10n.BookDetail.copied)
@@ -270,5 +293,18 @@ final class BookDetailOverflowMenuCoordinator {
 
     private func accepts(_ context: Context) -> Bool {
         canPresent() && isVisible(context) && presenter?.presentedViewController == nil
+    }
+}
+
+@MainActor
+enum BookDetailShareAction {
+    static func present(name: String?, bookURL: String, from presenter: UIViewController, anchor: UIView) {
+        var items: [Any] = []
+        if let name { items.append(name) }
+        items.append(bookURL)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.popoverPresentationController?.sourceView = anchor
+        controller.popoverPresentationController?.sourceRect = anchor.bounds
+        presenter.present(controller, animated: true)
     }
 }

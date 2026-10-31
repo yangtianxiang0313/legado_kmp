@@ -1,5 +1,6 @@
 package io.legado.kmp.shared.facade
 
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.repository.ChapterContentRepository
 import io.legado.kmp.shared.domain.usecase.LoadEpubLocalChapterContentUseCase
 import io.legado.kmp.shared.domain.usecase.LoadMobiLocalChapterContentUseCase
@@ -26,8 +27,7 @@ internal class ReaderContentSearchSource(
         if (cached != null) return cached
         if (!book.isLocal) return null
 
-        val extension = book.bookUrl.substringBefore('?').substringBefore('#')
-            .substringAfterLast('.', "").lowercase()
+        val extension = LocalBookFileBinding.format(book)
         context.ensureActive()
         // Keep persisted chapter boundaries intact; local resolvers own missing-file recovery.
         val content = when (extension) {

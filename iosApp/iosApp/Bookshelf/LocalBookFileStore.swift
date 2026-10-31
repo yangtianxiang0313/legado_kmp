@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 struct PreparedLocalBookFile: Sendable {
@@ -239,6 +240,13 @@ enum LocalBookFileStore {
         let attributes = try fileManager.attributesOfItem(atPath: directory.path)
         guard attributes[.type] as? FileAttributeType == .typeDirectory else { throw StoreError.invalidStorage }
         let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        if files.isEmpty {
+            // rmdir cannot recursively delete content published by another owner after the listing.
+            guard directory.path.withCString({ Darwin.rmdir($0) }) == 0 || errno == ENOENT else {
+                throw StoreError.invalidStorage
+            }
+            return nil
+        }
         guard files.count == 1, let file = files.first,
             file.pathExtension.lowercased() == fileExtension
         else { throw StoreError.invalidStorage }

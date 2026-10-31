@@ -24,7 +24,7 @@ enum BookmarkReadingResolver {
         guard chapters.contains(where: { $0.chapter.index == current.chapterIndex && !$0.chapter.isVolume }) else {
             throw failure("书签对应的章节已不存在")
         }
-        if book.isLocal, book.bookUrl.lowercased().hasSuffix(".pdf") {
+        if book.isLocal, LocalBookFileBinding.shared.format(book: book) == "pdf" {
             guard current.chapterPos == 0, !book.config.reverseToc else {
                 throw failure("PDF 书签定位格式与当前目录不一致，请从原书重新定位")
             }

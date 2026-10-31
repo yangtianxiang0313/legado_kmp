@@ -270,6 +270,16 @@ class BookRepositoryImpl(
         }
     }
 
+    override suspend fun relinkLocalFileIfUnchanged(
+        expected: Book,
+        expectedChapters: List<BookChapter>,
+        variable: String,
+        chapters: List<BookChapter>,
+        fileModified: Long,
+    ): Book? = relinkLocalBookFileIfUnchanged(
+        database, expected, expectedChapters, variable, chapters, fileModified, ::mapToBook,
+    )
+
     override suspend fun mergeWebFileMetadataIfUnchanged(expectedOnlineBook: Book, expectedLocalBook: Book): Book? =
         mergeImportedWebFileMetadata(database, expectedOnlineBook, expectedLocalBook, ::mapToBook)
 

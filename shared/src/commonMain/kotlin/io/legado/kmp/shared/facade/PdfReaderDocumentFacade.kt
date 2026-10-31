@@ -1,6 +1,7 @@
 package io.legado.kmp.shared.facade
 
 import io.legado.kmp.shared.bootstrap.SharedBootstrap
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.localbook.LocalBookFileResolver
 import io.legado.kmp.shared.domain.localbook.PdfBookParser
 import io.legado.kmp.shared.domain.usecase.GetBookUseCase
@@ -32,7 +33,7 @@ class PdfReaderDocumentFacade(
     suspend fun resolve(bookUrl: String): PdfReaderDocument = runRecoverable("PdfReaderDocument.resolve") {
         withContext(Dispatchers.Default) {
             val book = requireNotNull(books.get(bookUrl)) { "书籍已移除" }
-            require(book.isLocal && book.bookUrl.substringAfterLast('.').equals("pdf", true)) { "不是本地 PDF" }
+            require(book.isLocal && LocalBookFileBinding.format(book) == "pdf") { "不是本地 PDF" }
             val resolved = resolver.resolve(book)
             PdfReaderDocument(book, parser.documentPath(resolved))
         }

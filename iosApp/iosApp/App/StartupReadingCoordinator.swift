@@ -131,7 +131,7 @@ final class StartupReadingCoordinator {
             let isLocalFormat =
                 book.isLocal
                 && LocalBookFormats.bookExtensions.contains(
-                    URL(fileURLWithPath: book.bookUrl).pathExtension.lowercased())
+                    LocalBookFileBinding.shared.format(book: book))
             return (isText || isLocalFormat || book.isImage) && !book.isAudio && !book.isWebFile && !book.isNotShelf
                 && !book.bookUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }.sorted {
@@ -150,7 +150,7 @@ final class StartupReadingCoordinator {
         payload.book.bookUrl == book.bookUrl && payload.book.origin == book.origin
             && payload.chapter.index == book.durChapterIndex && payload.book.durChapterPos == book.durChapterPos
             && !payload.chapters.isEmpty
-            && (payload.chapter.isVolume || (book.isLocal && book.bookUrl.lowercased().hasSuffix(".pdf"))
+            && (payload.chapter.isVolume || (book.isLocal && LocalBookFileBinding.shared.format(book: book) == "pdf")
                 || !payload.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 

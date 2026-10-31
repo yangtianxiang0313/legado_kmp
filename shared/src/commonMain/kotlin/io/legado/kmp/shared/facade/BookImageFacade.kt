@@ -3,6 +3,7 @@ package io.legado.kmp.shared.facade
 import io.legado.kmp.shared.analyze.AnalyzeRule
 import io.legado.kmp.shared.domain.localbook.EpubBookParser
 import io.legado.kmp.shared.domain.localbook.EpubEmbeddedImage
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.localbook.LocalBookFileResolver
 import io.legado.kmp.shared.domain.localbook.LocalBookSvg
 import io.legado.kmp.shared.domain.localbook.MobiBookParser
@@ -724,10 +725,10 @@ class BookImageFacade(
 }
 
 private fun Book.isLocalEpubImageBook(): Boolean = isLocal &&
-    (isEpub || bookUrl.substringBefore('?').substringBefore('#').endsWith(".epub", true))
+    LocalBookFileBinding.format(this) == "epub"
 
 private fun Book.isLocalMobiImageBook(): Boolean = isLocal &&
-    bookUrl.substringBefore('?').substringBefore('#').substringAfterLast('.').lowercase() in setOf("mobi", "azw", "azw3")
+    LocalBookFileBinding.format(this) in setOf("mobi", "azw", "azw3")
 
 private fun Book.isLocalEmbeddedImageBook(): Boolean = isLocalEpubImageBook() || isLocalMobiImageBook()
 

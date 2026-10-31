@@ -372,6 +372,7 @@ val facadeModule = module {
     single { io.legado.kmp.shared.facade.CacheChapterImages(get(), get(), get()) }
     single { io.legado.kmp.shared.facade.CloudBackupFacade(get(), get()) }
     single { io.legado.kmp.shared.facade.ArchiveBookImportFacade(get(), get(), get(), get(), get(), get(), get(), get(), localBookFileNameResolver = get()) }
+    factory { io.legado.kmp.shared.facade.LocalBookRelinkFacade(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { LocalBookFileNameFacade(get(), get()) }
     factory { io.legado.kmp.shared.facade.DirectLinkUploadFacade(get(), get()) }
     factory { io.legado.kmp.shared.facade.BackupCapabilitiesFacade(get(), get(), get(), get(), get(), get(), get(), get(), get()) }

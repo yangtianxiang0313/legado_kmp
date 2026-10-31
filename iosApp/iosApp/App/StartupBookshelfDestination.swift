@@ -16,7 +16,7 @@ enum StartupBookshelfDestination {
             navigation.viewControllers.count == 1, navigation.topViewController === home,
             selectedBookshelf(in: home) != nil
         else { return }
-        if payload.book.isImage || (payload.book.isLocal && payload.book.bookUrl.lowercased().hasSuffix(".pdf")) {
+        if payload.book.isImage || (payload.book.isLocal && LocalBookFileBinding.shared.format(book: payload.book) == "pdf") {
             BookReadingDestination.open(payload.book, from: home)
             return
         }

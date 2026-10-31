@@ -53,7 +53,10 @@ enum LocalBookImportService {
         if let key = storageKey(file.url.path) {
             let books = try await facade.loadBooksAsync(groupId: -1)
             try Task.checkCancellation()
-            if let existing = books.first(where: { $0.isLocal && storageKey($0.bookUrl) == key }) {
+            if let existing = books.first(where: { existing in
+                existing.isLocal
+                    && (storageKey(existing.bookUrl) ?? LocalBookFileBinding.shared.retainedKeyForBook(book: existing)) == key
+            }) {
                 await LocalBookFileStore.retain(file)
                 return existing
             }

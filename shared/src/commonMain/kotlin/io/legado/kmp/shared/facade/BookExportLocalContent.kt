@@ -1,5 +1,6 @@
 package io.legado.kmp.shared.facade
 
+import io.legado.kmp.shared.domain.localbook.LocalBookFileBinding
 import io.legado.kmp.shared.domain.usecase.LoadEpubLocalChapterContentUseCase
 import io.legado.kmp.shared.domain.usecase.LoadMobiLocalChapterContentUseCase
 import io.legado.kmp.shared.domain.usecase.LoadTxtLocalChapterContentUseCase
@@ -16,7 +17,7 @@ internal enum class BookExportLocalFormat { TXT, EPUB, UMD, MOBI }
 
 internal fun bookExportLocalFormat(book: Book): BookExportLocalFormat? {
     if (!book.isLocal) return null
-    val extension = book.bookUrl.substringBefore('?').substringBefore('#').substringAfterLast('.', "").lowercase()
+    val extension = LocalBookFileBinding.format(book)
     return when (extension) {
         "pdf" -> null
         "txt" -> BookExportLocalFormat.TXT
@@ -37,7 +38,8 @@ internal fun requireBookExportFormat(book: Book) {
     requireBookExport(!book.hasType(BookType.AUDIO) && type != BookType.LEGACY_AUDIO, "音频书籍不支持正文导出")
     requireBookExport(book.isLocal || (!book.hasType(BookType.WEB_FILE) && type != BookType.LEGACY_WEB_FILE),
         "在线文件书籍请使用原文件下载，不支持正文导出")
-    val extension = book.bookUrl.substringBefore('?').substringBefore('#').substringAfterLast('.', "").lowercase()
+    val extension = if (book.isLocal) LocalBookFileBinding.format(book) else
+        book.bookUrl.substringBefore('?').substringBefore('#').substringAfterLast('.', "").lowercase()
     requireBookExport(extension != "pdf", "PDF 书籍不支持正文导出")
     requireBookExport(!book.isLocal || bookExportLocalFormat(book) != null, "此本地书籍格式不支持正文导出")
 }
