@@ -1,10 +1,6 @@
 package io.legado.kmp.shared.network
 
 import io.legado.kmp.shared.preferences.AppPreferencesStore
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 class SourceHeaderResolver(
     private val jsExecutor: JsExecutor = JsExecutor.Default,
@@ -55,30 +51,8 @@ class SourceHeaderResolver(
         }
     }
 
-    private fun parseHeaderContent(content: String): Map<String, String> {
-        val trimmed = content.trim()
-        if (trimmed.isEmpty()) return emptyMap()
-        return parseJsonHeaders(trimmed) ?: emptyMap()
-    }
-
-    private fun parseJsonHeaders(content: String): Map<String, String>? {
-        if (!content.startsWith("{")) return null
-        return runCatching {
-            val root = json.parseToJsonElement(content) as? JsonObject ?: return null
-            root.entries.mapNotNull { entry ->
-                entry.value.jsonPrimitive.contentOrNull?.let { contentValue ->
-                    entry.key to contentValue
-                }
-            }.toMap(LinkedHashMap())
-        }.getOrNull()
-    }
-
-    private companion object {
-        private val json = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
-    }
+    private fun parseHeaderContent(content: String): Map<String, String> =
+        decodeLegacyRequestHeaderJson(content.trim()).orEmpty()
 }
 
 internal fun String.isLegacyJsBlockRule(): Boolean {

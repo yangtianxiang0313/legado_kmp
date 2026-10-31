@@ -206,6 +206,35 @@ class SourceRequestExecutor(
         )
     }
 
+    override suspend fun executeBookResource(
+        urlRule: String,
+        source: BookSource,
+        baseUrl: String,
+        ruleData: Map<String, Any?>,
+        chapter: BookChapter?,
+    ): SourceResponse {
+        val request = prepareLegacyRequest(source, urlRule, baseUrl, ruleData, chapter)
+        val defaultHeaders = LinkedHashMap(resolveSourceHeaders(source, request, true, ruleData, chapter)).apply {
+            applyCompatibilityDefaults(
+                baseUrl = request.baseUrl.ifBlank { source.bookSourceUrl },
+                requestUrl = request.url.ifBlank { request.urlNoQuery },
+            )
+        }
+        val context = transport.createContext(
+            request = request,
+            source = source,
+            defaultHeaders = defaultHeaders,
+            ruleData = ruleData,
+            chapter = chapter,
+            followRedirects = true,
+        )
+        val response = ConcurrentRateLimiter(source).withLimit {
+            transport.executeText(context)
+        }
+        // Binary resources must bypass XML normalization and source response scripts.
+        return SourceResponse.fromHttpResponse(response)
+    }
+
     override suspend fun executeForLegacyJsRaw(
         urlRule: String,
         source: BookSource,

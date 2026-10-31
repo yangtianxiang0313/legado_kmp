@@ -4,6 +4,7 @@ import io.legado.kmp.shared.domain.repository.CacheRepository
 import io.legado.kmp.shared.domain.repository.CookieRepository
 import io.legado.kmp.shared.model.Cache
 import io.legado.kmp.shared.model.Cookie
+import io.legado.kmp.shared.network.decodeLegacyRequestHeaderJson
 import io.legado.kmp.shared.network.extractCookieDomain
 import io.legado.kmp.shared.network.mapToCookieString
 import io.legado.kmp.shared.util.currentTimeMillis
@@ -273,8 +274,11 @@ class SourceStateStore(
 
     private fun parseHeaderJson(header: String): Map<String, String>? {
         if (header.isBlank()) return null
-        val (isJson, jsonMap) = parseJsonObjectMap(header)
-        if (isJson) return jsonMap
+        decodeLegacyRequestHeaderJson(header)?.let { return it }
+        // Invalid JSON must not become headers through the legacy plain-text fallback.
+        when (header.trimStart().first()) {
+            '{', '[', '"', '\'' -> return null
+        }
         return parsePlainMap(header, preserveCookieHeaderValue = true).takeIf { it.isNotEmpty() }
     }
 

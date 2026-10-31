@@ -37,6 +37,21 @@ interface LegacyJsConnectGateway {
         chapter: BookChapter? = null
     ): SourceResponse
 
+    /** Book-resource intent, separate from raw java.get/head/post connections. */
+    suspend fun executeBookResource(
+        urlRule: String,
+        source: BookSource,
+        baseUrl: String = source.bookSourceUrl,
+        ruleData: Map<String, Any?> = emptyMap(),
+        chapter: BookChapter? = null,
+    ): SourceResponse = executeForLegacyJs(
+        urlRule = urlRule,
+        source = source,
+        baseUrl = baseUrl,
+        ruleData = ruleData,
+        chapter = chapter,
+    )
+
     suspend fun executeForLegacyJsRaw(
         urlRule: String,
         source: BookSource,

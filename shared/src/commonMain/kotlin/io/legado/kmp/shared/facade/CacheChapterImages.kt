@@ -88,7 +88,7 @@ class CacheChapterImages(
 
     private suspend fun download(book: Book, source: BookSource, chapter: BookChapter, src: String): ByteArray {
         val bytes = AnalyzeUrl.getByteArrayIfDataUri(src) ?: run {
-            val response = gateway.executeForLegacyJsRaw(
+            val response = gateway.executeBookResource(
                 urlRule = src,
                 source = source,
                 baseUrl = chapter.getAbsoluteUrl().split(ruleOptions, limit = 2).first(),

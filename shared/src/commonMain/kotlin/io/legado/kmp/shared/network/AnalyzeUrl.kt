@@ -12,7 +12,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 private const val CONTENT_TYPE = "Content-Type"
 
@@ -936,16 +935,8 @@ class AnalyzeUrl(
         }
     }
 
-    private fun parseLegacyHeaderJson(content: String): Map<String, String> {
-        val trimmed = content.trim()
-        if (!trimmed.startsWith("{")) return emptyMap()
-        return runCatching {
-            val root = json.parseToJsonElement(trimmed) as? JsonObject ?: return emptyMap()
-            root.entries.mapNotNull { (key, value) ->
-                value.jsonPrimitive.contentOrNull?.let { key to it }
-            }.toMap(LinkedHashMap())
-        }.getOrElse { emptyMap() }
-    }
+    private fun parseLegacyHeaderJson(content: String): Map<String, String> =
+        decodeLegacyRequestHeaderJson(content.trim()).orEmpty()
 
     private fun buildJsVariables(baseUrl: String, result: String?): Map<String, Any?> {
         val jsVars = LinkedHashMap<String, Any?>()

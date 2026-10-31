@@ -686,10 +686,9 @@ class BookImageFacade(
             return renderLocalImage(mobiBookParser.readImage(localBookFileResolver.resolve(book), imageUrl))
         }
         val source = getBookSourcesUseCase.getByUrl(book.origin) ?: return null
-        val sourceResponse = legacyGateway.executeForLegacyJsRaw(
+        val sourceResponse = legacyGateway.executeBookResource(
             urlRule = imageUrl,
             source = source,
-            headerJson = null,
             baseUrl = book.bookUrl.ifBlank { source.bookSourceUrl },
             ruleData = book.toImageRuleVariables()
         )

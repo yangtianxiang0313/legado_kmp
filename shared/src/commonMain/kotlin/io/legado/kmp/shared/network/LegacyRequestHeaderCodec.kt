@@ -12,6 +12,7 @@ import kotlinx.serialization.json.contentOrNull
 // Null means no usable explicit map; an empty result is still an explicit replacement.
 internal fun decodeLegacyRequestHeaderJson(content: String): Map<String, String>? {
     val root = runCatching { requestHeaderJson.parseToJsonElement(content) }.getOrNull()
+        ?.takeIf(::hasStrictHeaderPrimitives)
         ?: runCatching {
             require(content.length <= 1024 * 1024) { "Nonstandard request headers exceed the parser budget" }
             JsonPathJsonReader.parseComplete(content)
@@ -37,6 +38,23 @@ internal fun decodeLegacyRequestHeaderJson(content: String): Map<String, String>
     return values.mapNotNull { (key, value) -> value?.let { key to it } }.toMap(LinkedHashMap())
 }
 
+// JsonElement parsing can retain non-JSON bare tokens even with isLenient=false.
+// Let the existing compatibility reader decode those tokens, rather than keeping quote characters.
+private fun hasStrictHeaderPrimitives(root: JsonElement): Boolean {
+    val pending = ArrayDeque<JsonElement>()
+    pending.addLast(root)
+    while (pending.isNotEmpty()) {
+        when (val value = pending.removeLast()) {
+            JsonNull -> Unit
+            is JsonObject -> pending.addAll(value.values)
+            is JsonArray -> pending.addAll(value)
+            is JsonPrimitive -> if (!value.isString && value.content != "true" && value.content != "false" &&
+                !strictHeaderNumber.matches(value.content)) return false
+        }
+    }
+    return true
+}
+
 // The pinned Android GsonExtensions.StringJsonDeserializer is registered for String,
 // including Map values. This is not the conversion used by the raw Java Map overloads.
 private fun JsonElement.requestHeaderValue(): String? = when (this) {
@@ -48,3 +66,5 @@ private fun JsonElement.requestHeaderValue(): String? = when (this) {
 private val requestHeaderJson = Json {
     isLenient = false
 }
+
+private val strictHeaderNumber = Regex("-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
