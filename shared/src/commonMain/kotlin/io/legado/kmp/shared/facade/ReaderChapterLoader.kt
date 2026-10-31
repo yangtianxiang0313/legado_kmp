@@ -149,7 +149,6 @@ internal class ReaderChapterLoader(
         val normalizedIndex = chapterIndex.coerceIn(0, chapters.lastIndex)
         val chapter = chapters[normalizedIndex]
         var currentChapter = chapter
-        val source = requireSource(prepared.book)
         val didAddLoading = addLoading(book.bookUrl, loadingState, normalizedIndex)
         val payload = try {
             coroutineContext.ensureActive()
@@ -157,6 +156,7 @@ internal class ReaderChapterLoader(
             val cached = if (refreshContent) null else chapterContentRepository.getContent(prepared.book, chapter)
             coroutineContext.ensureActive()
             val rawContent = if (cached != null) cached else {
+                val source = requireSource(prepared.book)
                 val loaded = loadChapterContentUseCase.loadWithChapter(source, prepared.book, chapter).getOrThrow()
                 coroutineContext.ensureActive()
                 currentChapter = loaded.chapter

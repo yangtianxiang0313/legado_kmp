@@ -208,19 +208,34 @@ class SourceRequestExecutor(
 
     override suspend fun executeBookResource(
         urlRule: String,
-        source: BookSource,
+        source: BookSource?,
         baseUrl: String,
         ruleData: Map<String, Any?>,
         chapter: BookChapter?,
     ): SourceResponse {
-        val request = prepareLegacyRequest(source, urlRule, baseUrl, ruleData, chapter)
-        val defaultHeaders = LinkedHashMap(resolveSourceHeaders(source, request, true, ruleData, chapter)).apply {
+        val request = if (source != null) {
+            prepareLegacyRequest(source, urlRule, baseUrl, ruleData, chapter)
+        } else {
+            prepareSourceLessBookResourceRequest(jsExecutor, urlRule, baseUrl, ruleData, chapter)
+        }
+        val sourceHeaders = if (source != null) {
+            resolveSourceHeaders(source, request, true, ruleData, chapter)
+        } else {
+            emptyMap<String, String>()
+        }
+        val defaultHeaders = LinkedHashMap(sourceHeaders).apply {
+            if (source == null) putDefaultUserAgent(::defaultUserAgent)
             applyCompatibilityDefaults(
-                baseUrl = request.baseUrl.ifBlank { source.bookSourceUrl },
+                baseUrl = request.baseUrl.ifBlank { source?.bookSourceUrl.orEmpty() },
                 requestUrl = request.url.ifBlank { request.urlNoQuery },
             )
         }
-        val context = transport.createContext(
+        val resourceTransport = if (source == null) {
+            createSourceLessBookResourceTransport(httpUseCase, proxyRequestExecutor, ::defaultUserAgent)
+        } else {
+            transport
+        }
+        val context = resourceTransport.createContext(
             request = request,
             source = source,
             defaultHeaders = defaultHeaders,
@@ -229,7 +244,7 @@ class SourceRequestExecutor(
             followRedirects = true,
         )
         val response = ConcurrentRateLimiter(source).withLimit {
-            transport.executeText(context)
+            resourceTransport.executeText(context)
         }
         // Binary resources must bypass XML normalization and source response scripts.
         return SourceResponse.fromHttpResponse(response)

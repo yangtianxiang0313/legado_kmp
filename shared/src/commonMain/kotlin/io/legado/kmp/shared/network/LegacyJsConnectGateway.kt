@@ -37,20 +37,31 @@ interface LegacyJsConnectGateway {
         chapter: BookChapter? = null
     ): SourceResponse
 
-    /** Book-resource intent, separate from raw java.get/head/post connections. */
+    /**
+     * Book-resource intent, separate from raw java.get/head/post connections.
+     * A null source must not inherit stored source state or cookies. Gateways must opt in to that path.
+     */
     suspend fun executeBookResource(
         urlRule: String,
-        source: BookSource,
-        baseUrl: String = source.bookSourceUrl,
+        source: BookSource?,
+        baseUrl: String = source?.bookSourceUrl.orEmpty(),
         ruleData: Map<String, Any?> = emptyMap(),
         chapter: BookChapter? = null,
-    ): SourceResponse = executeForLegacyJs(
-        urlRule = urlRule,
-        source = source,
-        baseUrl = baseUrl,
-        ruleData = ruleData,
-        chapter = chapter,
-    )
+    ): SourceResponse {
+        if (source == null) {
+            throw SharedCapabilityException(
+                capabilityGapKey = "book_resource_without_source_unsupported",
+                message = "当前网关不支持无书源的书籍资源请求",
+            )
+        }
+        return executeForLegacyJs(
+            urlRule = urlRule,
+            source = source,
+            baseUrl = baseUrl,
+            ruleData = ruleData,
+            chapter = chapter,
+        )
+    }
 
     suspend fun executeForLegacyJsRaw(
         urlRule: String,

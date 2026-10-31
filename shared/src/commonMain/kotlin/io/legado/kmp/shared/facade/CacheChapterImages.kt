@@ -6,7 +6,6 @@ import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.BookChapter
 import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.model.getCacheFolderName
-import io.legado.kmp.shared.network.AnalyzeUrl
 import io.legado.kmp.shared.network.LegacyJsConnectGateway
 import io.legado.kmp.shared.scripting.LegacyImageDecoder
 import kotlinx.coroutines.currentCoroutineContext
@@ -24,7 +23,8 @@ class CacheChapterImages(
     private val gateway: LegacyJsConnectGateway,
     private val decoder: LegacyImageDecoder,
 ) {
-    private val requests = ImageRequestGate()
+    private val requests = ImageRequestGate.bookImages
+    private val imageBytes = BookImageBytes(gateway, decoder)
     private val imagePermits = Semaphore(2)
 
     internal fun changes(book: Book): Flow<Unit> = imageDiskCache.changes
@@ -39,7 +39,7 @@ class CacheChapterImages(
             currentCoroutineContext().ensureActive()
             val storageKey = book.imageCacheIdentity(src)
             imagePermits.withPermit {
-                requests.withKey("$folder\n$src") {
+                requests.withKey(imageDiskCache.getImagePath(folder, storageKey)) {
                     val existing = imageDiskCache.getImage(folder, storageKey)
                     currentCoroutineContext().ensureActive()
                     if (existing != null && existing.isNotEmpty()) {
@@ -53,7 +53,16 @@ class CacheChapterImages(
                             check(imageDiskCache.deleteImage(folder, storageKey)) { "Failed to remove invalid chapter image: $src" }
                         }
                     }
-                    val bytes = download(book, source, chapter, src)
+                    val bytes = checkNotNull(
+                        imageBytes.fetchAndDecode(
+                            src = src,
+                            isCover = false,
+                            baseUrl = chapter.getAbsoluteUrl().split(ruleOptions, limit = 2).first(),
+                            source = source,
+                            book = book,
+                            chapter = chapter,
+                        )
+                    ) { "Chapter image decode returned no bytes" }
                     currentCoroutineContext().ensureActive()
                     imageDiskCache.writeValidatedImage(folder, storageKey, bytes)
                 }
@@ -84,23 +93,6 @@ class CacheChapterImages(
         if (!allowRawUrls && !content.contains("<img", ignoreCase = true)) return emptyList()
         // Reading, prefetch, explicit download and export share identical resource identities.
         return MangaChapterParser.imageSources(chapter, content).distinct()
-    }
-
-    private suspend fun download(book: Book, source: BookSource, chapter: BookChapter, src: String): ByteArray {
-        val bytes = AnalyzeUrl.getByteArrayIfDataUri(src) ?: run {
-            val response = gateway.executeBookResource(
-                urlRule = src,
-                source = source,
-                baseUrl = chapter.getAbsoluteUrl().split(ruleOptions, limit = 2).first(),
-                ruleData = book.toImageRuleVariables(),
-                chapter = chapter,
-            )
-            check(response.statusCode in 200..299) { "Image request failed: ${response.statusCode}" }
-            response.body
-        }
-        return checkNotNull(decoder.decode(src, bytes, isCover = false, source = source, book = book)) {
-            "Chapter image decode returned no bytes"
-        }
     }
 
     private companion object {

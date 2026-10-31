@@ -60,7 +60,8 @@ class BookImageFacade(
     private val localBookFileResolver: LocalBookFileResolver,
     private val mobiBookParser: MobiBookParser,
 ) {
-    private val imageRequests = ImageRequestGate()
+    private val imageRequests = ImageRequestGate.bookImages
+    private val imageBytes = BookImageBytes(legacyGateway, legacyImageDecoder)
 
     // ==================== BC-03/BC-04: Default cover management ====================
 
@@ -671,9 +672,7 @@ class BookImageFacade(
         }
     }
 
-    /**
-     * Fetch image bytes from network via legacyGateway and decode via legacyImageDecoder.
-     */
+    /** Keeps local-book rendering separate from shared network/embedded byte acquisition. */
     private suspend fun fetchAndDecodeImage(
         book: Book,
         imageUrl: String,
@@ -685,20 +684,13 @@ class BookImageFacade(
         if (book.isLocalMobiImageBook()) {
             return renderLocalImage(mobiBookParser.readImage(localBookFileResolver.resolve(book), imageUrl))
         }
-        val source = getBookSourcesUseCase.getByUrl(book.origin) ?: return null
-        val sourceResponse = legacyGateway.executeBookResource(
-            urlRule = imageUrl,
-            source = source,
-            baseUrl = book.bookUrl.ifBlank { source.bookSourceUrl },
-            ruleData = book.toImageRuleVariables()
-        )
-        check(sourceResponse.statusCode in 200..299) { "Image request failed: ${sourceResponse.statusCode}" }
-        return legacyImageDecoder.decode(
+        val source = getBookSourcesUseCase.getByUrl(book.origin)
+        return imageBytes.fetchAndDecode(
             src = imageUrl,
-            bytes = sourceResponse.body,
             isCover = isCover,
+            baseUrl = book.bookUrl.ifBlank { source?.bookSourceUrl.orEmpty() },
             source = source,
-            book = book
+            book = book,
         )
     }
 

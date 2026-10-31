@@ -7,6 +7,11 @@ import kotlinx.coroutines.withContext
 
 /** Orders loads and explicit refreshes of the same image without serializing unrelated images. */
 internal class ImageRequestGate {
+    companion object {
+        // Display facades are factories; chapter downloads must still share their cache-file locks.
+        val bookImages = ImageRequestGate()
+    }
+
     private class Entry(val lock: Mutex = Mutex(), var users: Int = 0)
 
     private val lock = Mutex()
