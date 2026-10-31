@@ -16,6 +16,7 @@ import io.legado.kmp.shared.source.SourceStateStore
 import io.legado.kmp.shared.scripting.SourceJsRuntime
 import io.legado.kmp.shared.util.formatChineseWordCount
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -142,6 +143,8 @@ object BookList {
                     analyzeRule.getElements(ruleList)
                 }
             } catch (error: Exception) {
+                coroutineContext.ensureActive()
+                if (error is CancellationException) throw error
                 error.rethrowIfSharedCapability()
                 throw webBookParseFailure(
                     stage = if (isSearch) "search.list" else "explore.list",
@@ -173,45 +176,32 @@ object BookList {
                     ?: emptyList()
             } else {
                 debugSink?.log(message = "└列表大小:${items.size}")
-                var firstFailure: Exception? = null
                 val parsed = mutableListOf<SearchBook>()
                 val listVariables = analyzeRule.getVariables()
                 for ((index, item) in items.withIndex()) {
-                    val book = try {
-                        parseBookItem(
-                            item = item,
-                            bookSource = bookSource,
-                            rule = rule,
-                            baseUrl = baseUrl,
-                            parentRule = analyzeRule,
-                            initialVariables = listVariables,
-                            body = body,
-                            sourceStateStore = sourceStateStore,
-                            jsExecutor = jsExecutor,
-                            connectGateway = connectGateway,
-                            headerResolver = headerResolver,
-                            sourceJsRuntime = sourceJsRuntime,
-                            logFirstItem = index == 0,
-                            debugSink = debugSink
-                        )
-                    } catch (error: Exception) {
-                        error.rethrowIfSharedCapability()
-                        if (firstFailure == null) {
-                            firstFailure = error
-                        }
-                        null
-                    }
+                    val book = parseBookItem(
+                        item = item,
+                        bookSource = bookSource,
+                        rule = rule,
+                        baseUrl = baseUrl,
+                        parentRule = analyzeRule,
+                        initialVariables = listVariables,
+                        body = body,
+                        sourceStateStore = sourceStateStore,
+                        jsExecutor = jsExecutor,
+                        connectGateway = connectGateway,
+                        headerResolver = headerResolver,
+                        sourceJsRuntime = sourceJsRuntime,
+                        filter = filter,
+                        logFirstItem = index == 0,
+                        debugSink = debugSink
+                    )
                     if (book != null) {
-                        if (filter?.invoke(book.name, book.author) != false) {
-                            parsed += book
-                        }
-                        if (shouldBreak?.invoke(parsed.size) == true) {
-                            break
-                        }
+                        parsed += book
                     }
-                }
-                if (parsed.isEmpty() && items.isNotEmpty() && firstFailure != null) {
-                    throw firstFailure as Exception
+                    if (shouldBreak?.invoke(parsed.size) == true) {
+                        break
+                    }
                 }
                 parsed
             }
@@ -224,8 +214,11 @@ object BookList {
             debugSink?.log(message = "◇书籍总数:${result.size}")
             result
         } catch (e: WebBookParseException) {
+            coroutineContext.ensureActive()
             throw e
         } catch (e: Exception) {
+            coroutineContext.ensureActive()
+            if (e is CancellationException) throw e
             e.rethrowIfSharedCapability()
             throw webBookParseFailure(
                 stage = if (isSearch) "search.parse" else "explore.parse",
@@ -274,6 +267,8 @@ object BookList {
                 sourceJsRuntime = sourceJsRuntime
             )
         } catch (error: Exception) {
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
             error.rethrowIfSharedCapability()
             throw webBookParseFailure(
                 stage = "search.detailFallback",
@@ -313,162 +308,187 @@ object BookList {
         connectGateway: LegacyJsConnectGateway?,
         headerResolver: SourceHeaderResolver?,
         sourceJsRuntime: SourceJsRuntime?,
+        filter: ((name: String, author: String) -> Boolean)?,
         logFirstItem: Boolean = false,
         debugSink: BookSourceDebugSink? = null
     ): SearchBook? {
-        return try {
-            val itemRuleData = SimpleRuleData(
-                bookSource = bookSource,
-                initialVariables = initialVariables
+        val itemRuleData = SimpleRuleData(
+            bookSource = bookSource,
+            initialVariables = initialVariables
+        )
+        val itemRule = parentRule
+        itemRule.setRuleData(itemRuleData)
+        itemRule.setContent(item, baseUrl)
+
+        var bookContext = Book(
+            bookUrl = baseUrl,
+            origin = bookSource.bookSourceUrl,
+            originName = bookSource.bookSourceName,
+            type = getBookType(bookSource),
+            originOrder = bookSource.customOrder,
+            variable = itemRuleData.getVariables()
+                .takeIf { it.isNotEmpty() }
+                ?.let { searchBookJson.encodeToString(it) }
+        )
+        itemRule.setBookContext(bookContext)
+
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取书名")
+        val name = try {
+            formatBookName(rule.name?.let { itemRule.getString(it) }.orEmpty())
+        } catch (error: Exception) {
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            throw webBookParseFailure(
+                stage = "search.name",
+                source = bookSource,
+                baseUrl = baseUrl,
+                detail = "failed to parse book name",
+                rule = rule.name,
+                cause = error
             )
-            val itemRule = parentRule
-            itemRule.setRuleData(itemRuleData)
-            itemRule.setContent(item, baseUrl)
+        }
+        if (name.isEmpty()) return null
+        debugSink.logFirstItem(logFirstItem, "└$name")
+        bookContext = bookContext.copy(name = name)
+        itemRule.setBookContext(bookContext)
 
-            var bookContext = Book(
-                bookUrl = baseUrl,
-                origin = bookSource.bookSourceUrl,
-                originName = bookSource.bookSourceName,
-                type = getBookType(bookSource),
-                originOrder = bookSource.customOrder,
-                variable = itemRuleData.getVariables()
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { searchBookJson.encodeToString(it) }
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取作者")
+        val author = try {
+            formatBookAuthor(rule.author?.let { itemRule.getString(it) }.orEmpty())
+        } catch (error: Exception) {
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            throw webBookParseFailure(
+                stage = "search.author",
+                source = bookSource,
+                baseUrl = baseUrl,
+                detail = "failed to parse book author",
+                rule = rule.author,
+                cause = error
             )
-            itemRule.setBookContext(bookContext)
+        }
+        debugSink.logFirstItem(logFirstItem, "└$author")
+        bookContext = bookContext.copy(author = author)
+        itemRule.setBookContext(bookContext)
+        if (filter?.invoke(name, author) == false) return null
 
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取分类")
+        val kind = runCatching { rule.kind?.let { itemRule.getStringList(it) }?.joinToString(",") }.getOrElse { error ->
             coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取书名")
-            val rawName = try {
-                rule.name?.let { itemRule.getString(it) }.orEmpty()
-            } catch (error: Exception) {
-                error.rethrowIfSharedCapability()
-                throw webBookParseFailure(
-                    stage = "search.name",
-                    source = bookSource,
-                    baseUrl = baseUrl,
-                    detail = "failed to parse book name",
-                    rule = rule.name,
-                    cause = error
-                )
-            }
-            val name = formatBookName(rawName).takeIf { it.isNotEmpty() } ?: return null
-            debugSink.logFirstItem(logFirstItem, "└$name")
-            bookContext = bookContext.copy(name = name)
-            itemRule.setBookContext(bookContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取作者")
-            val author = runCatching {
-                formatBookAuthor(rule.author?.let { itemRule.getString(it) }.orEmpty())
-            }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
-                ""
-            }
-            debugSink.logFirstItem(logFirstItem, "└$author")
-            bookContext = bookContext.copy(author = author)
-            itemRule.setBookContext(bookContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取分类")
-            val kind = runCatching { rule.kind?.let { itemRule.getStringList(it) }?.joinToString(",") }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
-                null
-            }
-            debugSink.logFirstItem(logFirstItem, "└${kind.orEmpty()}")
-            bookContext = bookContext.copy(kind = kind)
-            itemRule.setBookContext(bookContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取字数")
-            val wordCount = runCatching { rule.wordCount?.let { formatWordCount(itemRule.getString(it)) } }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
-                null
-            }
-            debugSink.logFirstItem(logFirstItem, "└${wordCount.orEmpty()}")
-            bookContext = bookContext.copy(wordCount = wordCount)
-            itemRule.setBookContext(bookContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取最新章节")
-            val latestChapter = runCatching { rule.lastChapter?.let { itemRule.getString(it) }?.trim() }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
-                null
-            }
-            debugSink.logFirstItem(logFirstItem, "└${latestChapter.orEmpty()}")
-            bookContext = bookContext.copy(latestChapterTitle = latestChapter)
-            itemRule.setBookContext(bookContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取简介")
-            val intro = runCatching { rule.intro?.let { formatIntro(itemRule.getString(it)) } }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
-                null
-            }
-            debugSink.logFirstItem(logFirstItem, "└${intro.orEmpty()}")
-            bookContext = bookContext.copy(intro = intro)
-            itemRule.setBookContext(bookContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取封面链接")
-            val coverUrl = runCatching {
-                rule.coverUrl?.let { itemRule.getStringList(it, isUrl = true).firstOrNull() }
-            }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
-                null
-            }
-            debugSink.logFirstItem(logFirstItem, "└${coverUrl.orEmpty()}")
-            bookContext = bookContext.copy(coverUrl = coverUrl)
-            itemRule.setBookContext(bookContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstItem(logFirstItem, "┌获取详情页链接")
-            val bookUrl = try {
-                rule.bookUrl?.let { itemRule.getString(it, isUrl = true) }?.takeIf { it.isNotBlank() } ?: baseUrl
-            } catch (error: Exception) {
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
-                baseUrl
-            }
-            val resolvedBookUrl = bookUrl.takeIf { it.isNotBlank() } ?: baseUrl
-            val effectiveBookUrl = if (resolvedBookUrl == baseUrl) {
-                extractWindowOpenUrl(item.toString())?.let { resolveLegacyAbsoluteUrl(baseUrl, it) } ?: resolvedBookUrl
-            } else {
-                resolvedBookUrl
-            }
-            debugSink.logFirstItem(logFirstItem, "└$effectiveBookUrl")
-
-            return SearchBook(
-                bookUrl = effectiveBookUrl,
-                name = name,
-                author = author,
-                intro = intro,
-                coverUrl = coverUrl,
-                kind = kind,
-                wordCount = wordCount,
-                latestChapterTitle = latestChapter,
-                tocUrl = "",
-                origin = bookSource.bookSourceUrl,
-                originName = bookSource.bookSourceName,
-                type = getBookType(bookSource),
-                originOrder = bookSource.customOrder,
-                variable = itemRuleData.getVariables()
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { searchBookJson.encodeToString(it) }
-            ).apply {
-                if (baseUrl == effectiveBookUrl) {
-                    infoHtml = body
-                }
-            }
-        } catch (e: Exception) {
-            e.rethrowIfSharedCapability()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
             null
+        }
+        debugSink.logFirstItem(logFirstItem, "└${kind.orEmpty()}")
+        bookContext = bookContext.copy(kind = kind)
+        itemRule.setBookContext(bookContext)
+
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取字数")
+        val wordCount = runCatching { rule.wordCount?.let { formatWordCount(itemRule.getString(it)) } }.getOrElse { error ->
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
+            null
+        }
+        debugSink.logFirstItem(logFirstItem, "└${wordCount.orEmpty()}")
+        bookContext = bookContext.copy(wordCount = wordCount)
+        itemRule.setBookContext(bookContext)
+
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取最新章节")
+        val latestChapter = runCatching { rule.lastChapter?.let { itemRule.getString(it) }?.trim() }.getOrElse { error ->
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
+            null
+        }
+        debugSink.logFirstItem(logFirstItem, "└${latestChapter.orEmpty()}")
+        bookContext = bookContext.copy(latestChapterTitle = latestChapter)
+        itemRule.setBookContext(bookContext)
+
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取简介")
+        val intro = runCatching { rule.intro?.let { formatIntro(itemRule.getString(it)) } }.getOrElse { error ->
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
+            null
+        }
+        debugSink.logFirstItem(logFirstItem, "└${intro.orEmpty()}")
+        bookContext = bookContext.copy(intro = intro)
+        itemRule.setBookContext(bookContext)
+
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取封面链接")
+        val coverUrl = runCatching {
+            rule.coverUrl?.let { itemRule.getStringList(it, isUrl = true).firstOrNull() }
+        }.getOrElse { error ->
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstItem(logFirstItem, "└${error.message.orEmpty()}")
+            null
+        }
+        debugSink.logFirstItem(logFirstItem, "└${coverUrl.orEmpty()}")
+        bookContext = bookContext.copy(coverUrl = coverUrl)
+        itemRule.setBookContext(bookContext)
+
+        coroutineContext.ensureActive()
+        debugSink.logFirstItem(logFirstItem, "┌获取详情页链接")
+        val effectiveBookUrl = try {
+            val bookUrl = rule.bookUrl?.let { itemRule.getString(it, isUrl = true) }
+                ?.takeIf { it.isNotBlank() } ?: baseUrl
+            if (bookUrl == baseUrl) {
+                extractWindowOpenUrl(item.toString())?.let { resolveLegacyAbsoluteUrl(baseUrl, it) } ?: bookUrl
+            } else {
+                bookUrl
+            }
+        } catch (error: Exception) {
+            coroutineContext.ensureActive()
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            throw webBookParseFailure(
+                stage = "search.bookUrl",
+                source = bookSource,
+                baseUrl = baseUrl,
+                detail = "failed to parse book URL",
+                rule = rule.bookUrl,
+                cause = error
+            )
+        }
+        debugSink.logFirstItem(logFirstItem, "└$effectiveBookUrl")
+
+        return SearchBook(
+            bookUrl = effectiveBookUrl,
+            name = name,
+            author = author,
+            intro = intro,
+            coverUrl = coverUrl,
+            kind = kind,
+            wordCount = wordCount,
+            latestChapterTitle = latestChapter,
+            tocUrl = "",
+            origin = bookSource.bookSourceUrl,
+            originName = bookSource.bookSourceName,
+            type = getBookType(bookSource),
+            originOrder = bookSource.customOrder,
+            variable = itemRuleData.getVariables()
+                .takeIf { it.isNotEmpty() }
+                ?.let { searchBookJson.encodeToString(it) }
+        ).apply {
+            if (baseUrl == effectiveBookUrl) {
+                infoHtml = body
+            }
         }
     }
 

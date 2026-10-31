@@ -13,6 +13,7 @@ import io.legado.kmp.shared.source.SourceStateStore
 import io.legado.kmp.shared.scripting.JsResult
 import io.legado.kmp.shared.scripting.SourceJsRuntime
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -128,6 +129,7 @@ object BookChapterList {
                 logger?.log(message = "└${urls.joinToString()}")
                 urls
             } catch (error: Exception) {
+                if (error is CancellationException) throw error
                 error.rethrowIfSharedCapability()
                 logger?.log(message = "└${error.message.orEmpty()}")
                 throw webBookParseFailure(
@@ -147,6 +149,7 @@ object BookChapterList {
         val items = try {
             if (listRule.isBlank()) emptyList() else analyzeRule.getElements(listRule)
         } catch (error: Exception) {
+            if (error is CancellationException) throw error
             error.rethrowIfSharedCapability()
             logger?.log(message = "└${error.message.orEmpty()}")
             throw webBookParseFailure(
@@ -159,35 +162,23 @@ object BookChapterList {
             )
         }
         logger?.log(message = "└列表大小:${items.size}")
-        var firstFailure: Exception? = null
         val chapters = items.mapIndexedNotNull { index, item ->
-            try {
-                parseChapter(
-                    parentRule = analyzeRule,
-                    item = item,
-                    bookSource = bookSource,
-                    book = book,
-                    baseUrl = baseUrl,
-                    redirectUrl = redirectUrl,
-                    index = index,
-                    sourceStateStore = sourceStateStore,
-                    jsExecutor = jsExecutor,
-                    connectGateway = connectGateway,
-                    headerResolver = headerResolver,
-                    sourceJsRuntime = sourceJsRuntime,
-                    logFirstChapter = index == 0 && debugLog,
-                    debugSink = debugSink
-                )
-            } catch (error: Exception) {
-                error.rethrowIfSharedCapability()
-                if (firstFailure == null) {
-                    firstFailure = error
-                }
-                null
-            }
-        }
-        if (chapters.isEmpty() && items.isNotEmpty() && firstFailure != null) {
-            throw firstFailure as Exception
+            parseChapter(
+                parentRule = analyzeRule,
+                item = item,
+                bookSource = bookSource,
+                book = book,
+                baseUrl = baseUrl,
+                redirectUrl = redirectUrl,
+                index = index,
+                sourceStateStore = sourceStateStore,
+                jsExecutor = jsExecutor,
+                connectGateway = connectGateway,
+                headerResolver = headerResolver,
+                sourceJsRuntime = sourceJsRuntime,
+                logFirstChapter = index == 0 && debugLog,
+                debugSink = debugSink
+            )
         }
         logger?.log(message = "└目录列表解析完成")
         chapters.firstOrNull()?.let { firstChapter ->
@@ -280,137 +271,168 @@ object BookChapterList {
     ): BookChapter? {
         val rule = bookSource.ruleToc ?: return null
 
-        return try {
-            val itemRule = AnalyzeRule(
+        val itemRule = AnalyzeRule(
+            source = bookSource,
+            sourceStateStore = sourceStateStore,
+            jsExecutor = jsExecutor,
+            connectGateway = connectGateway,
+            headerResolver = headerResolver,
+            sourceJsRuntime = sourceJsRuntime
+        )
+        itemRule.setContent(item, baseUrl)
+        itemRule.setRedirectUrl(redirectUrl)
+        itemRule.setBookContext(book.copy(variable = serializeVariableMap(parentRule.getVariables())))
+        itemRule.inheritBookVariableState(parentRule)
+
+        var chapterContext = BookChapter(
+            bookUrl = book.bookUrl,
+            index = index,
+            title = "",
+            url = "",
+            baseUrl = redirectUrl
+        )
+        itemRule.setChapterContext(chapterContext)
+
+        coroutineContext.ensureActive()
+        debugSink.logFirstChapter(logFirstChapter, "┌获取章节名称")
+        val chapterName = try {
+            itemRule.getString(rule.chapterName).trim()
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
+            throw webBookParseFailure(
+                stage = "toc.chapterName",
                 source = bookSource,
-                sourceStateStore = sourceStateStore,
-                jsExecutor = jsExecutor,
-                connectGateway = connectGateway,
-                headerResolver = headerResolver,
-                sourceJsRuntime = sourceJsRuntime
-            )
-            itemRule.setContent(item, baseUrl)
-            itemRule.setRedirectUrl(redirectUrl)
-            itemRule.setBookContext(book.copy(variable = serializeVariableMap(parentRule.getVariables())))
-            itemRule.inheritBookVariableState(parentRule)
-
-            var chapterContext = BookChapter(
-                bookUrl = book.bookUrl,
-                index = index,
-                title = "",
-                url = "",
-                baseUrl = redirectUrl
-            )
-            itemRule.setChapterContext(chapterContext)
-
-            coroutineContext.ensureActive()
-            debugSink.logFirstChapter(logFirstChapter, "┌获取章节名称")
-            val chapterName = try {
-                rule.chapterName?.let { itemRule.getString(it) }?.trim()
-            } catch (error: Exception) {
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
-                throw webBookParseFailure(
-                    stage = "toc.chapterName",
-                    source = bookSource,
-                    baseUrl = redirectUrl,
-                    detail = "failed to parse chapter title",
-                    rule = rule.chapterName,
-                    cause = error
-                )
-            } ?: return null
-            debugSink.logFirstChapter(logFirstChapter, "└$chapterName")
-            chapterContext = chapterContext.copy(title = chapterName)
-            itemRule.setChapterContext(chapterContext)
-            coroutineContext.ensureActive()
-            debugSink.logFirstChapter(logFirstChapter, "┌获取章节链接")
-            val rawChapterUrl = try {
-                rule.chapterUrl
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { itemRule.getUrlWithoutFallback(it) }
-                    ?.trim()
-                    .orEmpty()
-            } catch (error: Exception) {
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
-                throw webBookParseFailure(
-                    stage = "toc.chapterUrl",
-                    source = bookSource,
-                    baseUrl = redirectUrl,
-                    detail = "failed to parse chapter URL",
-                    rule = rule.chapterUrl,
-                    cause = error
-                )
-            }
-            // Variables written while parsing name/URL acquire their durable chapter identity now.
-            chapterContext = chapterContext.copy(url = rawChapterUrl)
-            itemRule.setChapterContext(chapterContext)
-            val updateTime = runCatching {
-                rule.updateTime?.let { itemRule.getString(it) }?.trim()?.takeIf { it.isNotEmpty() }
-            }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
-                null
-            }
-            val isVolume = runCatching {
-                legacyRuleIsTrue(rule.isVolume?.let { itemRule.getString(it) })
-            }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                false
-            }
-            val resolvedUrl = when {
-                rawChapterUrl.isNotBlank() -> rawChapterUrl
-                isVolume -> chapterName + index
-                else -> baseUrl
-            }
-            debugSink.logFirstChapter(logFirstChapter, "└$resolvedUrl")
-            debugSink.logFirstChapter(logFirstChapter, "┌获取章节信息")
-            debugSink.logFirstChapter(logFirstChapter, "└${updateTime.orEmpty()}")
-            chapterContext = chapterContext.copy(
-                url = resolvedUrl,
-                isVolume = isVolume,
-                tag = updateTime
-            )
-            itemRule.setChapterContext(chapterContext)
-            val isVip = runCatching {
-                debugSink.logFirstChapter(logFirstChapter, "┌获取是否VIP")
-                legacyRuleIsTrue(rule.isVip?.let { itemRule.getString(it) })
-            }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
-                false
-            }
-            debugSink.logFirstChapter(logFirstChapter, "└$isVip")
-            val isPay = runCatching {
-                debugSink.logFirstChapter(logFirstChapter, "┌获取是否购买")
-                legacyRuleIsTrue(rule.isPay?.let { itemRule.getString(it) })
-            }.getOrElse { error ->
-                error.rethrowIfSharedCapability()
-                debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
-                false
-            }
-            debugSink.logFirstChapter(logFirstChapter, "└$isPay")
-
-            BookChapter(
-                bookUrl = book.bookUrl,
-                index = index,
-                title = chapterName,
-                url = resolvedUrl,
                 baseUrl = redirectUrl,
-                isVolume = isVolume,
-                isVip = isVip,
-                isPay = isPay,
-                tag = updateTime,
-                variable = itemRule.getVariables()
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { bookChapterJson.encodeToString(it) }
+                detail = "failed to parse chapter title",
+                rule = rule.chapterName,
+                cause = error
             )
-        } catch (e: WebBookParseException) {
-            throw e
-        } catch (e: Exception) {
-            e.rethrowIfSharedCapability()
-            null
         }
+        debugSink.logFirstChapter(logFirstChapter, "└$chapterName")
+        chapterContext = chapterContext.copy(title = chapterName)
+        itemRule.setChapterContext(chapterContext)
+        coroutineContext.ensureActive()
+        debugSink.logFirstChapter(logFirstChapter, "┌获取章节链接")
+        val rawChapterUrl = try {
+            rule.chapterUrl
+                ?.takeIf { it.isNotBlank() }
+                ?.let { itemRule.getUrlWithoutFallback(it) }
+                ?.trim()
+                .orEmpty()
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
+            throw webBookParseFailure(
+                stage = "toc.chapterUrl",
+                source = bookSource,
+                baseUrl = redirectUrl,
+                detail = "failed to parse chapter URL",
+                rule = rule.chapterUrl,
+                cause = error
+            )
+        }
+        // Variables written while parsing name/URL acquire their durable chapter identity now.
+        chapterContext = chapterContext.copy(url = rawChapterUrl)
+        itemRule.setChapterContext(chapterContext)
+        val updateTime = try {
+            rule.updateTime?.let { itemRule.getString(it) }?.trim()?.takeIf { it.isNotEmpty() }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
+            throw webBookParseFailure(
+                stage = "toc.updateTime",
+                source = bookSource,
+                baseUrl = redirectUrl,
+                detail = "failed to parse chapter update time",
+                rule = rule.updateTime,
+                cause = error
+            )
+        }
+        val isVolume = try {
+            legacyRuleIsTrue(rule.isVolume?.let { itemRule.getString(it) })
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
+            throw webBookParseFailure(
+                stage = "toc.isVolume",
+                source = bookSource,
+                baseUrl = redirectUrl,
+                detail = "failed to parse chapter volume flag",
+                rule = rule.isVolume,
+                cause = error
+            )
+        }
+        val resolvedUrl = when {
+            rawChapterUrl.isNotBlank() -> rawChapterUrl
+            isVolume -> chapterName + index
+            else -> baseUrl
+        }
+        debugSink.logFirstChapter(logFirstChapter, "└$resolvedUrl")
+        debugSink.logFirstChapter(logFirstChapter, "┌获取章节信息")
+        debugSink.logFirstChapter(logFirstChapter, "└${updateTime.orEmpty()}")
+        chapterContext = chapterContext.copy(
+            url = resolvedUrl,
+            isVolume = isVolume,
+            tag = updateTime
+        )
+        itemRule.setChapterContext(chapterContext)
+        // Android skips empty titles only after URL/update-time/volume rules have run.
+        if (chapterName.isEmpty()) return null
+
+        val isVip = try {
+            debugSink.logFirstChapter(logFirstChapter, "┌获取是否VIP")
+            legacyRuleIsTrue(rule.isVip?.let { itemRule.getString(it) })
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
+            throw webBookParseFailure(
+                stage = "toc.isVip",
+                source = bookSource,
+                baseUrl = redirectUrl,
+                detail = "failed to parse chapter VIP flag",
+                rule = rule.isVip,
+                cause = error
+            )
+        }
+        debugSink.logFirstChapter(logFirstChapter, "└$isVip")
+        val isPay = try {
+            debugSink.logFirstChapter(logFirstChapter, "┌获取是否购买")
+            legacyRuleIsTrue(rule.isPay?.let { itemRule.getString(it) })
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            error.rethrowIfSharedCapability()
+            debugSink.logFirstChapter(logFirstChapter, "└${error.message.orEmpty()}")
+            throw webBookParseFailure(
+                stage = "toc.isPay",
+                source = bookSource,
+                baseUrl = redirectUrl,
+                detail = "failed to parse chapter payment flag",
+                rule = rule.isPay,
+                cause = error
+            )
+        }
+        debugSink.logFirstChapter(logFirstChapter, "└$isPay")
+
+        return BookChapter(
+            bookUrl = book.bookUrl,
+            index = index,
+            title = chapterName,
+            url = resolvedUrl,
+            baseUrl = redirectUrl,
+            isVolume = isVolume,
+            isVip = isVip,
+            isPay = isPay,
+            tag = updateTime,
+            variable = itemRule.getVariables()
+                .takeIf { it.isNotEmpty() }
+                ?.let { bookChapterJson.encodeToString(it) }
+        )
     }
 
     private fun BookSourceDebugSink?.logFirstChapter(enabled: Boolean, message: String) {
