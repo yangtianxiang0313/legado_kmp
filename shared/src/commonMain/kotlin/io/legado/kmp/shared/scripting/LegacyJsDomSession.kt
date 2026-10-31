@@ -3,22 +3,18 @@ package io.legado.kmp.shared.scripting
 import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Document
 import com.fleeksoft.ksoup.nodes.Element
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.intOrNull
+import com.fleeksoft.ksoup.nodes.Node
 
 /** Owned by one QuickJS execution; nodes remain live until that execution releases the session. */
 internal class LegacyJsDomSession {
     private val namespace = randomUUID()
     private var nextHandle = 0L
-    private val elementsByHandle = HashMap<String, Element>()
+    private val nodesByHandle = HashMap<String, Node>()
 
-    // Ksoup 0.2.4 Node.equals/hashCode use object identity; Element does not override them.
+    // Ksoup 0.2.4 Node.equals/hashCode use object identity.
     // Content mutations therefore cannot invalidate this index or merge equal-looking nodes.
-    private val handlesByElement = HashMap<Element, String>()
+    private val handlesByNode = HashMap<Node, String>()
+    private val nodeSupport = LegacyJsDomNodeSupport(this)
 
     internal fun parse(html: String, baseUri: String): Map<String, Any?> =
         retain(Ksoup.parse(html, baseUri))
@@ -26,33 +22,60 @@ internal class LegacyJsDomSession {
     internal fun adopt(payload: String): Map<String, Any?> {
         val decoded = legacyJsDomPayloadFromJson(payload)
         if (decoded.containsKey("handle")) {
-            val handle = decoded["handle"] as? String
-                ?: throw IllegalArgumentException("Invalid legacy DOM descriptor handle")
-            val element = resolve(handle)
-            require(decoded["document"] == (element is Document)) { "Invalid legacy DOM descriptor type" }
-            return retain(element)
+            return retain(resolveDescriptor(decoded))
+        }
+        require(!decoded.containsKey("nodeType") || decoded["nodeType"] == "element") {
+            "Legacy DOM nodes require a registered handle"
         }
         return retain(legacyJsDomElement(decoded))
     }
 
-    internal fun retain(element: Element): Map<String, Any?> {
-        val handle = handlesByElement[element] ?: run {
+    internal fun create(nodeType: String, text: String): Map<String, Any?> =
+        retain(legacyJsDomCreateNode(nodeType, text))
+
+    internal fun retain(element: Element): Map<String, Any?> = retain(element as Node)
+
+    internal fun retain(node: Node): Map<String, Any?> {
+        val handle = handlesByNode[node] ?: run {
             check(nextHandle < Long.MAX_VALUE) { "Legacy DOM handle space exhausted" }
             val allocated = "dom:$namespace:${++nextHandle}"
-            handlesByElement[element] = allocated
-            elementsByHandle[allocated] = element
+            handlesByNode[node] = allocated
+            nodesByHandle[allocated] = node
             allocated
         }
-        return linkedMapOf("handle" to handle, "document" to (element is Document))
+        return linkedMapOf<String, Any?>(
+            "handle" to handle,
+            "document" to (node is Document),
+        ).apply {
+            if (node !is Element) put("nodeType", legacyJsDomNodeType(node))
+        }
     }
 
-    internal fun resolve(handle: String): Element = elementsByHandle[handle]
+    internal fun resolve(handle: String): Element = resolveNode(handle) as? Element
+        ?: throw IllegalArgumentException("Legacy DOM handle does not refer to an Element")
+
+    internal fun resolveNode(handle: String): Node = nodesByHandle[handle]
         ?: throw IllegalArgumentException("Unknown legacy DOM handle for this session")
+
+    internal fun resolveDescriptor(descriptor: Map<*, *>): Node {
+        val handle = descriptor["handle"] as? String
+            ?: throw IllegalArgumentException("Invalid legacy DOM descriptor handle")
+        val node = resolveNode(handle)
+        require(descriptor["document"] == (node is Document)) { "Invalid legacy DOM descriptor type" }
+        require(descriptor["nodeType"] == legacyJsDomNodeType(node) ||
+            (node is Element && !descriptor.containsKey("nodeType"))) {
+            "Invalid legacy DOM descriptor node type"
+        }
+        return node
+    }
 
     /** Arguments are a JSON array, not a comma-separated string or a serialized HTML snapshot. */
     internal fun invoke(handle: String, operation: String, argsJson: String): Map<String, Any?> {
-        val element = resolve(handle)
-        val args = Arguments(operation, argsJson)
+        val node = resolveNode(handle)
+        val args = LegacyJsDomArguments(operation, argsJson)
+        nodeSupport.invoke(node, operation, args)?.let { return it }
+        val element = node as? Element
+            ?: throw IllegalArgumentException("Legacy DOM $operation requires an Element")
         return when (operation) {
             "select" -> {
                 args.count(1)
@@ -62,10 +85,9 @@ internal class LegacyJsDomSession {
                 args.count(1)
                 elementResult(element.selectFirst(args.string(0)))
             }
-            "parent", "nextElementSibling", "previousElementSibling" -> {
+            "nextElementSibling", "previousElementSibling" -> {
                 args.count(0)
                 elementResult(when (operation) {
-                    "parent" -> element.parent()
                     "nextElementSibling" -> element.nextElementSibling()
                     else -> element.previousElementSibling()
                 })
@@ -82,18 +104,17 @@ internal class LegacyJsDomSession {
                 args.count(1)
                 elementResult(element.child(args.int(0)))
             }
-            "ownText", "wholeText", "outerHtml", "data", "baseUri", "className",
-            "nodeName", "normalName", "childrenSize" -> {
+            "textNodes", "dataNodes" -> {
+                args.count(0)
+                nodesResult(if (operation == "textNodes") element.textNodes() else element.dataNodes(), readOnly = true)
+            }
+            "ownText", "wholeText", "data", "className", "childrenSize" -> {
                 args.count(0)
                 valueResult(when (operation) {
                     "ownText" -> element.ownText()
                     "wholeText" -> element.wholeText()
-                    "outerHtml" -> element.outerHtml()
                     "data" -> element.data()
-                    "baseUri" -> element.baseUri()
                     "className" -> element.className()
-                    "nodeName" -> element.nodeName()
-                    "normalName" -> element.normalName()
                     else -> element.childrenSize()
                 })
             }
@@ -116,25 +137,10 @@ internal class LegacyJsDomSession {
                     })
                 }
             }
-            "hasAttr", "hasClass", "absUrl" -> {
+            "hasClass" -> {
                 args.count(1)
                 val key = args.string(0)
-                valueResult(when (operation) {
-                    "hasAttr" -> element.hasAttr(key)
-                    "hasClass" -> element.hasClass(key)
-                    else -> element.absUrl(key)
-                })
-            }
-            "attr" -> {
-                args.count(1, 2)
-                val key = args.string(0)
-                if (args.size == 1) {
-                    valueResult(element.attr(key))
-                } else {
-                    val attribute = args.stringOrBoolean(1)
-                    elementResult(if (attribute is Boolean) element.attr(key, attribute)
-                        else element.attr(key, attribute as String))
-                }
+                valueResult(element.hasClass(key))
             }
             "getElementsByTag", "getElementsByClass" -> {
                 args.count(1)
@@ -151,48 +157,24 @@ internal class LegacyJsDomSession {
                 if (args.size == 0) valueResult(element.classNames().toList())
                 else elementResult(element.classNames(args.strings(0).toSet()))
             }
-            "addClass", "removeClass", "toggleClass", "removeAttr" -> {
+            "addClass", "removeClass", "toggleClass" -> {
                 args.count(1)
                 val name = args.string(0)
                 elementResult(when (operation) {
                     "addClass" -> element.addClass(name)
                     "removeClass" -> element.removeClass(name)
-                    "toggleClass" -> element.toggleClass(name)
-                    else -> element.removeAttr(name)
+                    else -> element.toggleClass(name)
                 })
             }
-            "append", "prepend", "before", "after", "wrap" -> {
+            "append", "prepend", "appendText", "prependText" -> {
                 args.count(1)
-                val html = args.string(0)
-                // Ksoup silently ignores sibling HTML on orphans; Jsoup 1.16.2 rejects it.
-                if (operation == "before" || operation == "after") requireParent(element, operation)
+                val content = args.string(0)
                 elementResult(when (operation) {
-                    "append" -> element.append(html)
-                    "prepend" -> element.prepend(html)
-                    "before" -> element.before(html)
-                    "after" -> element.after(html)
-                    else -> element.wrap(html)
+                    "append" -> element.append(content)
+                    "prepend" -> element.prepend(content)
+                    "appendText" -> element.appendText(content)
+                    else -> element.prependText(content)
                 })
-            }
-            "empty", "clone" -> {
-                args.count(0)
-                elementResult(if (operation == "empty") element.empty() else element.clone())
-            }
-            "remove" -> {
-                args.count(0)
-                element.remove()
-                valueResult(null)
-            }
-            "unwrap" -> {
-                args.count(0)
-                requireParent(element, operation)
-                // Node.unwrap may return a TextNode/Comment. Reject before mutation because this
-                // bridge only exports Elements; returning self or null would misrepresent Jsoup.
-                val first = element.firstChild()
-                if (first != null && first !is Element) {
-                    throw UnsupportedOperationException("Legacy DOM unwrap cannot return a non-Element node")
-                }
-                elementResult(element.unwrap() as? Element)
             }
             "appendElement", "prependElement" -> {
                 args.count(1)
@@ -222,7 +204,16 @@ internal class LegacyJsDomSession {
         }
     }
 
-    private fun valueResult(value: Any?): Map<String, Any?> = linkedMapOf("kind" to "value", "value" to value)
+    internal fun valueResult(value: Any?): Map<String, Any?> = linkedMapOf("kind" to "value", "value" to value)
+
+    internal fun nodeResult(node: Node?): Map<String, Any?> =
+        if (node is Element) elementResult(node)
+        else linkedMapOf("kind" to "node", "value" to node?.let { retain(it) })
+
+    internal fun nodesResult(nodes: Iterable<Node>, readOnly: Boolean, emptyNodes: Boolean = false): Map<String, Any?> = linkedMapOf(
+        "kind" to "nodes", "value" to nodes.map { retain(it) }, "readOnly" to readOnly,
+        "emptyNodes" to emptyNodes,
+    )
 
     private fun elementResult(element: Element?): Map<String, Any?> =
         linkedMapOf("kind" to "element", "value" to element?.let(::retain))
@@ -232,50 +223,4 @@ internal class LegacyJsDomSession {
 
     private fun requireDocument(element: Element, operation: String): Document = element as? Document
         ?: throw IllegalArgumentException("Legacy DOM $operation requires a Document")
-
-    private fun requireParent(element: Element, operation: String) {
-        require(element.parent() != null) { "Legacy DOM $operation requires a parent" }
-    }
-
-    private class Arguments(private val operation: String, json: String) {
-        private val values = Json.parseToJsonElement(json) as? JsonArray
-            ?: throw IllegalArgumentException("Legacy DOM $operation arguments must be a JSON array")
-
-        val size: Int get() = values.size
-
-        fun count(vararg allowed: Int) {
-            require(size in allowed) { "Invalid argument count for legacy DOM $operation" }
-        }
-
-        fun string(index: Int): String = stringValue(values[index], index)
-
-        fun int(index: Int): Int {
-            val primitive = values[index] as? JsonPrimitive
-            return primitive?.takeUnless { it.isString }?.intOrNull
-                ?: throw IllegalArgumentException("Legacy DOM $operation argument $index must be an integer")
-        }
-
-        fun stringOrBoolean(index: Int): Any {
-            val primitive = values[index] as? JsonPrimitive
-                ?: throw IllegalArgumentException("Legacy DOM $operation argument $index must be a string or boolean")
-            if (primitive.isString) return primitive.content
-            return primitive.booleanOrNull
-                ?: throw IllegalArgumentException("Legacy DOM $operation argument $index must be a string or boolean")
-        }
-
-        fun strings(index: Int): List<String> {
-            val array = values[index] as? JsonArray
-                ?: throw IllegalArgumentException("Legacy DOM $operation argument $index must be a string array")
-            return array.map { stringValue(it, index) }
-        }
-
-        private fun stringValue(value: JsonElement, index: Int): String {
-            val primitive = value as? JsonPrimitive
-                ?: throw IllegalArgumentException("Legacy DOM $operation argument $index must be a string")
-            require(primitive.isString) {
-                "Legacy DOM $operation argument $index must be a string"
-            }
-            return primitive.content
-        }
-    }
 }

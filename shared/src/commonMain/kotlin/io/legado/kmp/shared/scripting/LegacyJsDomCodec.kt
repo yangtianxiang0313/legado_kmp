@@ -3,6 +3,7 @@ package io.legado.kmp.shared.scripting
 import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Document
 import com.fleeksoft.ksoup.nodes.Element
+import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.parser.Parser
 import com.fleeksoft.ksoup.select.Elements
 import kotlinx.serialization.json.Json
@@ -39,11 +40,39 @@ private fun decodeLegacyJsDomValue(wire: Any?, session: LegacyJsDomSession?): Le
         "raw", "value" -> LegacyJsDomValue(envelope["value"], present = envelope.containsKey("value"))
         "element" -> LegacyJsDomValue(
             (envelope["value"] as? Map<*, *> ?: error("Invalid legacy DOM element")).let { payload ->
-                val handle = payload["handle"] as? String
-                if (session != null && handle != null) session.resolve(handle) else legacyJsDomElement(payload)
+                if (payload.containsKey("handle")) {
+                    val node = resolveLegacyJsDomReference(payload, session)
+                    require(node is Element) { "Invalid legacy DOM element type" }
+                    node
+                } else {
+                    require(!payload.containsKey("nodeType") || payload["nodeType"] == "element") {
+                        "Legacy DOM nodes require a registered handle"
+                    }
+                    legacyJsDomElement(payload)
+                }
             },
             containsDom = true,
         )
+        "node" -> LegacyJsDomValue(
+            decodeLegacyJsDomNode(envelope["value"], session).also {
+                require(it !is Element) { "Invalid legacy DOM node envelope type" }
+            },
+            containsDom = true,
+        )
+        "nodes" -> {
+            require(envelope["readOnly"] is Boolean) { "Invalid legacy DOM node collection mutability" }
+            val nodes = (envelope["value"] as? List<*>)?.map { member ->
+                val payload = member as? Map<*, *> ?: error("Invalid legacy DOM node collection member")
+                val node = if (payload.containsKey("kind")) decodeLegacyJsDomValue(payload, session).value
+                    else decodeLegacyJsDomNode(payload, session)
+                node as? Node ?: error("Invalid legacy DOM node collection member")
+            } ?: error("Invalid legacy DOM node collection")
+            require(!envelope.containsKey("emptyNodes") || envelope["emptyNodes"] is Boolean) {
+                "Invalid empty DOM node list kind"
+            }
+            LegacyJsDomValue(LegacyJsDomNodeValues(nodes, envelope["readOnly"] as Boolean,
+                envelope["emptyNodes"] == true), containsDom = true)
+        }
         "array", "elements" -> {
             val children = (envelope["value"] as? List<*>)
                 ?.map { decodeLegacyJsDomValue(it, session) }
@@ -71,6 +100,27 @@ private fun decodeLegacyJsDomValue(wire: Any?, session: LegacyJsDomSession?): Le
         }
         else -> error("Unknown legacy DOM envelope kind")
     }
+}
+
+private fun requireLegacyJsDomSession(session: LegacyJsDomSession?): LegacyJsDomSession =
+    session ?: throw IllegalArgumentException("Legacy DOM handles require their owning session")
+
+private fun resolveLegacyJsDomReference(payload: Map<*, *>, session: LegacyJsDomSession?): Node {
+    val owner = requireLegacyJsDomSession(session)
+    // The private exporter historically emits only the handle, not a host descriptor.
+    // Raw user maps remain inside raw/value envelopes and never reach this branch.
+    if (payload.size == 1 && payload.containsKey("handle")) {
+        val handle = payload["handle"] as? String
+            ?: throw IllegalArgumentException("Invalid legacy DOM reference handle")
+        return owner.resolveNode(handle)
+    }
+    return owner.resolveDescriptor(payload)
+}
+
+private fun decodeLegacyJsDomNode(value: Any?, session: LegacyJsDomSession?): Node? {
+    if (value == null) return null
+    val payload = value as? Map<*, *> ?: error("Invalid legacy DOM node descriptor")
+    return resolveLegacyJsDomReference(payload, session)
 }
 
 internal fun legacyJsDomParse(html: String, baseUri: String): Map<String, Any?> =

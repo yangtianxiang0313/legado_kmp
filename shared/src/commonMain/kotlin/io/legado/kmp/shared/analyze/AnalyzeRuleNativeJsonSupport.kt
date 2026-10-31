@@ -1,10 +1,11 @@
 package io.legado.kmp.shared.analyze
 
-import com.fleeksoft.ksoup.nodes.Element
+import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.select.Elements
 import io.legado.kmp.shared.analyze.parser.JsonPathNumberTypes
 import io.legado.kmp.shared.analyze.parser.JsonPathRetainedValue
 import io.legado.kmp.shared.analyze.parser.JsonPathValueStrings
+import io.legado.kmp.shared.scripting.LegacyJsDomNodeValues
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -31,7 +32,7 @@ internal fun legacyJsonInputDescriptors(rawResult: Any?): List<Map<String, Any?>
             is AnalyzeResult -> scan(jsPipelineValue(value), path, numbers)
             is JsonPathRetainedValue -> scan(value.element, path, value.numbers)
             // DOM wrappers must stay opaque, including those implementing List.
-            is AnalyzeHtmlElementValues, is Element, is Elements -> Unit
+            is AnalyzeHtmlElementValues, is Node, is Elements, is LegacyJsDomNodeValues -> Unit
             is JsonObject -> {
                 descriptors += linkedMapOf(
                     "path" to path,

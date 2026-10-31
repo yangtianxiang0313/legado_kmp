@@ -2,6 +2,7 @@ package io.legado.kmp.shared.scripting
 
 import com.dokar.quickjs.QuickJs
 import com.fleeksoft.ksoup.nodes.Element
+import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.select.Elements
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -53,6 +54,7 @@ sealed class JsResult {
         is JsNativeValue -> when (val native = value) {
             is Element -> native.outerHtml()
             is Elements -> native.outerHtml()
+            is Node -> legacyJsDomOuterHtml(native)
             else -> native.toString()
         }
         is JsError -> message

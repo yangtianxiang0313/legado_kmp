@@ -647,7 +647,8 @@ class AnalyzeRule(
     }
 
     private fun List<*>.unwrapLegacySingleElement(): Any? {
-        if (isStructuredArray() || legacyHtmlResultKind(this) == LegacyHtmlResultKind.ELEMENTS) return this
+        if (isStructuredArray() || legacyHtmlResultKind(this) == LegacyHtmlResultKind.ELEMENTS ||
+            legacyHtmlResultKind(this) == LegacyHtmlResultKind.NODES) return this
         return when (size) {
             0 -> null
             1 -> first()

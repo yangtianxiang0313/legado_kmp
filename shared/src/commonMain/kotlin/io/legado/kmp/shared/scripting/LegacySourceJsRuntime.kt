@@ -554,6 +554,14 @@ class LegacySourceJsRuntime(
                         val baseUri = args.getOrNull(1)?.toString().orEmpty()
                         json.encodeToString(domSession.parse(html, baseUri).toJsonElement())
                     }
+                    function("__legacyDomCreate") { args ->
+                        require(args.size == 2) { "Legacy DOM create requires two arguments" }
+                        val nodeType = args[0] as? String
+                            ?: throw IllegalArgumentException("Legacy DOM create node type must be a string")
+                        val text = args[1] as? String
+                            ?: throw IllegalArgumentException("Legacy DOM create text must be a string")
+                        json.encodeToString(domSession.create(nodeType, text).toJsonElement())
+                    }
                     function("__legacyDomAdopt") { args ->
                         json.encodeToString(domSession.adopt(args.firstOrNull()?.toString().orEmpty()).toJsonElement())
                     }

@@ -2,10 +2,16 @@ package io.legado.kmp.shared.analyze
 
 import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Document
+import com.fleeksoft.ksoup.nodes.Node
+import com.fleeksoft.ksoup.nodes.TextNode
+import com.fleeksoft.ksoup.nodes.Comment
+import com.fleeksoft.ksoup.nodes.DataNode
 import com.fleeksoft.ksoup.select.Elements
 import io.legado.kmp.shared.analyze.parser.JsonPathRetainedValue
 import io.legado.kmp.shared.scripting.LEGACY_NATIVE_DOM_INPUT_BINDING
 import io.legado.kmp.shared.scripting.LegacyJsDomInputs
+import io.legado.kmp.shared.scripting.LegacyJsDomNodeValues
+import io.legado.kmp.shared.scripting.legacyJsDomOuterHtml
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -36,7 +42,7 @@ sealed class AnalyzeResult {
         is FloatVal -> value.toString()
         is BoolVal -> if (value) "true" else "false"
         is StringList -> values.joinToString("\n")
-        is Elements -> values.firstOrNull()?.toString() ?: ""
+        is Elements -> values.firstOrNull()?.let { if (it is Node) legacyJsDomOuterHtml(it) else it.toString() } ?: ""
         is Null -> ""
     }
 }
@@ -46,12 +52,14 @@ internal const val LEGACY_DOM_INPUT_DESCRIPTORS_BINDING = "__legacyDomInputDescr
 
 internal enum class LegacyHtmlResultKind(val bindingValue: String) {
     ELEMENT("element"),
-    ELEMENTS("elements")
+    ELEMENTS("elements"),
+    NODE("node"),
+    NODES("nodes")
 }
 
 // AnalyzeResult.Elements also holds scalar objects; keep native HTML provenance separate.
 internal class AnalyzeHtmlElementValues private constructor(
-    private val elements: List<Element>,
+    private val elements: List<Node>,
     val kind: LegacyHtmlResultKind
 ) : AbstractList<Any>() {
     override val size: Int get() = elements.size
@@ -61,6 +69,9 @@ internal class AnalyzeHtmlElementValues private constructor(
     companion object {
         fun element(value: Element): AnalyzeHtmlElementValues =
             AnalyzeHtmlElementValues(listOf(value), LegacyHtmlResultKind.ELEMENT)
+
+        fun node(value: Node): AnalyzeHtmlElementValues =
+            AnalyzeHtmlElementValues(listOf(value), LegacyHtmlResultKind.NODE)
 
         fun elements(values: List<Element>): AnalyzeHtmlElementValues =
             AnalyzeHtmlElementValues(values.toList(), LegacyHtmlResultKind.ELEMENTS)
@@ -72,7 +83,9 @@ internal fun legacyHtmlResultKind(value: Any?): LegacyHtmlResultKind? {
         is AnalyzeResult.Elements -> legacyHtmlResultKind(value.values)
         is AnalyzeHtmlElementValues -> value.kind
         is Element -> LegacyHtmlResultKind.ELEMENT
+        is Node -> LegacyHtmlResultKind.NODE
         is Elements -> LegacyHtmlResultKind.ELEMENTS
+        is LegacyJsDomNodeValues -> LegacyHtmlResultKind.NODES
         is List<*> -> if (!value.isStructuredArray() && value.isNotEmpty() && value.all { it is Element }) {
             LegacyHtmlResultKind.ELEMENTS
         } else {
@@ -94,7 +107,9 @@ internal fun legacyDomInputDescriptors(rawResult: Any?): List<Map<String, Any?>>
             is AnalyzeResult -> scan(jsPipelineValue(value), path)
             is AnalyzeHtmlElementValues -> addDescriptor(path, value.kind)
             is Element -> addDescriptor(path, LegacyHtmlResultKind.ELEMENT)
+            is Node -> addDescriptor(path, LegacyHtmlResultKind.NODE)
             is Elements -> addDescriptor(path, LegacyHtmlResultKind.ELEMENTS)
+            is LegacyJsDomNodeValues -> addDescriptor(path, LegacyHtmlResultKind.NODES)
             is Map<*, *> -> value.forEach { (key, child) ->
                 key?.toString()?.let { scan(child, path + it) }
             }
@@ -127,12 +142,18 @@ internal fun legacyNativeDomInputs(rawResult: Any?): LegacyJsDomInputs? {
             })
         }
         val elements = when (val selected = value) {
-            is Element -> listOf(selected)
+            is Node -> listOf(selected)
             is Elements -> selected.toList()
-            is List<*> -> selected.map { it as Element }
+            is List<*> -> selected.map { it as Node }
             else -> error("Invalid native DOM input")
         }
-        LegacyJsDomInputs.Input(path, elements, descriptor["kind"] == LegacyHtmlResultKind.ELEMENT.bindingValue)
+        val kind = descriptor["kind"]
+        LegacyJsDomInputs.Input(
+            path, elements,
+            kind == LegacyHtmlResultKind.ELEMENT.bindingValue || kind == LegacyHtmlResultKind.NODE.bindingValue,
+            (value as? LegacyJsDomNodeValues)?.readOnly,
+            (value as? LegacyJsDomNodeValues)?.emptyNodes ?: false,
+        )
     }
     return LegacyJsDomInputs(inputs)
 }
@@ -145,7 +166,9 @@ internal fun analyzeResultFromRaw(raw: Any?): AnalyzeResult {
         is kotlin.String -> AnalyzeResult.StringVal(raw)
         is AnalyzeHtmlElementValues -> AnalyzeResult.Elements(raw)
         is Element -> AnalyzeResult.Elements(AnalyzeHtmlElementValues.element(raw))
+        is Node -> AnalyzeResult.Elements(AnalyzeHtmlElementValues.node(raw))
         is Elements -> AnalyzeResult.Elements(AnalyzeHtmlElementValues.elements(raw.toList()))
+        is LegacyJsDomNodeValues -> AnalyzeResult.Elements(raw)
         is AnalyzeJsArrayValues -> AnalyzeResult.Elements(raw)
         is AnalyzeJsonArrayValues -> AnalyzeResult.Elements(raw)
         is JsonArray -> AnalyzeResult.Elements(AnalyzeJsonArrayValues(raw))
@@ -170,7 +193,8 @@ internal fun AnalyzeResult.asElementValues(): List<Any> {
 internal fun jsPipelineValue(result: AnalyzeResult): Any? {
     return when (result) {
         is AnalyzeResult.Elements -> if (result.values.isStructuredArray() ||
-            legacyHtmlResultKind(result) == LegacyHtmlResultKind.ELEMENTS
+            legacyHtmlResultKind(result) == LegacyHtmlResultKind.ELEMENTS ||
+            legacyHtmlResultKind(result) == LegacyHtmlResultKind.NODES
         ) {
             result.values
         } else {
@@ -211,9 +235,12 @@ internal fun legacyJsElementPayload(value: Any?): Map<String, Any?>? {
             "baseUri" to value.baseUri(),
             "attrs" to value.attributes().associate { it.key to it.value }
         )
+        is Node -> nodeToJsCompatibleValue(value)
         is List<*> -> {
             val elementPayloads = value.mapNotNull { item ->
-                (item as? com.fleeksoft.ksoup.nodes.Element)?.let { element ->
+                (item as? Node)?.let { node ->
+                    if (node !is Element) return@let nodeToJsCompatibleValue(node)
+                    val element = node
                     linkedMapOf(
                         "text" to element.text(),
                         "innerHtml" to element.html(),
@@ -249,15 +276,16 @@ internal fun legacyJsElementPayload(value: Any?): Map<String, Any?>? {
         )
     } ?: return null
     val elements = when (value) {
-        is Element -> listOf(value)
+        is Node -> listOf(value)
         is Elements -> value.toList()
-        is List<*> -> value.filterIsInstance<Element>()
+        is List<*> -> value.filterIsInstance<Node>()
         else -> emptyList()
     }
-    if (value !is Element && value !is Elements && elements.isEmpty()) return payload
+    if (value !is Node && value !is Elements && value !is LegacyJsDomNodeValues && elements.isEmpty()) return payload
     return LinkedHashMap(payload).apply {
         put(LEGACY_NATIVE_DOM_INPUT_BINDING, LegacyJsDomInputs(listOf(
-            LegacyJsDomInputs.Input(emptyList(), elements, value is Element)
+            LegacyJsDomInputs.Input(emptyList(), elements, value is Node,
+                (value as? LegacyJsDomNodeValues)?.readOnly, (value as? LegacyJsDomNodeValues)?.emptyNodes ?: false)
         )))
     }
 }
@@ -302,7 +330,8 @@ internal fun legacyJsValueFromAnalyzeResult(previousResult: AnalyzeResult): Any?
 private fun AnalyzeResult.Elements.toJsElementValue(convert: (Any) -> Any?): Any? {
     // JsonNull is an array slot, not a missing element; converting it must not shift indexes.
     val converted = values.map(convert)
-    if (values.isStructuredArray() || legacyHtmlResultKind(this) == LegacyHtmlResultKind.ELEMENTS) {
+    if (values.isStructuredArray() || legacyHtmlResultKind(this) == LegacyHtmlResultKind.ELEMENTS ||
+        legacyHtmlResultKind(this) == LegacyHtmlResultKind.NODES) {
         return converted
     }
     return when (converted.size) {
@@ -349,13 +378,14 @@ internal fun toJsCompatibleValue(value: Any?): Any? {
             }
         }
         is JsonArray -> value.map(::toJsCompatibleValue)
-        is AnalyzeHtmlElementValues -> if (value.kind == LegacyHtmlResultKind.ELEMENT) {
+        is AnalyzeHtmlElementValues -> if (value.kind != LegacyHtmlResultKind.ELEMENTS) {
             toJsCompatibleValue(value.single())
         } else {
             value.map(::toJsCompatibleValue)
         }
         is com.fleeksoft.ksoup.select.Elements -> value.map(::toJsCompatibleValue)
         is com.fleeksoft.ksoup.nodes.Element -> elementToJsCompatibleValue(value)
+        is Node -> nodeToJsCompatibleValue(value)
         is Map<*, *> -> LinkedHashMap<String, Any?>().apply {
             value.forEach { (key, child) ->
                 key?.toString()?.let { put(it, toJsCompatibleValue(child)) }
@@ -366,6 +396,17 @@ internal fun toJsCompatibleValue(value: Any?): Any? {
         else -> value.toString()
     }
 }
+
+private fun nodeToJsCompatibleValue(node: Node): Map<String, Any?> = linkedMapOf(
+    "nodeType" to when (node) {
+        is TextNode -> "text"
+        is Comment -> "comment"
+        is DataNode -> "data"
+        else -> "node"
+    },
+    "outerHtml" to node.outerHtml(),
+    "baseUri" to node.baseUri(),
+)
 
 private fun elementToJsCompatibleValue(element: com.fleeksoft.ksoup.nodes.Element): Map<String, Any?> {
     val attrs = linkedMapOf<String, Any?>().apply {

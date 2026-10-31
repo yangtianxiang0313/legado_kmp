@@ -3,6 +3,8 @@ package io.legado.kmp.shared.scripting
 // Installed in the DOM closure after the Java shim, before any source library executes.
 internal val LEGACY_JS_DOM_COLLECTIONS = """
     var domArrayList = java.util.ArrayList;
+    var domUnmodifiableList = java.util.Collections.unmodifiableList;
+    var domEmptyList = java.util.Collections.emptyList;
     var domLinkedHashSet = java.util.LinkedHashSet;
     var domProxy = Proxy;
     var domReflectKeys = Reflect.ownKeys;
@@ -12,6 +14,19 @@ internal val LEGACY_JS_DOM_COLLECTIONS = """
     var domCallback = Function.prototype.call.bind(Function.prototype.call);
     var domHole = create(null), domUndefined = create(null);
 
+    function domNodesList(descriptors, readOnly, emptyNodes) {
+      emptyNodes = emptyNodes === true;
+      if (emptyNodes && (!readOnly || descriptors.length !== 0)) throw new fail('Invalid empty DOM node list');
+      var items = [];
+      for (var i = 0; i < descriptors.length; i++) {
+        if (!domDescriptor(descriptors[i])) throw new fail('Invalid DOM host Node list member');
+        items[i] = node(descriptors[i]);
+      }
+      var wrapped = emptyNodes ? domEmptyList() : new domArrayList(items);
+      if (readOnly && !emptyNodes) wrapped = domUnmodifiableList(wrapped);
+      register(wrapped, { kind: 'domList', readOnly: readOnly, emptyNodes: emptyNodes });
+      return wrapped;
+    }
     function domListValue(value) { return value === domHole || value === domUndefined ? undefined : value; }
     function domStoredValue(value) { return value === undefined ? domUndefined : value; }
     function domListCheck(data) {

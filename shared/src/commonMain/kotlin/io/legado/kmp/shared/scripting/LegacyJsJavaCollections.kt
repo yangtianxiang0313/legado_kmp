@@ -64,6 +64,7 @@ internal val LEGACY_JS_JAVA_COLLECTIONS = """
     function collectionSize(data) { return data.kind === 'view' ? data.owner.items.length : data.items.length; }
     function collectionItems(data) { return data.kind === 'view' ? viewItems(data) : slice(data.items); }
     function removeValue(data, value) {
+      if (data.emptyList) return false;
       mutable(data, true);
       if (data.kind !== 'view') {
         var at = find(data.items, value, false);
@@ -144,6 +145,7 @@ internal val LEGACY_JS_JAVA_COLLECTIONS = """
         return true;
       });
       method(target, 'removeAll', function(values) {
+        if (data.emptyList) { valuesOf(values); return false; }
         mutable(data, true);
         var candidates = valuesOf(values), items = collectionItems(data), removed = false;
         for (var i = 0; i < items.length; i++) {
@@ -152,6 +154,7 @@ internal val LEGACY_JS_JAVA_COLLECTIONS = """
         return removed;
       });
       method(target, 'retainAll', function(values) {
+        if (data.emptyList) { valuesOf(values); return false; }
         mutable(data, true);
         var candidates = valuesOf(values), items = collectionItems(data), removed = false;
         for (var i = 0; i < items.length; i++) {
@@ -160,6 +163,7 @@ internal val LEGACY_JS_JAVA_COLLECTIONS = """
         return removed;
       });
       method(target, 'clear', function() {
+        if (data.emptyList) return;
         mutable(data, true);
         var owner = data.kind === 'view' ? data.owner : data;
         if (owner.items.length) { owner.items.length = 0; changed(owner); }
@@ -185,8 +189,8 @@ internal val LEGACY_JS_JAVA_COLLECTIONS = """
       if (initial === undefined) items = [];
       else if (typeof initial === 'number') { index(initial, 2147483647, true); items = []; }
       else items = valuesOf(initial);
-      var data = { kind: 'list', items: items, version: 0, readOnly: false, fixed: false };
-      if (options) { data.readOnly = !!options.readOnly; data.fixed = !!options.fixed; }
+      var data = { kind: 'list', items: items, version: 0, readOnly: false, fixed: false, emptyList: false };
+      if (options) { data.readOnly = !!options.readOnly; data.fixed = !!options.fixed; data.emptyList = !!options.emptyList; }
       var target = create(ctor.prototype);
       collectionMethods(target, data);
       method(target, 'get', function(at) { return data.items[index(at, data.items.length, false)]; });
@@ -201,7 +205,13 @@ internal val LEGACY_JS_JAVA_COLLECTIONS = """
         splice(data.items, at, 0, value); changed(data);
       });
       method(target, 'addAll', function(at, values) {
-        arity(arguments, 1, 2, 'List.addAll'); mutable(data, true);
+        arity(arguments, 1, 2, 'List.addAll');
+        if (data.emptyList) {
+          if (arguments.length === 1) values = at;
+          else index(at, 0, true);
+          if (valuesOf(values).length === 0) return false;
+        }
+        mutable(data, true);
         if (arguments.length === 1) { values = at; at = data.items.length; }
         at = index(at, data.items.length, true);
         var added = valuesOf(values);
@@ -223,7 +233,7 @@ internal val LEGACY_JS_JAVA_COLLECTIONS = """
         for (var i = data.items.length - 1; i >= 0; i--) if (equal(data.items[i], value)) return i;
         return -1;
       });
-      method(target, 'sort', function(comparator) { sortList(target, comparator); });
+      method(target, 'sort', function(comparator) { if (!data.emptyList) sortList(target, comparator); });
       if (ctor === JLinkedList) {
         method(target, 'addFirst', function(value) { target.add(0, value); });
         method(target, 'addLast', function(value) { target.add(value); });

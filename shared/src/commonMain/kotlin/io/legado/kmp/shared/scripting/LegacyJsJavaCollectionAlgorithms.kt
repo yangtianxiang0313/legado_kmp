@@ -50,7 +50,7 @@ internal val LEGACY_JS_JAVA_COLLECTION_ALGORITHMS = """
       return list(values, JArrayList, { readOnly: true });
     }
     var JCollections = staticClass({
-      emptyList: function() { return immutableList([]); },
+      emptyList: function() { return list([], JArrayList, { readOnly: true, emptyList: true }); },
       singletonList: function(value) { return immutableList([requireValue(value)]); },
       nCopies: function(count, value) {
         count = index(count, 2147483647, true); requireValue(value);

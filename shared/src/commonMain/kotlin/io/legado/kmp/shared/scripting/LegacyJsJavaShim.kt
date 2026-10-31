@@ -162,6 +162,21 @@ internal val LEGACY_JS_JAVA_SHIM = """
 
       $LEGACY_JS_JAVA_COLLECTIONS
       $LEGACY_JS_JAVA_COLLECTION_ALGORITHMS
+      // Node snapshots own their backing List; the public utility still retains ordinary view semantics.
+      var collectionsMembers = create(null), collectionsNames = keys(JCollections);
+      for (var cni = 0; cni < collectionsNames.length; cni++) {
+        field(collectionsMembers, collectionsNames[cni], JCollections[collectionsNames[cni]]);
+      }
+      field(collectionsMembers, 'unmodifiableList', function(value) {
+        arity(arguments, 1, 1, 'Collections.unmodifiableList');
+        var source = metadata(value);
+        if (!source || source.kind !== 'list') throw new fail('Collections.unmodifiableList expects a supported Java List');
+        var wrapped = list([], JArrayList, { readOnly: true }), view = metadata(wrapped);
+        define(view, 'items', { get: function() { return source.items; } });
+        define(view, 'version', { get: function() { return source.version; } });
+        return wrapped;
+      });
+      JCollections = staticClass(collectionsMembers);
       $LEGACY_JS_JAVA_VALUES
       $LEGACY_JS_JAVA_CRYPTO
       $LEGACY_JS_JAVA_CIPHER
@@ -171,6 +186,10 @@ internal val LEGACY_JS_JAVA_SHIM = """
 
       registerClass('org.jsoup.Jsoup', org.jsoup.Jsoup);
       registerClass('org.jsoup.Connection', JJsoupConnection);
+      registerClass('org.jsoup.nodes.Node', DomNode);
+      registerClass('org.jsoup.nodes.TextNode', DomTextNode);
+      registerClass('org.jsoup.nodes.Comment', DomComment);
+      registerClass('org.jsoup.nodes.DataNode', DomDataNode);
       registerClass('java.util.ArrayList', JArrayList);
       registerClass('java.util.LinkedList', JLinkedList);
       registerClass('java.util.HashMap', JHashMap);
@@ -292,6 +311,7 @@ internal val LEGACY_JS_JAVA_SHIM = """
       };
       var root = namespace('');
       field(global, 'Packages', root);
+      field(org.jsoup, 'nodes', root.org.jsoup.nodes);
       field(global, 'javax', root.javax);
       field(global, 'android', root.android);
       // Keep the original reading host object (ajax/source/crypto/etc.) and add only package children.

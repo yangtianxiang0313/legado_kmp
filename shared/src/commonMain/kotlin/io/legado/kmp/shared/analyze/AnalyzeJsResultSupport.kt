@@ -1,8 +1,9 @@
 package io.legado.kmp.shared.analyze
 
-import com.fleeksoft.ksoup.nodes.Element
+import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.select.Elements
 import io.legado.kmp.shared.scripting.JsResult
+import io.legado.kmp.shared.scripting.LegacyJsDomNodeValues
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 
@@ -48,8 +49,8 @@ internal class AnalyzeJsArrayValues(values: List<Any?>) : AbstractList<Any>() {
 
 private fun preserveJsResultValue(value: Any?): Any? {
     return when (value) {
-        // Element and Elements must precede List: DOM is not a JavaScript array.
-        is Element, is Elements, is AnalyzeHtmlElementValues -> value
+        // Native nodes and Elements must precede List: DOM is not a JavaScript array.
+        is Node, is Elements, is AnalyzeHtmlElementValues, is LegacyJsDomNodeValues -> value
         is AnalyzeJsArrayValues, is AnalyzeJsonArrayValues -> value
         is JsonElement -> preserveJsResultValue(toJsCompatibleValue(value))
         is Map<*, *> -> LinkedHashMap<String, Any?>().apply {
