@@ -288,6 +288,7 @@ internal object IosPreferencesBackup {
         "show_rss" to "showRss", "show_discovery" to "showDiscovery",
         "auto_refresh_book" to "autoRefreshOnStart", "keep_screen_on" to "keepScreenOn",
         "show_add_to_shelf_alert" to "showAddToShelfAlert",
+        "preview_image_by_click" to "previewImageByClick",
     )
     private fun booleanValue(value: JsonPrimitive): Boolean? = value.booleanOrNull ?: when (value.content) {
         "1" -> true

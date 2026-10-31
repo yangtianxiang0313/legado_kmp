@@ -1,0 +1,21 @@
+CREATE TABLE backup_restore_journal (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    transactionId TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('PREPARED', 'COMMITTED')),
+    beforePayload TEXT NOT NULL,
+    afterPayload TEXT NOT NULL
+);
+
+readPending:
+SELECT * FROM backup_restore_journal WHERE id = 1;
+
+insertPending:
+INSERT INTO backup_restore_journal (id, transactionId, beforePayload, afterPayload, state)
+VALUES (1, :transactionId, :beforePayload, :afterPayload, 'PREPARED');
+
+markCommitted:
+UPDATE backup_restore_journal SET state = 'COMMITTED'
+WHERE id = 1 AND transactionId = :transactionId AND state = 'PREPARED';
+
+deletePending:
+DELETE FROM backup_restore_journal WHERE id = 1 AND transactionId = :transactionId;

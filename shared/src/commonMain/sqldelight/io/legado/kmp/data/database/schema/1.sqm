@@ -1,0 +1,7 @@
+CREATE TABLE backup_restore_journal (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    transactionId TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('PREPARED', 'COMMITTED')),
+    beforePayload TEXT NOT NULL,
+    afterPayload TEXT NOT NULL
+);

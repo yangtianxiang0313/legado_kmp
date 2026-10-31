@@ -5,14 +5,13 @@ import io.legado.kmp.shared.data.repository.restoreBackupTables
 import io.legado.kmp.shared.domain.repository.*
 import io.legado.kmp.shared.model.BackupData
 import io.legado.kmp.shared.preferences.AppPreferencesStore
+import io.legado.kmp.shared.preferences.BackupPreferencesTransactionStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
@@ -39,11 +38,14 @@ internal class SettingsBackupSupport(
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
     private val credentialCodec = BackupCredentialCodec()
 
-    suspend fun createBackup(password: String? = null): String = credentialCodec.encode(snapshot(), password)
+    suspend fun createBackup(password: String? = null): String {
+        val data = BackupPreferencesRestoreCoordinator.serialized(database, preferences) { snapshot() }
+        return credentialCodec.encode(data, password)
+    }
 
     suspend fun createArchive(password: String? = null): AndroidBackupExport = try {
         currentCoroutineContext().ensureActive()
-        val data = snapshot()
+        val data = BackupPreferencesRestoreCoordinator.serialized(database, preferences) { snapshot() }
         currentCoroutineContext().ensureActive()
         val result = AndroidBackupArchive().exportData(data, password)
         currentCoroutineContext().ensureActive()
@@ -95,7 +97,7 @@ internal class SettingsBackupSupport(
         } catch (error: Exception) {
             throw RecoverableSharedException("INVALID_BACKUP_JSON", "备份 JSON 格式或数据不正确，未恢复任何数据")
         }
-        return restoreMutex.withLock { restoreValidated(data) }
+        return BackupPreferencesRestoreCoordinator.serialized(database, preferences) { restoreValidated(data) }
     }
 
     private suspend fun restoreValidated(data: BackupData): BackupRestoreResult {
@@ -123,28 +125,24 @@ internal class SettingsBackupSupport(
         require(rowCounts.all { it <= 100_000 } && rowCounts.sumOf { it.toLong() } <= 200_000L) {
             "备份记录超过恢复上限（单表十万条，总计二十万条），未恢复任何数据"
         }
-        if (rowCounts.any { it > 0 } && database == null) {
+        if ((rowCounts.any { it > 0 } || data.preferences != null) && database == null) {
             throw RecoverableSharedException("BACKUP_DATABASE_UNAVAILABLE", "备份数据库尚未就绪，未恢复任何数据")
         }
+        val platform = if (data.preferences != null) {
+            preferences as? BackupPreferencesTransactionStore ?: throw RecoverableSharedException(
+                "BACKUP_PREFERENCES_TRANSACTION_UNAVAILABLE", "当前平台不支持设置事务，未恢复任何数据",
+            )
+        } else null
         val context = currentCoroutineContext()
         context.ensureActive()
-        // Keep the accepted commit and its settings application together even if the UI leaves afterwards.
+        // The platform methods do not suspend while SQLite owns its transaction connection.
         return withContext(NonCancellable) {
             context.ensureActive()
-            val restoredReadRecords = try {
-                withContext(Dispatchers.Default) {
-                    database?.let { restoreBackupTables(it, data.copy(bookshelf = restoredBooks)) { context.ensureActive() } } ?: 0
+            val restoredReadRecords = withContext(Dispatchers.Default) {
+                val action = {
+                    restoreTransaction(data.copy(bookshelf = restoredBooks), ignored, platform) { context.ensureActive() }
                 }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                throw RecoverableSharedException("BACKUP_DATABASE_RESTORE_FAILED", "数据库恢复失败，本次数据库写入已回滚，设置未应用")
-            }
-            try {
-                data.preferences?.let { preferences.restoreBackupPreferences(it, ignored) }
-            } catch (_: Exception) {
-                // Defaults are not part of SQLite: never misreport an already committed database as untouched.
-                throw RecoverableSharedException("BACKUP_PREFERENCES_RESTORE_FAILED", "数据库已恢复，但设置恢复失败，请重新应用设置")
+                if (platform == null) action() else platform.withBackupPreferencesRestoreLock(action)
             }
             BackupRestoreResult(
                 bookCount = restoredBooks.size,
@@ -167,13 +165,62 @@ internal class SettingsBackupSupport(
         }
     }
 
+    private fun restoreTransaction(
+        data: BackupData,
+        ignored: Set<String>,
+        platform: BackupPreferencesTransactionStore?,
+        checkActive: () -> Unit,
+    ): Int {
+        checkActive()
+        val prepared = try {
+            data.preferences?.let { platform!!.prepareBackupPreferencesRestore(it, ignored) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            throw RecoverableSharedException("BACKUP_PREFERENCES_PREPARATION_FAILED", "备份设置准备失败，未修改数据库或原设置")
+        }
+        checkActive()
+        var journalId: String? = null
+        var applyingPreferences = false
+        try {
+            if (prepared != null) journalId = BackupPreferencesRestoreCoordinator.begin(checkNotNull(database), prepared)
+            val count = database?.let { db ->
+                restoreBackupTables(db, data, checkActive) {
+                    if (prepared != null) {
+                        applyingPreferences = true
+                        platform!!.applyPreparedBackupPreferencesRestore(prepared.after)
+                        BackupPreferencesRestoreCoordinator.markCommitted(db, checkNotNull(journalId))
+                    }
+                }
+            } ?: 0
+            if (prepared != null) {
+                platform!!.publishBackupPreferencesRestore()
+                BackupPreferencesRestoreCoordinator.acknowledge(checkNotNull(database), checkNotNull(journalId))
+            }
+            return count
+        } catch (error: Exception) {
+            val outcome = BackupPreferencesRestoreCoordinator.recoverLocked(database, preferences)
+            if (outcome == "COMMITTED") {
+                throw RecoverableSharedException(
+                    "BACKUP_RESTORE_COMMIT_CONFIRMED",
+                    "恢复数据和设置已提交并完成补偿，但本次回执中断，请核对恢复结果",
+                )
+            }
+            if (error is CancellationException) throw error
+            if (journalId != null && outcome != "PREPARED") {
+                throw RecoverableSharedException("BACKUP_RESTORE_STATE_UNCERTAIN", "恢复状态无法确认，请重新启动后重试")
+            }
+            throw RecoverableSharedException(
+                if (applyingPreferences) "BACKUP_PREFERENCES_RESTORE_FAILED" else "BACKUP_DATABASE_RESTORE_FAILED",
+                "备份恢复失败，本次数据库写入已回滚，原设置已保留或还原",
+            )
+        }
+    }
+
     private fun requireRepository(rows: List<*>, repository: Any?, key: String) {
         if (rows.isNotEmpty() && repository == null) {
             throw RecoverableSharedException("BACKUP_REPOSITORY_UNAVAILABLE", "Backup repository unavailable: $key")
         }
     }
 
-    private companion object {
-        val restoreMutex = Mutex()
-    }
 }

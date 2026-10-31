@@ -23,6 +23,10 @@ import io.legado.kmp.shared.facade.CacheFacade
 import io.legado.kmp.shared.facade.LogFacade
 import io.legado.kmp.shared.facade.AudioPlayFacade
 import io.legado.kmp.shared.facade.MangaReaderFacade
+import io.legado.kmp.shared.data.database.LegadoDatabase
+import io.legado.kmp.shared.facade.BackupPreferencesRestoreCoordinator
+import io.legado.kmp.shared.preferences.AppPreferencesStore
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.legado.kmp.shared.model.RssSource
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.ListSerializer
@@ -31,27 +35,29 @@ import org.koin.core.Koin
 import org.koin.mp.KoinPlatformTools
 
 object SharedBootstrap {
+    private val recoveryReady = MutableStateFlow(false)
     fun start(): Boolean {
         startOrThrow()
         return true
     }
 
     fun startOrThrow(): Boolean {
-        if (KoinPlatformTools.defaultContext().getOrNull() != null) {
-            return false
-        }
         try {
-            initKoin(platformModule = platformModule)
+            val existing = KoinPlatformTools.defaultContext().getOrNull()
+            if (existing != null && recoveryReady.value) return false
+            if (existing == null) initKoin(platformModule = platformModule)
+            recoverPreferences(checkNotNull(KoinPlatformTools.defaultContext().getOrNull()))
+            return existing == null
         } catch (throwable: Throwable) {
             throw SharedRuntimeBootstrapException(
                 message = "Failed to initialize shared runtime",
                 cause = throwable,
             )
         }
-        return true
     }
 
     fun stop() {
+        recoveryReady.value = false
         if (KoinPlatformTools.defaultContext().getOrNull() != null) {
             KoinPlatformTools.defaultContext().stopKoin()
         }
@@ -137,7 +143,7 @@ object SharedBootstrap {
         val started = KoinPlatformTools.defaultContext().getOrNull() != null
         return SharedRuntimeHealth(
             started = started,
-            status = if (started) "ready" else "idle",
+            status = if (!started) "idle" else if (recoveryReady.value) "ready" else "recovery_required",
         )
     }
 
@@ -148,7 +154,9 @@ object SharedBootstrap {
 
     private inline fun <reified T : Any> getFacade(name: String): T {
         return try {
-            koin().get()
+            val container = koin()
+            if (!recoveryReady.value) recoverPreferences(container)
+            container.get()
         } catch (throwable: Throwable) {
             throw SharedRuntimeBootstrapException(
                 message = "Failed to resolve $name",
@@ -159,12 +167,20 @@ object SharedBootstrap {
 
     private inline fun <reified T : Any> getDependency(name: String): T {
         return try {
-            koin().get()
+            val container = koin()
+            if (!recoveryReady.value) recoverPreferences(container)
+            container.get()
         } catch (throwable: Throwable) {
             throw SharedRuntimeBootstrapException(
                 message = "Failed to resolve $name",
                 cause = throwable,
             )
         }
+    }
+
+    private fun recoverPreferences(container: Koin) {
+        recoveryReady.value = false
+        BackupPreferencesRestoreCoordinator.recoverAtStartup(container.get<LegadoDatabase>(), container.get<AppPreferencesStore>())
+        recoveryReady.value = true
     }
 }

@@ -6,7 +6,7 @@ import io.legado.kmp.shared.model.ReadRecord
 
 /**
  * Restores core rows synchronously inside the caller's SQL transaction.
- * The caller filters ignored books and handles preferences after the transaction.
+ * The caller filters ignored books and coordinates preferences with the enclosing transaction.
  * Returns the number of read-record rows written, including newer duplicates in this batch.
  */
 internal fun restoreBackupCoreTables(

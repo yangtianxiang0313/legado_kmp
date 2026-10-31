@@ -7,62 +7,84 @@ import platform.Foundation.NSUserDefaults
 import platform.Foundation.NSUserDefaultsDidChangeNotification
 import platform.UIKit.UIDevice
 
-class IosAppPreferencesStore : AppPreferencesStore {
+class IosAppPreferencesStore : AppPreferencesStore, BackupPreferencesTransactionStore {
     private val defaults = NSUserDefaults.standardUserDefaults
-    private val userAgentPreference = IosUserAgentPreference(defaults)
-    private val readerPresetPersistence = IosReaderPresetPersistence(defaults)
-    private val themePresetPersistence = IosThemePresetPersistence(defaults)
-    override val themePresets: List<ThemePreset> get() = themePresetPersistence.presets
+    private val userAgentPreference = IosAppPreferencesLock.withLock { IosUserAgentPreference(defaults) }
+    private val readerPresetPersistence = IosAppPreferencesLock.withLock { IosReaderPresetPersistence(defaults) }
+    private val themePresetPersistence = IosAppPreferencesLock.withLock { IosThemePresetPersistence(defaults) }
+    override val themePresets: List<ThemePreset> get() = IosAppPreferencesLock.withLock { themePresetPersistence.presets }
     override var readerPresets: List<ReaderPreset>
-        get() = readerPresetPersistence.presets
-        private set(value) { readerPresetPersistence.presets = value }
+        get() = IosAppPreferencesLock.withLock { readerPresetPersistence.presets }
+        private set(value) { IosAppPreferencesLock.withLock { readerPresetPersistence.presets = value } }
 
-    private val uiState = MutableStateFlow(readPreferences())
-    private val runtimeState = MutableStateFlow(readRuntimeConfig())
+    private val uiState = MutableStateFlow(IosAppPreferencesLock.withLock { readPreferences() })
+    private val runtimeState = MutableStateFlow(IosAppPreferencesLock.withLock { readRuntimeConfig() })
 
     override val preferences = uiState.asStateFlow()
     override val runtimeConfig = runtimeState.asStateFlow()
 
-    override fun getBackupConfigJson(key: String): String? = IosPreferencesBackup.getConfig(defaults, key)
+    override fun getBackupConfigJson(key: String): String? = IosAppPreferencesLock.withLock {
+        IosPreferencesBackup.getConfig(defaults, key)
+    }
 
-    override fun setBackupConfigJson(key: String, value: String?) {
+    override fun setBackupConfigJson(key: String, value: String?) = IosAppPreferencesLock.withLock {
         IosPreferencesBackup.setConfig(defaults, key, value)
     }
 
-    override suspend fun exportBackupPreferences(): PreferencesBackupData =
+    override suspend fun exportBackupPreferences(): PreferencesBackupData = IosAppPreferencesLock.withLock {
         IosPreferencesBackup.export(defaults, readerPresets.mapIndexed { index, preset ->
             if (index == currentReaderPresetIndex()) defaults.readerPresetWithLegacyActiveValues(preset) else preset
         }, themePresets).withReaderSharedLayout(defaults)
-
-    override suspend fun restoreBackupPreferences(data: PreferencesBackupData, ignoredKeys: Set<String>) {
-        materializeLegacyReaderPresetValues()
-        IosPreferencesBackup.restore(defaults, data, ignoredKeys)
-        defaults.restoreReaderSharedLayout(data, ignoredKeys)
-        readerPresetPersistence.reload()
-        themePresetPersistence.reload()
-        // Android presets contain the active layout; iOS snapshots already contain its exact defaults.
-        if (BackupRestoreIgnoreKeys.READ_CONFIG !in ignoredKeys && data.readConfig.isNotEmpty() &&
-            data.appConfig.keys.none { it in READER_STYLE_PREFERENCE_KEYS }) {
-            val index = defaults.integerForKey(KEY_READ_STYLE_INDEX).toInt().coerceIn(0, readerPresets.lastIndex)
-            val preset = readerPresets[index]
-            val independent = IosPreferencesBackup.readerStyle(preset, defaults.stringForKey(KEY_THEME_MODE))
-            val shared = defaults.readReaderSharedLayout().takeIf { defaults.boolForKey(KEY_SHARE_LAYOUT) }
-            defaults.writeReaderStyle(preset.name, shared?.let(independent::withSharedLayoutFrom) ?: independent)
-            defaults.setBool(true, KEY_READER_LINE_SPACING_ANDROID_SCALE_MIGRATED)
-            defaults.synchronize()
-        }
-        refresh()
     }
 
-    override suspend fun bootstrapDefaultsIfNeeded() {
-        if (defaults.boolForKey(KEY_INITIALIZED)) return
+    override fun withBackupPreferencesRestoreLock(action: () -> Int): Int = IosAppPreferencesLock.withLock(action)
+
+    override suspend fun restoreBackupPreferences(data: PreferencesBackupData, ignoredKeys: Set<String>) = IosAppPreferencesLock.withLock {
+        val prepared = prepareBackupPreferencesRestore(data, ignoredKeys)
+        try {
+            applyPreparedBackupPreferencesRestore(prepared.after)
+        } catch (failure: Throwable) {
+            try {
+                applyPreparedBackupPreferencesRestore(prepared.before)
+            } catch (rollbackFailure: Throwable) {
+                failure.addSuppressed(rollbackFailure)
+            }
+            try {
+                publishBackupPreferencesRestore()
+            } catch (publishFailure: Throwable) {
+                failure.addSuppressed(publishFailure)
+            }
+            throw failure
+        }
+        publishBackupPreferencesRestore()
+    }
+
+    override fun prepareBackupPreferencesRestore(
+        data: PreferencesBackupData,
+        ignoredKeys: Set<String>,
+    ): PreparedBackupPreferencesRestore = IosAppPreferencesLock.withLock {
+        IosBackupPreferencesTransaction.prepare(defaults, data, ignoredKeys)
+    }
+
+    override fun applyPreparedBackupPreferencesRestore(payload: String) = IosAppPreferencesLock.withLock {
+        IosBackupPreferencesTransaction.apply(defaults, payload)
+    }
+
+    override fun publishBackupPreferencesRestore() = IosAppPreferencesLock.withLock {
+        readerPresetPersistence.reload()
+        themePresetPersistence.reload()
+        refreshThemePreferences()
+    }
+
+    override suspend fun bootstrapDefaultsIfNeeded() = IosAppPreferencesLock.withLock {
+        if (defaults.boolForKey(KEY_INITIALIZED)) return@withLock
         if (IosPreferencesBackup.hasStoredPreferences(defaults)) {
             materializeLegacyReaderPresetValues()
             themePresetPersistence.pinCatalogIfMissing()
             defaults.setBool(true, KEY_INITIALIZED)
             defaults.synchronize()
             refresh()
-            return
+            return@withLock
         }
         val themePreset = themePresets.firstOrNull() ?: DefaultUiPresets.themePresets.first()
         val readerPreset = readerPresets.first()
@@ -199,43 +221,45 @@ class IosAppPreferencesStore : AppPreferencesStore {
         setInteger(position.coerceAtLeast(0).toLong(), KEY_SAVE_TAB_POSITION)
     }
 
-    override suspend fun setThemePreset(themeName: String) {
+    override suspend fun setThemePreset(themeName: String) = IosAppPreferencesLock.withLock {
         themePresetPersistence.apply(themeName, switchMode = false)
         refreshThemePreferences()
     }
 
-    override fun themePalette(isNightTheme: Boolean): ThemeColorPalette = themePresetPersistence.palette(isNightTheme)
+    override fun themePalette(isNightTheme: Boolean): ThemeColorPalette = IosAppPreferencesLock.withLock {
+        themePresetPersistence.palette(isNightTheme)
+    }
 
-    override suspend fun setThemeColor(isNightTheme: Boolean, field: ThemeColorField, color: String) {
+    override suspend fun setThemeColor(isNightTheme: Boolean, field: ThemeColorField, color: String) = IosAppPreferencesLock.withLock {
         themePresetPersistence.setColor(isNightTheme, field, color)
         refreshThemePreferences()
     }
 
-    override suspend fun saveThemePalette(themeName: String, isNightTheme: Boolean) {
+    override suspend fun saveThemePalette(themeName: String, isNightTheme: Boolean) = IosAppPreferencesLock.withLock {
         themePresetPersistence.savePalette(themeName, isNightTheme)
         refreshThemePreferences()
     }
 
-    override suspend fun applyThemePreset(themeName: String) {
+    override suspend fun applyThemePreset(themeName: String) = IosAppPreferencesLock.withLock {
         themePresetPersistence.apply(themeName, switchMode = true)
         readerPresetPersistence.writeActivePageAnimation()
         refreshThemePreferences()
     }
 
-    override suspend fun importThemePreset(preset: ThemePreset) {
+    override suspend fun importThemePreset(preset: ThemePreset) = IosAppPreferencesLock.withLock {
         themePresetPersistence.import(preset)
         refreshThemePreferences()
     }
 
-    override suspend fun deleteThemePreset(themeName: String) {
+    override suspend fun deleteThemePreset(themeName: String) = IosAppPreferencesLock.withLock {
         themePresetPersistence.delete(themeName)
         refreshThemePreferences()
     }
 
-    override suspend fun setReaderPreset(name: String) {
+    override suspend fun setReaderPreset(name: String) = IosAppPreferencesLock.withLock {
         val presetIndex = readerPresetPersistence.mutationIndex(name, null)
-        if (presetIndex < 0) return
-        setReadStyleIndex(presetIndex)
+        if (presetIndex < 0) return@withLock
+        write { changeReaderSelection(presetIndex, boolForKey(KEY_SHARE_LAYOUT)) }
     }
 
     override suspend fun setReaderFontSize(fontSizeSp: Float) = write {
@@ -248,7 +272,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
         expectedName: String,
         expectedIndex: Int,
         expectedShareLayout: Boolean,
-    ) {
+    ) = IosAppPreferencesLock.withLock {
         // Reject stale requests before write() can materialize any legacy state.
         readerPresetPersistence.selectedMutationIndex(expectedName, expectedIndex)
         check(defaults.boolForKey(KEY_SHARE_LAYOUT) == expectedShareLayout) {
@@ -271,7 +295,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
         expectedName: String,
         expectedIndex: Int,
         expectedShareLayout: Boolean,
-    ) {
+    ) = IosAppPreferencesLock.withLock {
         val allowed = if (option == ReaderAppearanceQuickOption.PARAGRAPH_INDENT) 0..4 else 0..2
         require(value in allowed) { "Invalid reader quick option: $option=$value" }
         readerPresetPersistence.selectedMutationIndex(expectedName, expectedIndex)
@@ -310,12 +334,13 @@ class IosAppPreferencesStore : AppPreferencesStore {
         ))
     }
 
-    override suspend fun setReaderBackgroundMode(mode: ReaderBackgroundMode) {
-        setReaderStyle(readPreferences().readerStyle.withBackgroundModeDefaults(mode).copy(backgroundImagePath = null))
+    override suspend fun setReaderBackgroundMode(mode: ReaderBackgroundMode) = IosAppPreferencesLock.withLock {
+        writeReaderStyleForVariant(readPreferences().readerStyle.withBackgroundModeDefaults(mode)
+            .copy(backgroundImagePath = null), defaults.readerVisualVariant(), null, null)
     }
 
-    override suspend fun setReaderStyle(style: ReaderStylePreferences) {
-        setReaderStyleForVariant(style, defaults.readerVisualVariant(), null)
+    override suspend fun setReaderStyle(style: ReaderStylePreferences) = IosAppPreferencesLock.withLock {
+        writeReaderStyleForVariant(style, defaults.readerVisualVariant(), null, null)
     }
 
     override suspend fun setReaderLayout(style: ReaderStylePreferences) = write {
@@ -325,6 +350,15 @@ class IosAppPreferencesStore : AppPreferencesStore {
     }
 
     override suspend fun setReaderStyleForVariant(
+        style: ReaderStylePreferences,
+        variant: ReaderVisualVariant,
+        presetName: String?,
+        expectedIndex: Int?,
+    ) = IosAppPreferencesLock.withLock {
+        writeReaderStyleForVariant(style, variant, presetName, expectedIndex)
+    }
+
+    private fun writeReaderStyleForVariant(
         style: ReaderStylePreferences,
         variant: ReaderVisualVariant,
         presetName: String?,
@@ -341,7 +375,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
         }
     }
 
-    override suspend fun restoreReaderPreset(name: String, template: ReaderPreset, expectedIndex: Int?) {
+    override suspend fun restoreReaderPreset(name: String, template: ReaderPreset, expectedIndex: Int?) = IosAppPreferencesLock.withLock {
         val index = readerPresetPersistence.mutationIndex(name, expectedIndex)
         require(index >= 0) { "Reader preset not found: $name" }
         write {
@@ -514,24 +548,24 @@ class IosAppPreferencesStore : AppPreferencesStore {
         setInteger(config.tapZoneActions.bottomRight.toLong(), KEY_TAP_BOTTOM_RIGHT)
     }
 
-    override suspend fun renameReaderPreset(oldName: String, newName: String, expectedIndex: Int?) {
+    override suspend fun renameReaderPreset(oldName: String, newName: String, expectedIndex: Int?) = IosAppPreferencesLock.withLock {
         val index = readerPresetPersistence.mutationIndex(oldName, expectedIndex)
-        if (index < 0 || readerPresets[index].name == newName) return
+        if (index < 0 || readerPresets[index].name == newName) return@withLock
         write {
             readerPresetPersistence.rename(index, newName)
         }
     }
 
-    override suspend fun deleteReaderPreset(name: String, expectedIndex: Int?) {
+    override suspend fun deleteReaderPreset(name: String, expectedIndex: Int?) = IosAppPreferencesLock.withLock {
         val removedIndex = readerPresetPersistence.mutationIndex(name, expectedIndex)
-        if (readerPresets.size <= 5) return
-        if (removedIndex < 0) return
+        if (readerPresets.size <= 5) return@withLock
+        if (removedIndex < 0) return@withLock
         write {
             readerPresetPersistence.delete(removedIndex, preserveCurrentReaderLayout())
         }
     }
 
-    override suspend fun importReaderPreset(preset: ReaderPreset) {
+    override suspend fun importReaderPreset(preset: ReaderPreset) = IosAppPreferencesLock.withLock {
         preserveCurrentReaderLayout()
         readerPresets = readerPresets + preset
         persistReaderPresets()
@@ -546,26 +580,27 @@ class IosAppPreferencesStore : AppPreferencesStore {
         }
     }
 
-    override suspend fun replaceReaderPreset(expectedName: String, preset: ReaderPreset, expectedIndex: Int?): ReaderPreset {
+    override suspend fun replaceReaderPreset(expectedName: String, preset: ReaderPreset, expectedIndex: Int?): ReaderPreset = IosAppPreferencesLock.withLock {
         // Validation precedes write's legacy materialization. There is no suspension before replacement.
         val index = readerPresetPersistence.selectedMutationIndex(expectedName, expectedIndex)
         require(index >= 0) { "Reader preset not found: $expectedName" }
         write {
             readerPresetPersistence.replace(index, preset)
         }
-        return preset
+        preset
     }
 
-    override suspend fun upsertReaderPresetWithoutSelecting(preset: ReaderPreset): ReaderPreset {
+    override suspend fun upsertReaderPresetWithoutSelecting(preset: ReaderPreset): ReaderPreset = IosAppPreferencesLock.withLock {
         // Existing reader-menu imports still append and select. System imports keep both indices.
         readerPresetPersistence.materializeLegacyValues()
         readerPresetPersistence.upsertWithoutSelecting(preset)
         refresh()
-        return preset
+        preset
     }
 
-    override fun readerPresetForExport(name: String): ReaderPreset? =
+    override fun readerPresetForExport(name: String): ReaderPreset? = IosAppPreferencesLock.withLock {
         readerPresetPersistence.presetForExport(name, readPreferences().readerStyle)
+    }
 
     override suspend fun setTapZoneActions(actions: ReaderTapZoneActions) = write {
         setInteger(actions.topLeft.toLong(), KEY_TAP_TOP_LEFT)
@@ -684,8 +719,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
     private fun currentReaderPresetIndex(): Int = readerPresetPersistence.currentIndex()
 
     private fun materializeLegacyReaderPresetValues() {
-        migrateReaderLineSpacingToAndroidScale()
-        readerPresetPersistence.materializeLegacyValues()
+        IosBackupPreferencesRestore.materializeLegacyReaderPresetValues(defaults, readerPresetPersistence)
     }
 
     private fun persistCurrentReaderLayout(style: ReaderStylePreferences) = readerPresetPersistence.persistCurrentLayout(style)
@@ -708,7 +742,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
         readerPresetPersistence.activate(index, previousStyle, keepVisual)
     }
 
-    private inline fun write(block: NSUserDefaults.() -> Unit) {
+    private fun write(block: NSUserDefaults.() -> Unit) = IosAppPreferencesLock.withLock {
         materializeLegacyReaderPresetValues()
         defaults.block()
         defaults.synchronize()
@@ -769,15 +803,6 @@ class IosAppPreferencesStore : AppPreferencesStore {
 
     private fun NSUserDefaults.writeReaderStyle(presetName: String, style: ReaderStylePreferences) {
         writeReaderStyleSnapshot(presetName, style)
-    }
-
-    private fun migrateReaderLineSpacingToAndroidScale() {
-        if (defaults.boolForKey(KEY_READER_LINE_SPACING_ANDROID_SCALE_MIGRATED)) return
-        defaults.setBool(true, KEY_READER_LINE_SPACING_ANDROID_SCALE_MIGRATED)
-        if (defaults.objectForKey(KEY_READER_LINE_SPACING) == null) return
-        val oldMultiplier = defaults.floatForKey(KEY_READER_LINE_SPACING)
-        if (oldMultiplier < 1f) return
-        defaults.setFloat((oldMultiplier - 1f).coerceIn(0f, 2f), KEY_READER_LINE_SPACING)
     }
 
     private fun readRuntimeConfig(): AppRuntimeConfig {

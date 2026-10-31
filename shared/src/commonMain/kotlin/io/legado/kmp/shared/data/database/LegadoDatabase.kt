@@ -13,6 +13,7 @@ class LegadoDatabase(private val driver: SqlDriver) {
     private val database = io.legado.kmp.`data`.database.LegadoDatabase(driver)
 
     // Expose DAOs
+    val backupRestoreJournalQueries = database.backupRestoreJournalQueries
     val bookChapterQueries = database.bookChapterQueries
     val bookChapterReviewQueries = database.bookChapterReviewQueries
     val bookQueries = database.bookQueries
