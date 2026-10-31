@@ -8,6 +8,7 @@ import io.legado.kmp.shared.model.getCacheFolderName
 import io.legado.kmp.shared.model.isTxtLocalBook
 import io.legado.kmp.shared.platform.AppFilesDirectory
 import io.legado.kmp.shared.platform.FileAccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -73,6 +74,41 @@ class ChapterContentRepositoryImpl(
             _saveContentEvents.tryEmit(SaveContentEvent(book, chapter))
         }
         return success
+    }
+
+    override suspend fun replaceContentIfUnchanged(
+        book: Book,
+        chapter: BookChapter,
+        expectedContent: String?,
+        content: String,
+    ): Boolean {
+        if (content.isEmpty()) return false
+        currentCoroutineContext().ensureActive()
+        val root = rootDirectory(book)
+        val success = ChapterCacheLocks.withLock(root) {
+            currentCoroutineContext().ensureActive()
+            val path = cache.chapterPath(root, chapter)
+            fileAccess.writeChapterContentIfUnchanged(root, path, expectedContent, content)
+        }
+        if (!success) return false
+
+        // The body is committed. Never acquire a SQL lock while holding the cache lock.
+        currentCoroutineContext().ensureActive()
+        try {
+            if (book.isOnLineTxt) {
+                chapterRepository?.updateWordCount(chapter.bookUrl, chapter.url, wordCountFormat(content.length))
+            }
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            throw IllegalStateException(
+                "Chapter content remains committed, but updating wordCount failed; no save event was emitted",
+                failure,
+            )
+        }
+        currentCoroutineContext().ensureActive()
+        _saveContentEvents.tryEmit(SaveContentEvent(book, chapter))
+        return true
     }
 
     override suspend fun deleteContent(book: Book, chapter: BookChapter): Boolean {

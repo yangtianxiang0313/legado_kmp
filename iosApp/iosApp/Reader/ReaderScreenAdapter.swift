@@ -786,13 +786,15 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
         currentChapterIndex: Int,
         candidateBookUrl: String,
         sourceUrl: String,
-        candidateChapterIndex: Int
+        candidateChapterIndex: Int,
+        willCommit: @MainActor () throws -> Void = {}
     ) async throws {
         try await sourceChangeClient.replaceChapterContentFromSource(
             currentChapterIndex: currentChapterIndex,
             candidateBookUrl: candidateBookUrl,
             sourceUrl: sourceUrl,
-            candidateChapterIndex: candidateChapterIndex
+            candidateChapterIndex: candidateChapterIndex,
+            willCommit: willCommit
         )
     }
 

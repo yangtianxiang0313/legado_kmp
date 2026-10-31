@@ -234,7 +234,8 @@ final class ReaderSourceChangeClient {
         currentChapterIndex: Int,
         candidateBookUrl: String,
         sourceUrl: String,
-        candidateChapterIndex: Int
+        candidateChapterIndex: Int,
+        willCommit: @MainActor () throws -> Void = {}
     ) async throws {
         let snapshot = binding()
         try checkActive(snapshot)
@@ -245,15 +246,40 @@ final class ReaderSourceChangeClient {
         else { throw CancellationError() }
         try checkActive(preparation.binding)
         let facade = try requireFacade()
+        let prepared: PreparedChapterSourceReplacement = try await SharedCancellableAsync.value(
+            awaitCancellationCompletion: true
+        ) { completion in
+            facade.prepareChapterSourceReplacementRequest(
+                bookUrl: snapshot.bookURL,
+                currentChapterIndex: Int32(currentChapterIndex),
+                candidateBookUrl: candidateBookUrl,
+                sourceUrl: sourceUrl,
+                candidateChapterIndex: Int32(candidateChapterIndex)
+            ) { result in
+                if result.isCancelled {
+                    completion(nil, CancellationError())
+                } else if result.errorCode != nil || result.errorMessage != nil {
+                    completion(
+                        nil,
+                        Self.preparationError(
+                            errorCode: result.errorCode,
+                            errorMessage: result.errorMessage
+                        ))
+                } else {
+                    completion(result.prepared, nil)
+                }
+            }
+        }
+        try checkActive(snapshot)
+        try checkActive(preparation.binding)
+        guard chapterPreparation?.id == preparation.id else { throw CancellationError() }
+        // Preparation stays cancellable; consume this TOC once at the synchronous commit boundary.
         chapterPreparation = nil
-        // Consume the TOC once; after entry the legacy cache write must finish without a stale-result check.
-        _ = try await facade.replaceChapterContentFromSourceAsync(
-            bookUrl: snapshot.bookURL,
-            currentChapterIndex: Int32(currentChapterIndex),
-            candidateBookUrl: candidateBookUrl,
-            sourceUrl: sourceUrl,
-            candidateChapterIndex: Int32(candidateChapterIndex)
-        )
+        try willCommit()
+        // Only the short persistent write is non-cancellable; never discard its completed result.
+        let _: String = try await SharedAsync.value { completion in
+            facade.commitChapterSourceReplacement(prepared: prepared, completionHandler: completion)
+        }
     }
 
     @MainActor

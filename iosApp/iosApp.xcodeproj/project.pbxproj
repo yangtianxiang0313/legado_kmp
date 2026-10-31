@@ -654,6 +654,7 @@
 		D818F0010000000000000003 /* ReaderSearchSelectionMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D818F0020000000000000003 /* ReaderSearchSelectionMapper.swift */; };
 		D81AA0010000000000000001 /* ReaderContentSearchOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81AA0020000000000000001 /* ReaderContentSearchOptions.swift */; };
 		D81AA0010000000000000002 /* ChangeChapterSourceTocView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81AA0020000000000000002 /* ChangeChapterSourceTocView.swift */; };
+		D81BB0010000000000000001 /* ChapterSourceReplacementCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81BB0020000000000000001 /* ChapterSourceReplacementCoordinator.swift */; };
 		D81AA0010000000000000003 /* ChangeChapterSourceTocCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81AA0020000000000000003 /* ChangeChapterSourceTocCell.swift */; };
 		D81AB0010000000000000001 /* ChangeSourceRatingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81AB0020000000000000001 /* ChangeSourceRatingStore.swift */; };
 		D81AB0010000000000000002 /* ChangeSourceCandidatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81AB0020000000000000002 /* ChangeSourceCandidatePolicy.swift */; };
@@ -1396,6 +1397,7 @@
 		D818F0020000000000000003 /* ReaderSearchSelectionMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSearchSelectionMapper.swift; sourceTree = "<group>"; };
 		D81AA0020000000000000001 /* ReaderContentSearchOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContentSearchOptions.swift; sourceTree = "<group>"; };
 		D81AA0020000000000000002 /* ChangeChapterSourceTocView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeChapterSourceTocView.swift; sourceTree = "<group>"; };
+		D81BB0020000000000000001 /* ChapterSourceReplacementCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterSourceReplacementCoordinator.swift; sourceTree = "<group>"; };
 		D81AA0020000000000000003 /* ChangeChapterSourceTocCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeChapterSourceTocCell.swift; sourceTree = "<group>"; };
 		D81AB0020000000000000001 /* ChangeSourceRatingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSourceRatingStore.swift; sourceTree = "<group>"; };
 		D81AB0020000000000000002 /* ChangeSourceCandidatePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSourceCandidatePolicy.swift; sourceTree = "<group>"; };
@@ -2039,6 +2041,7 @@
 				D37E12A8C0AB4D489A1B0002 /* ChangeSourceCandidateCell.swift */,
 				D37E12A8C0AB4D489A1B0004 /* ChangeSourcePanelView.swift */,
 				D81AA0020000000000000002 /* ChangeChapterSourceTocView.swift */,
+				D81BB0020000000000000001 /* ChapterSourceReplacementCoordinator.swift */,
 				D81AA0020000000000000003 /* ChangeChapterSourceTocCell.swift */,
 				D81AB0020000000000000001 /* ChangeSourceRatingStore.swift */,
 				D81AB0020000000000000002 /* ChangeSourceCandidatePolicy.swift */,
@@ -3103,6 +3106,7 @@
 				D818F0010000000000000003 /* ReaderSearchSelectionMapper.swift in Sources */,
 				D81AA0010000000000000001 /* ReaderContentSearchOptions.swift in Sources */,
 				D81AA0010000000000000002 /* ChangeChapterSourceTocView.swift in Sources */,
+				D81BB0010000000000000001 /* ChapterSourceReplacementCoordinator.swift in Sources */,
 				D81AA0010000000000000003 /* ChangeChapterSourceTocCell.swift in Sources */,
 				D81AB0010000000000000001 /* ChangeSourceRatingStore.swift in Sources */,
 				D81AB0010000000000000002 /* ChangeSourceCandidatePolicy.swift in Sources */,

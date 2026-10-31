@@ -222,6 +222,10 @@ class BookDetailFacade(
     private val epubCatalogReflowPreparer: EpubCatalogReflowPreparer? = null,
 ) {
     private val sourceChangePreparationOwner = Any()
+    private val chapterSourceReplacement = ChapterSourceReplacementSupport(
+        getBookUseCase, bookChapterRepository, getBookSourcesUseCase,
+        loadChapterContentUseCase, chapterContentRepository, ::fetchCandidateChapterList,
+    )
 
     fun watchBook(bookUrl: String, onUpdate: (Book?) -> Unit): FlowSubscription {
         return watchFlow(getBookUseCase(bookUrl), onUpdate, label = "BookDetailFacade.book")
@@ -667,26 +671,40 @@ class BookDetailFacade(
         sourceUrl: String,
         candidateChapterIndex: Int,
     ): String {
-        return runRecoverable("BookDetailFacade.replaceChapterContentFromSource") {
-            val current = requireBook(bookUrl)
-            require(current.isLocal.not()) { "Local books do not support source switching" }
-            val currentChapters = bookChapterRepository.getChaptersByBookUrl(bookUrl)
-            val currentChapter = currentChapters.getOrNull(currentChapterIndex)
-                ?: error("Current chapter not found")
-            val (candidateBook, candidateChapters) = fetchCandidateChapterList(current, candidateBookUrl, sourceUrl)
-            val source = requireNotNull(getBookSourcesUseCase.getByUrl(sourceUrl)) {
-                "Book source not found: $sourceUrl"
-            }
-            val candidateChapter = candidateChapters.getOrNull(candidateChapterIndex)
-                ?: error("Candidate chapter not found")
-            val content = loadChapterContentUseCase(source, candidateBook, candidateChapter).getOrThrow()
-            require(content.isNotBlank()) { "Chapter content is empty" }
-            check(chapterContentRepository.saveContent(current, currentChapter, content)) {
-                "Failed to save chapter content"
-            }
-            content
-        }
+        val prepared = prepareChapterSourceReplacement(
+            bookUrl, currentChapterIndex, candidateBookUrl, sourceUrl, candidateChapterIndex,
+        )
+        return commitChapterSourceReplacement(prepared)
     }
+
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun prepareChapterSourceReplacement(
+        bookUrl: String,
+        currentChapterIndex: Int,
+        candidateBookUrl: String,
+        sourceUrl: String,
+        candidateChapterIndex: Int,
+    ): PreparedChapterSourceReplacement = runRecoverable("BookDetailFacade.prepareChapterSourceReplacement") {
+        chapterSourceReplacement.prepare(bookUrl, currentChapterIndex, candidateBookUrl, sourceUrl, candidateChapterIndex)
+    }
+
+    fun prepareChapterSourceReplacementRequest(
+        bookUrl: String,
+        currentChapterIndex: Int,
+        candidateBookUrl: String,
+        sourceUrl: String,
+        candidateChapterIndex: Int,
+        onResult: (ChapterSourceReplacementPreparationResult) -> Unit,
+    ): FlowSubscription = ChapterSourceReplacementPreparationRequest.start(
+        prepare = { prepareChapterSourceReplacement(bookUrl, currentChapterIndex, candidateBookUrl, sourceUrl, candidateChapterIndex) },
+        onResult = onResult,
+    )
+
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun commitChapterSourceReplacement(prepared: PreparedChapterSourceReplacement): String =
+        runRecoverable("BookDetailFacade.commitChapterSourceReplacement") {
+            bookSaveMutex.withLock { chapterSourceReplacement.commit(prepared) }
+        }
 
     private suspend fun fetchCandidateChapterList(
         current: Book,

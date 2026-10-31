@@ -9,7 +9,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     struct ChapterSelection {
         let title: String
         let load: (BookSourceChangeCandidate) async throws -> ChapterSourceChangeToc
-        let replace: (BookSourceChangeCandidate, BookChapter) async throws -> Void
+        let replace: (BookSourceChangeCandidate, BookChapter, ChapterSourceCommitGate) async throws -> Void
         let onReplaced: () -> Void
         let onCancel: () -> Void
     }
@@ -50,6 +50,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     private var liveQueryMatches = Set<String>()
     private let chapterTocView = ChangeChapterSourceTocView()
     private var chapterTask: Task<Void, Never>?
+    private let chapterReplacement = ChapterSourceReplacementCoordinator()
     private var chapterRequestID = UUID()
     private var selectedChapterCandidate: BookSourceChangeCandidate?
     private var loadedChapterToc: ChapterSourceChangeToc?
@@ -193,7 +194,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     override var canBecomeFirstResponder: Bool { true }
 
     override var keyCommands: [UIKeyCommand]? {
-        guard canInteract, !isReplacingChapter, !isApplyingAction, !isSelectingBook else { return [] }
+        guard canInteract, !chapterReplacement.isCommitting, !isApplyingAction, !isSelectingBook else { return [] }
         return [UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(dismissSelf))]
     }
 
@@ -209,7 +210,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     func cancelPendingBookSelection() { wholeBookCoordinator?.cancel() }
 
     override func accessibilityPerformEscape() -> Bool {
-        guard canInteract, !isReplacingChapter, !isApplyingAction, !isSelectingBook else { return false }
+        guard canInteract, !chapterReplacement.isCommitting, !isApplyingAction, !isSelectingBook else { return false }
         dismissSelf()
         return true
     }
@@ -230,7 +231,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
         menuCoordinator.dismiss()
         if isLeavingPresentation {
             wholeBookCoordinator?.cancel()
-            if !isReplacingChapter && !didReplaceChapter { hideChapterToc() }
+            if !didReplaceChapter { hideChapterToc() }
             resultList.suspend()
             stopSearch()
             screen.unbind()
@@ -246,7 +247,10 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     @objc private func sceneActivationChanged(_ notification: Notification) {
         guard let scene = notification.object as? UIWindowScene, scene === presentationScene else { return }
         isSceneActive = notification.name == UIScene.didActivateNotification
-        if !isSceneActive { menuCoordinator.dismiss() }
+        if !isSceneActive {
+            menuCoordinator.dismiss()
+            if chapterTask != nil || isReplacingChapter { hideChapterToc() }
+        }
         updatePresentationActivity()
     }
 
@@ -489,7 +493,8 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
 
     private func updateActionAvailability() {
         let enabled = !isApplyingAction && !isReplacingChapter && !isSelectingBook && !isClosing
-        panel.setActionsEnabled(enabled)
+        // The toolbar lock includes Back; preparation keeps it available while action guards stay busy.
+        panel.setActionsEnabled(!isApplyingAction && !isSelectingBook && !isClosing && !chapterReplacement.isCommitting)
         panel.moreButton.isEnabled = enabled && screenState != nil
         resultList.isScoreEnabled = enabled && screenState != nil
         updatePresentationActivity()
@@ -611,7 +616,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     }
 
     private func closePicker(onClose: (() -> Void)? = nil) {
-        guard !isReplacingChapter, !isSelectingBook, !isClosing else { return }
+        guard !chapterReplacement.isCommitting, !isSelectingBook, !isClosing else { return }
         hideChapterToc()
         isClosing = true
         updateActionAvailability()
@@ -646,7 +651,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     }
 
     @objc private func dismissSelf() {
-        guard canInteract, !isReplacingChapter, !isApplyingAction, !isSelectingBook else { return }
+        guard canInteract, !chapterReplacement.isCommitting, !isApplyingAction, !isSelectingBook else { return }
         if menuCoordinator.isVisible {
             menuCoordinator.dismiss()
         } else if !chapterTocView.isHidden {
@@ -695,16 +700,18 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     }
 
     private func hideChapterToc() {
-        guard !isReplacingChapter else { return }
+        guard !chapterReplacement.isCommitting, !didReplaceChapter else { return }
         chapterRequestID = UUID()
         chapterTask?.cancel()
         chapterTask = nil
+        chapterReplacement.cancel()
+        isReplacingChapter = false
         loadedChapterToc = nil
         selectedChapterCandidate = nil
         chapterTocView.reset()
         panel.setChapterTocVisible(false)
-        updatePresentationActivity()
         chapterSelection?.onCancel()
+        updateActionAvailability()
     }
 
     private func acceptsChapterRequest(_ id: UUID) -> Bool {
@@ -714,42 +721,54 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
 
     private func selectChapter(_ chapter: BookChapter) {
         guard canInteract, !isReplacingChapter, let chapterSelection,
-            let candidate = selectedChapterCandidate, let toc = loadedChapterToc,
+            let window = view.window, let candidate = selectedChapterCandidate, let toc = loadedChapterToc,
             toc.chapters.contains(where: { $0.index == chapter.index && $0.url == chapter.url })
         else { return }
         let id = chapterRequestID
         guard acceptsChapterRequest(id) else { return }
+        guard
+            chapterReplacement.start(
+                canCommit: { [weak self, weak window] in
+                    guard let self, let window else { return false }
+                    return self.canInteract && self.acceptsChapterRequest(id)
+                        && self.viewIfLoaded?.window === window && !self.chapterTocView.isHidden
+                },
+                onCommit: { [weak self] in
+                    self?.chapterTocView.showReplacementLoading(canClose: false)
+                    self?.updateActionAvailability()
+                },
+                onFinish: { [self] outcome in
+                    finishChapterReplacement(outcome, requestID: id, selection: chapterSelection)
+                },
+                replace: { gate in try await chapterSelection.replace(candidate, chapter, gate) }
+            )
+        else { return }
         isReplacingChapter = true
+        chapterTocView.showReplacementLoading(canClose: true)
         updateActionAvailability()
-        chapterTocView.showLoading(canClose: false)
-        // The legacy operation writes cache content. Keep it alive until the actual outcome.
-        chapterTask = Task { @MainActor [self] in
-            do {
-                try await chapterSelection.replace(candidate, chapter)
-                isReplacingChapter = false
-                updateActionAvailability()
-                chapterTask = nil
-                guard acceptsChapterRequest(id) else {
-                    chapterSelection.onCancel()
-                    return
-                }
-                didReplaceChapter = true
-                isClosing = true
-                stopSearch()
-                resultList.suspend()
-                let replaced = chapterSelection.onReplaced
-                dismiss(animated: true) { replaced() }
-            } catch {
-                isReplacingChapter = false
-                updateActionAvailability()
-                chapterTask = nil
-                guard acceptsChapterRequest(id) else {
-                    chapterSelection.onCancel()
-                    return
-                }
-                hideChapterToc()
-                if !(error is CancellationError) { showTransientMessage(error.userFacingMessage) }
+    }
+
+    private func finishChapterReplacement(
+        _ outcome: ChapterSourceReplacementCoordinator.Outcome, requestID id: UUID, selection: ChapterSelection
+    ) {
+        switch outcome {
+        case .committed:
+            isReplacingChapter = false
+            didReplaceChapter = true
+            isClosing = true
+            updateActionAvailability()
+            stopSearch()
+            resultList.suspend()
+            if isPresentationVisible, !isLeavingPresentation, viewIfLoaded?.window != nil {
+                dismiss(animated: true, completion: selection.onReplaced)
+            } else {
+                selection.onReplaced()
             }
+        case .cancelled, .failed:
+            guard chapterRequestID == id else { return }
+            let canReportError = acceptsChapterRequest(id)
+            hideChapterToc()
+            if canReportError, case .failed(let error) = outcome { showTransientMessage(error.userFacingMessage) }
         }
     }
 

@@ -13,7 +13,7 @@ data class SaveContentEvent(val book: Book, val chapter: BookChapter)
 interface ChapterContentRepository {
     /**
      * Flow of save-content events, equivalent to legado's EventBus.SAVE_CONTENT.
-     * Emits a [SaveContentEvent] each time [saveContent] succeeds.
+     * Emits a [SaveContentEvent] each time [saveContent] or [replaceContentIfUnchanged] succeeds.
      * UI layers (chapter list, cache activity, search content) can collect this
      * to update cached-chapter indicators in real time.
      */
@@ -22,6 +22,31 @@ interface ChapterContentRepository {
     suspend fun hasContent(book: Book, chapter: BookChapter): Boolean
     suspend fun getContent(book: Book, chapter: BookChapter): String?
     suspend fun saveContent(book: Book, chapter: BookChapter, content: String): Boolean
+
+    /**
+     * Atomically compare the cached body using [getContent] semantics and replace it.
+     * Missing and zero-byte bodies both compare as null. Empty [content] is rejected.
+     * Implementations must serialize comparison, writing and full byte verification across
+     * repository instances sharing a cache directory; separate get/save calls are not sufficient.
+     * A failed or cancelled file write restores the previous raw bytes before releasing the lock.
+     * If restoration fails, the failure is reported and only a provably invalid body is removed.
+     *
+     * After the verified file commit, online-text word count updates run outside the cache lock.
+     * A metadata exception explicitly reports that the body remains committed; it does not
+     * roll back the file or emit a save event. Cancellation propagates without a save event,
+     * but cancellation after the file commit cannot undo that commit.
+     *
+     * @return false for an empty replacement, a comparison mismatch or a rejected/unverified
+     * write whose previous bytes were successfully restored. File exceptions propagate.
+     * @throws UnsupportedOperationException if atomic replacement is not implemented.
+     */
+    suspend fun replaceContentIfUnchanged(
+        book: Book,
+        chapter: BookChapter,
+        expectedContent: String?,
+        content: String,
+    ): Boolean = throw UnsupportedOperationException("Atomic chapter content replacement is not supported")
+
     suspend fun deleteContent(book: Book, chapter: BookChapter): Boolean
 
     /**

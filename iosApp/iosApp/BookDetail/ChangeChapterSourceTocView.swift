@@ -35,7 +35,7 @@ final class ChangeChapterSourceTocView: UIView, UITableViewDataSource, UITableVi
         configureLayout()
     }
 
-    /// true: loading a new TOC; false: writing content, retaining the visible TOC.
+    /// Load a new catalog, or keep its rows while committing content.
     func showLoading(canClose: Bool) {
         cancelSuggestedScroll()
         if canClose {
@@ -43,6 +43,14 @@ final class ChangeChapterSourceTocView: UIView, UITableViewDataSource, UITableVi
         }
         state = .loading(canClose: canClose)
         loadingView.accessibilityLabel = canClose ? "正在加载目录" : "正在替换正文"
+        updatePresentation()
+        setNeedsLayout()
+    }
+
+    func showReplacementLoading(canClose: Bool) {
+        cancelSuggestedScroll()
+        state = .loading(canClose: canClose)
+        loadingView.accessibilityLabel = canClose ? "正在加载正文" : "正在替换正文"
         updatePresentation()
         setNeedsLayout()
     }

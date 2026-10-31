@@ -192,11 +192,14 @@ final class ReaderSourceChangeActions {
         _ controller: ChangeSourceViewController, reader: ReaderContainerViewController
     ) {
         let context = ChapterContext(reader)
+        let sourceURL = reader.book?.origin
         var requestID: UUID?
         controller.chapterSelection = .init(
             title: reader.chapterTitle,
             load: { [weak self, weak reader] candidate in
-                guard let self, let reader, self.matchesChapter(context), !self.isCommitting else {
+                guard let self, let reader, self.matchesChapter(context), reader.book?.origin == sourceURL,
+                    !self.isCommitting
+                else {
                     throw CancellationError()
                 }
                 try Task.checkCancellation()
@@ -208,7 +211,9 @@ final class ReaderSourceChangeActions {
                         candidateBookUrl: candidate.bookUrl, sourceUrl: candidate.sourceUrl, chapterIndex: context.index
                     )
                     try Task.checkCancellation()
-                    guard self.operationID == id, requestID == id, self.matchesChapter(context) else {
+                    guard self.operationID == id, requestID == id, self.matchesChapter(context),
+                        reader.book?.origin == sourceURL
+                    else {
                         throw CancellationError()
                     }
                     return toc
@@ -217,26 +222,33 @@ final class ReaderSourceChangeActions {
                     throw error
                 }
             },
-            replace: { [weak self, weak reader] candidate, chapter in
+            replace: { [weak self, weak reader] candidate, chapter, gate in
                 guard let self, let reader, let id = requestID, self.operationID == id,
-                    self.matchesChapter(context), !self.isCommitting
+                    self.matchesChapter(context), reader.book?.origin == sourceURL, !self.isCommitting
                 else { throw CancellationError() }
                 try Task.checkCancellation()
-                self.isCommitting = true
-                defer { self.isCommitting = false }
-                // This call persists content; do not discard a successful write on dismissal.
+                var didBeginCommit = false
+                defer { if didBeginCommit { self.isCommitting = false } }
                 try await reader.screen.replaceChapterContentFromSource(
                     currentChapterIndex: context.index, candidateBookUrl: candidate.bookUrl,
-                    sourceUrl: candidate.sourceUrl, candidateChapterIndex: Int(chapter.index))
+                    sourceUrl: candidate.sourceUrl, candidateChapterIndex: Int(chapter.index),
+                    willCommit: {
+                        guard requestID == id, self.operationID == id, self.matchesChapter(context),
+                            reader.book?.origin == sourceURL, !self.isCommitting
+                        else { throw CancellationError() }
+                        try gate.begin()
+                        self.isCommitting = true
+                        didBeginCommit = true
+                    })
             },
             onReplaced: { [weak self, weak reader] in
                 guard let self, let reader, let id = requestID else { return }
                 if self.operationID == id { self.operationID = nil }
                 requestID = nil
-                guard self.matchesChapter(context), self.isActive(reader) else { return }
+                guard self.matchesChapter(context), reader.book?.origin == sourceURL, self.isActive(reader) else { return }
                 reader.setMenuVisible(false)
                 reader.chapterLoadCoordinator.load(
-                    in: reader, index: context.index, restorePosition: 0,
+                    in: reader, index: context.index, restorePosition: reader.currentCharacterOffset(),
                     successMessage: L10n.Reader.chapterChangeSourceSuccess)
             },
             onCancel: { [weak self] in

@@ -2,8 +2,11 @@ import Foundation
 import shared
 
 enum SharedCancellableAsync {
-    static func value<T>(start: (@escaping @Sendable (T?, Error?) -> Void) -> FlowSubscription) async throws -> T {
-        let state = SharedCancellableAsyncState<T>()
+    static func value<T>(
+        awaitCancellationCompletion: Bool = false,
+        start: (@escaping @Sendable (T?, Error?) -> Void) -> FlowSubscription
+    ) async throws -> T {
+        let state = SharedCancellableAsyncState<T>(awaitCancellationCompletion: awaitCancellationCompletion)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
                 guard state.installContinuation(continuation) else { return }
@@ -21,14 +24,20 @@ enum SharedCancellableAsync {
 private final class SharedCancellableAsyncState<T>: @unchecked Sendable {
     private enum Phase {
         case pending
+        case cancelling
         case completed
         case cancelled
     }
 
     private let lock = NSLock()
+    private let awaitCancellationCompletion: Bool
     private var phase = Phase.pending
     private var continuation: CheckedContinuation<T, Error>?
     private var subscription: FlowSubscription?
+
+    init(awaitCancellationCompletion: Bool) {
+        self.awaitCancellationCompletion = awaitCancellationCompletion
+    }
 
     func installContinuation(_ continuation: CheckedContinuation<T, Error>) -> Bool {
         lock.lock()
@@ -44,7 +53,7 @@ private final class SharedCancellableAsyncState<T>: @unchecked Sendable {
 
     func installSubscription(_ subscription: FlowSubscription) {
         lock.lock()
-        guard phase == .pending else {
+        guard phase == .pending || phase == .cancelling else {
             let shouldCancel = phase == .cancelled
             lock.unlock()
             if shouldCancel {
@@ -53,7 +62,9 @@ private final class SharedCancellableAsyncState<T>: @unchecked Sendable {
             return
         }
         self.subscription = subscription
+        let shouldCancel = phase == .cancelling
         lock.unlock()
+        if shouldCancel { subscription.cancel() }
     }
 
     func complete(value: T?, error: Error?) {
@@ -70,32 +81,43 @@ private final class SharedCancellableAsyncState<T>: @unchecked Sendable {
                     userInfo: [NSLocalizedDescriptionKey: L10n.Shared.emptyValue]
                 ))
         }
-        finish(with: result, cancelled: false)
-    }
-
-    func cancel() {
-        finish(with: .failure(CancellationError()), cancelled: true)
-    }
-
-    private func finish(with result: Result<T, Error>, cancelled: Bool) {
         lock.lock()
-        guard phase == .pending else {
+        guard phase == .pending || phase == .cancelling else {
             lock.unlock()
             return
         }
-        phase = cancelled ? .cancelled : .completed
+        let wasCancelled = phase == .cancelling
+        phase = .completed
         let continuation = self.continuation
         let subscription = self.subscription
         self.continuation = nil
         self.subscription = nil
         lock.unlock()
+        withExtendedLifetime(subscription) {
+            continuation?.resume(with: wasCancelled ? .failure(CancellationError()) : result)
+        }
+    }
+
+    func cancel() {
+        lock.lock()
+        guard phase == .pending else {
+            lock.unlock()
+            return
+        }
+        let waitForTerminal = awaitCancellationCompletion && continuation != nil
+        phase = waitForTerminal ? .cancelling : .cancelled
+        let continuation = self.continuation
+        let subscription = self.subscription
+        if !waitForTerminal {
+            self.continuation = nil
+            self.subscription = nil
+        }
+        lock.unlock()
 
         // Kotlin cancellation can synchronously call back into this state.
         withExtendedLifetime(subscription) {
-            continuation?.resume(with: result)
-            if cancelled {
-                subscription?.cancel()
-            }
+            if !waitForTerminal { continuation?.resume(throwing: CancellationError()) }
+            subscription?.cancel()
         }
     }
 }
