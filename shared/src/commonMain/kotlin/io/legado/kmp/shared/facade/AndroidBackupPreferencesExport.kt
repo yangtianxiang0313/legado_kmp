@@ -30,17 +30,19 @@ internal class AndroidBackupPreferencesExport(private val warnings: MutableList<
                 val selected = ((config["readStyleSelect"] as? JsonPrimitive)?.intOrNull ?: 0)
                     .coerceIn(0, rows.lastIndex)
                 config["readStyleSelect"] = JsonPrimitive(selected)
-                val snapshot = original["reader_shared_layout_snapshot"] as? JsonObject
-                result["shareReadConfig.json"] = if (snapshot != null && data.readConfig.isNotEmpty()) {
-                    reader(sharedPreset(data.readConfig[selected], snapshot)).toString()
-                } else rows[selected].toString()
             }
         }
-        if ("shareReadConfig.json" !in result) {
-            (original["android.shareReadConfig"] as? JsonObject)?.let {
-                result["shareReadConfig.json"] = it.toString()
-            }
+        val snapshot = original["reader_shared_layout_snapshot"]
+        val sharedLayout = (snapshot as? JsonObject)?.let(::sharedPreset)
+        if (snapshot != null && snapshot !is JsonNull && sharedLayout == null) {
+            warnings += "共享阅读排版快照无效，Android 备份已回退到原生共享配置或默认排版。"
         }
+        val shared = sharedLayout?.let(::reader)
+            // ReadBookConfig.initShareConfig (5f5d314): saved object, index 5, then Config().
+            ?: (original["android.shareReadConfig"] as? JsonObject)
+            ?: (readers?.getOrNull(5) as? JsonObject)
+            ?: reader(androidDefaultPreset())
+        result["shareReadConfig.json"] = shared.toString()
         themes?.let { rows ->
             require(rows.all { it is JsonObject }) { "主题备份必须是对象数组" }
             if (rows.isNotEmpty()) result["themeConfig.json"] = rows.toString()
@@ -87,17 +89,8 @@ internal class AndroidBackupPreferencesExport(private val warnings: MutableList<
         row["paragraphIndent"] = JsonPrimitive("\u3000".repeat(preset.paragraphIndent))
         row["titleSize"] = JsonPrimitive(preset.titleSize.toInt())
         row["textFont"] = JsonPrimitive(preset.textFont.orEmpty())
-        row["tipColor"] = JsonPrimitive(when {
-            preset.tipColorHex == null -> 0
-            sameColor(preset.tipColorHex, preset.textColor) -> 1
-            else -> { tipWarning(); 0 }
-        })
-        row["tipDividerColor"] = JsonPrimitive(when {
-            preset.tipDividerColorHex == null -> -1
-            runCatching { ThemePresetCodec.colorInt(preset.tipDividerColorHex).toUInt() shr 24 == 0u }.getOrDefault(false) -> 0
-            sameColor(preset.tipDividerColorHex, preset.textColor) -> 1
-            else -> { tipWarning(); -1 }
-        })
+        row["tipColor"] = JsonPrimitive(tipColor(preset.tipColorHex, divider = false))
+        row["tipDividerColor"] = JsonPrimitive(tipColor(preset.tipDividerColorHex, divider = true))
         if (preset.titleSize != preset.titleSize.toInt().toFloat()) {
             warnings += "Android 标题字号为整数，小数字号已取整；原值保留在 KMP metadata。"
         }
@@ -122,21 +115,41 @@ internal class AndroidBackupPreferencesExport(private val warnings: MutableList<
         return JsonObject(row)
     }
 
-    private fun sharedPreset(base: ReaderPreset, snapshot: JsonObject): ReaderPreset {
-        val row = json.encodeToJsonElement(ReaderPreset.serializer(), base).jsonObject.toMutableMap()
-        // The iOS shared-layout snapshot is independent from the selected preset's own saved layout.
-        snapshot.filterKeys { it in row && it !in setOf("name", "bgAlpha") }.forEach { (key, value) -> row[key] = value }
-        snapshot["fontName"]?.let { row["textFont"] = it }
-        (snapshot["fontSizeSp"] as? JsonPrimitive)?.floatOrNull?.let {
-            require(it.isFinite()) { "共享阅读字号无效" }
-            row["textSize"] = JsonPrimitive(it.roundToInt())
+    private fun androidDefaultPreset(): ReaderPreset = ReaderPreset(name = "", textSize = 20)
+
+    private fun sharedPreset(snapshot: JsonObject): ReaderPreset? = runCatching {
+        val fields = setOf(
+            "textFont", "textSize", "lineSpacingExtra", "textBold", "letterSpacing", "paragraphSpacing",
+            "paragraphIndent", "underline", "bgAlpha", "titleMode", "titleSize", "titleTopSpacing",
+            "titleBottomSpacing", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight",
+            "headerPaddingTop", "headerPaddingBottom", "headerPaddingLeft", "headerPaddingRight",
+            "footerPaddingTop", "footerPaddingBottom", "footerPaddingLeft", "footerPaddingRight",
+            "showHeaderLine", "showFooterLine", "tipHeaderLeft", "tipHeaderMiddle", "tipHeaderRight",
+            "tipFooterLeft", "tipFooterMiddle", "tipFooterRight", "tipColorHex", "tipDividerColorHex",
+            "headerMode", "footerMode",
+        )
+        val aliases = mapOf("fontName" to "textFont", "backgroundAlpha" to "bgAlpha")
+        val layout = snapshot.filterKeys { it in fields }.toMutableMap()
+        aliases.forEach { (source, target) -> snapshot[source]?.let { layout[target] = it } }
+        fun scaled(source: String, target: String, scale: Float) {
+            val element = snapshot[source] ?: return
+            val primitive = element as? JsonPrimitive
+            require(primitive != null && !primitive.isString) { "共享阅读排版数值无效" }
+            val value = primitive.floatOrNull?.times(scale)
+            require(value != null && value.isFinite()) { "共享阅读排版数值无效" }
+            layout[target] = JsonPrimitive(value.roundToInt())
         }
-        (snapshot["lineSpacingMultiplier"] as? JsonPrimitive)?.floatOrNull?.let {
-            require(it.isFinite()) { "共享阅读行距无效" }
-            row["lineSpacingExtra"] = JsonPrimitive((it * 10f).roundToInt())
+        scaled("fontSizeSp", "textSize", 1f)
+        scaled("lineSpacingMultiplier", "lineSpacingExtra", 10f)
+        require(layout.isNotEmpty()) { "共享阅读排版快照为空" }
+        // Start independently of the selected preset; visuals are never shared-layout fields.
+        val row = json.encodeToJsonElement(ReaderPreset.serializer(), androidDefaultPreset()).jsonObject + layout
+        json.decodeFromJsonElement(ReaderPreset.serializer(), JsonObject(row)).also {
+            require(it.paragraphIndent in 0..64 && it.titleSize.isFinite() && it.letterSpacing.isFinite()) {
+                "共享阅读排版快照无效"
+            }
         }
-        return json.decodeFromJsonElement(ReaderPreset.serializer(), JsonObject(row))
-    }
+    }.getOrNull()
 
     private fun theme(preset: ThemePreset): JsonObject {
         val valid = ThemePresetCodec.validated(preset)
@@ -154,11 +167,19 @@ internal class AndroidBackupPreferencesExport(private val warnings: MutableList<
         }
     }
 
-    private fun sameColor(left: String, right: String?): Boolean = right != null &&
-        runCatching { ThemePresetCodec.colorInt(left) == ThemePresetCodec.colorInt(right) }.getOrDefault(false)
-
-    private fun tipWarning() {
-        warnings += "Android 页眉页脚仅支持默认／跟随正文／透明颜色选项，自定义颜色仅保留在 KMP metadata。"
+    private fun tipColor(value: String?, divider: Boolean): Int {
+        val fallback = if (divider) -1 else 0
+        if (value == null) return fallback
+        if (value == "@text") return 0
+        val color = runCatching { ThemePresetCodec.colorInt(value) }.getOrNull()
+        if (color == null) {
+            warnings += "页眉页脚颜色无效，Android 使用默认颜色；原值保留在 KMP metadata。"
+            return fallback
+        }
+        if (color == 0 || (divider && color == -1)) {
+            warnings += "部分颜色与 Android 的跟随正文／默认分隔线标记重合；原颜色保留在 KMP metadata。"
+        }
+        return color
     }
 
     private fun requireStrings(rule: JsonObject, vararg keys: String) {

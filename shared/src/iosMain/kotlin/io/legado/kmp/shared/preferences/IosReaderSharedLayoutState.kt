@@ -3,6 +3,7 @@ package io.legado.kmp.shared.preferences
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
@@ -170,6 +171,19 @@ internal fun NSUserDefaults.restoreReaderSharedLayout(data: PreferencesBackupDat
         }.getOrNull()
         if (layout != null) {
             writeReaderSharedLayout(layout)
+            return
+        }
+    }
+    if (snapshot == null) {
+        val nativeShared = data.appConfig["android.shareReadConfig"] as? JsonObject
+        if (nativeShared != null) {
+            writeReaderSharedLayout(AndroidBackupPreferences.sharedReaderStyle(nativeShared))
+            return
+        }
+        if (data.appConfig["android.readConfig"] is JsonArray) {
+            // Android initShareConfig falls back to preset 5, not the currently selected preset.
+            writeReaderSharedLayout(data.readConfig.getOrNull(5)?.toReaderStylePreferences()
+                ?: AndroidBackupPreferences.sharedReaderStyle(JsonObject(emptyMap())))
             return
         }
     }

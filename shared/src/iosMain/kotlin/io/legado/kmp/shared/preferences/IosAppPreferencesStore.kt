@@ -45,8 +45,9 @@ class IosAppPreferencesStore : AppPreferencesStore {
             data.appConfig.keys.none { it in READER_STYLE_PREFERENCE_KEYS }) {
             val index = defaults.integerForKey(KEY_READ_STYLE_INDEX).toInt().coerceIn(0, readerPresets.lastIndex)
             val preset = readerPresets[index]
-            defaults.writeReaderStyle(preset.name,
-                IosPreferencesBackup.readerStyle(preset, defaults.stringForKey(KEY_THEME_MODE)))
+            val independent = IosPreferencesBackup.readerStyle(preset, defaults.stringForKey(KEY_THEME_MODE))
+            val shared = defaults.readReaderSharedLayout().takeIf { defaults.boolForKey(KEY_SHARE_LAYOUT) }
+            defaults.writeReaderStyle(preset.name, shared?.let(independent::withSharedLayoutFrom) ?: independent)
             defaults.setBool(true, KEY_READER_LINE_SPACING_ANDROID_SCALE_MIGRATED)
             defaults.synchronize()
         }
@@ -584,9 +585,9 @@ class IosAppPreferencesStore : AppPreferencesStore {
     override suspend fun setBookExportFileName(template: String?) = write { setNullableString(KEY_BOOK_EXPORT_FILE_NAME, template) }
     override suspend fun setEpisodeExportFileName(template: String?) = write { setNullableString(KEY_EPISODE_EXPORT_FILE_NAME, template) }
     override suspend fun setDefaultBookTreeUri(uri: String?) = write { setNullableString(KEY_DEFAULT_BOOK_TREE_URI, uri) }
-    override suspend fun setShowDiscovery(enabled: Boolean) = write { setBool(enabled, KEY_SHOW_DISCOVERY) }
-    override suspend fun setShowRSS(enabled: Boolean) = write { setBool(enabled, KEY_SHOW_RSS) }
-    override suspend fun setAutoRefreshBook(enabled: Boolean) = write { setBool(enabled, KEY_AUTO_REFRESH_BOOK) }
+    override suspend fun setShowDiscovery(enabled: Boolean) = write { IosPreferencesBackup.writeBoolean(this, KEY_SHOW_DISCOVERY, enabled) }
+    override suspend fun setShowRSS(enabled: Boolean) = write { IosPreferencesBackup.writeBoolean(this, KEY_SHOW_RSS, enabled) }
+    override suspend fun setAutoRefreshBook(enabled: Boolean) = write { IosPreferencesBackup.writeBoolean(this, KEY_AUTO_REFRESH_BOOK, enabled) }
     override suspend fun setExportCharset(charset: String) = write { setObject(charset.ifBlank { "UTF-8" }, KEY_EXPORT_CHARSET) }
     override suspend fun setExportUseReplace(enabled: Boolean) = write { setBool(enabled, KEY_EXPORT_USE_REPLACE) }
     override suspend fun setExportToWebDav(enabled: Boolean) = write { setBool(enabled, KEY_EXPORT_TO_WEBDAV) }
@@ -674,7 +675,7 @@ class IosAppPreferencesStore : AppPreferencesStore {
     override suspend fun setDefaultHomePage(page: String) = write { setObject(page.ifBlank { "bookshelf" }, KEY_DEFAULT_HOME_PAGE) }
     override suspend fun setUpdateToVariant(variant: String) = write { setObject(variant.ifBlank { "default_version" }, KEY_UPDATE_TO_VARIANT) }
     override suspend fun setLoadCoverOnlyWifi(enabled: Boolean) = write { setBool(enabled, KEY_LOAD_COVER_ONLY_WIFI) }
-    override suspend fun setShowAddToShelfAlert(enabled: Boolean) = write { setBool(enabled, KEY_SHOW_ADD_TO_SHELF_ALERT) }
+    override suspend fun setShowAddToShelfAlert(enabled: Boolean) = write { IosPreferencesBackup.writeBoolean(this, KEY_SHOW_ADD_TO_SHELF_ALERT, enabled) }
     override suspend fun setBookInfoDeleteAlert(enabled: Boolean) = write { setBool(enabled, KEY_BOOK_INFO_DELETE_ALERT) }
     override suspend fun setRecordHeapDump(enabled: Boolean) = write { setBool(enabled, KEY_RECORD_HEAP_DUMP) }
 

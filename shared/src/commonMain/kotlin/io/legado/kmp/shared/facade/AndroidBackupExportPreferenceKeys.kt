@@ -18,6 +18,7 @@ internal object AndroidBackupExportPreferenceKeys {
         "brightness_night" to "nightBrightness", "brightnessNight" to "nightBrightness",
         "reader_chinese_mode" to "chineseConverterType",
         "replace_rule_enabled_by_default" to "replaceEnableDefault",
+        "auto_refresh_book" to "auto_refresh",
         "export_to_webdav" to "webDavCacheBackup", "is_cronet" to "Cronet",
         "use_anti_alias" to "antiAlias", "show_read_title_bar_addition" to "showReadTitleAddition",
         "is_transparent_status_bar" to "transparentStatusBar",
@@ -38,6 +39,7 @@ internal object AndroidBackupExportPreferenceKeys {
         "themeMode", "web_dav_url", "web_dav_account", "web_dav_password", "webDavDir",
         "userAgent", "appTtsEngine", "screenOrientation", "doubleHorizontalPage", "progressBarBehavior",
         "defaultHomePage", "bookExportFileName", "bookImportFileName", "episodeExportFileName",
+        "keep_light",
         "exportCharset", "searchScope", "searchGroup", "mangaFooterConfig",
         "mangaColorFilter", "updateToVariant",
         "backgroundImage", "backgroundImageNight", "welcomeImagePath", "welcomeImagePathDark",
@@ -57,7 +59,7 @@ internal object AndroidBackupExportPreferenceKeys {
         "mangaEInkThreshold", "saveTabPosition", "system_typefaces",
     )
     private val booleanKeys = setOf(
-        "showUnread", "showLastUpdateTime", "showWaitUpCount", "showBookshelfFastScroller",
+        "showUnread", "showLastUpdateTime", "showWaitUpCount", "showBookshelfFastScroller", "process_text",
         "showDiscovery", "showRss", "enableReview", "useDefaultCover", "loadCoverOnlyWifi", "coverShowName",
         "coverShowAuthor", "coverShowNameN", "coverShowAuthorN", "hideStatusBar", "hideNavigationBar",
         "precisionSearch", "ttsFollowSys", "recordLog", "enableCustomExport", "webDavCacheBackup",
@@ -84,14 +86,14 @@ internal object AndroidBackupExportPreferenceKeys {
         "backupUri", "backup_path", "defaultBookTreeUri", "default_book_tree_uri", "webDavDeviceName",
         "defaultCover", "defaultCoverDark", "launcherIcon", "bitmapCacheSize", "webServiceWakeLock",
         "readAloudWakeLock", "audioPlayWakeLock", "backup_restore_ignored_keys", "reader_preset_name",
-        "theme_preset_name", "page_animation", "pageAnim", "keep_screen_on", "auto_refresh_book",
+        "theme_preset_name", "page_animation", "pageAnim", "keep_screen_on",
         "reader_line_spacing_android_scale_migrated", "tts_voice_identifier", "bookshelf_layout_mode",
     )
 
     fun config(original: JsonObject, warnings: MutableList<String>): MutableMap<String, JsonElement> {
         val result = linkedMapOf<String, JsonElement>()
         // Raw Android values first; canonical KMP values win over stale aliases, including null removal.
-        original.entries.sortedBy { if ('_' in it.key || it.key == "bookshelf_layout_mode") 1 else 0 }
+        original.entries.sortedBy { if (('_' in it.key && it.key !in nativeKeys) || aliases[it.key] == it.key) 1 else 0 }
             .forEach { (key, value) ->
                 if (key.startsWith("android.") || (key.startsWith("reader_") && key !in aliases) ||
                     key in excluded) return@forEach
@@ -148,6 +150,7 @@ internal object AndroidBackupExportPreferenceKeys {
     fun importConfig(original: JsonObject): JsonObject {
         val result = original.toMutableMap()
         val nativeToCanonical = mapOf(
+            "auto_refresh" to "auto_refresh_book",
             "nightBrightness" to "brightness_night", "chineseConverterType" to "reader_chinese_mode",
             "ttsFollowSys" to "tts_follow_system_rate", "ttsTimer" to "tts_timer_minutes",
             "webDavCacheBackup" to "export_to_webdav", "Cronet" to "is_cronet", "antiAlias" to "use_anti_alias",

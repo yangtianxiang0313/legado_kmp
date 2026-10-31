@@ -14,15 +14,9 @@ object AndroidBackupPreferences {
             ?.let(json::parseToJsonElement)
         val shared = entries["shareReadConfig.json"]?.let(json::parseToJsonElement) as? JsonObject
         val themesRaw = entries["themeConfig.json"]?.let(json::parseToJsonElement)
-        val shareLayout = (config["shareLayout"] as? JsonPrimitive)?.let {
-            it.booleanOrNull ?: (it.content == "true" || it.content == "1")
-        } ?: false
+        // Android stores each preset independently of the active shared layout.
         val readers = (readerRaw as? JsonArray)?.mapIndexed { index, item ->
-            val original = item.jsonObject
-            val merged = if (shareLayout && shared != null) {
-                JsonObject(original + shared.filterKeys { it in sharedLayoutFields })
-            } else original
-            toReaderPreset(merged, index)
+            toReaderPreset(item.jsonObject, index)
         } ?: emptyList()
         val themes = ((themesRaw as? JsonArray)?.map { json.decodeFromJsonElement<ThemePreset>(it) } ?: emptyList()).toMutableList()
         fun color(key: String, night: Boolean, fallback: String): String {
@@ -62,6 +56,10 @@ object AndroidBackupPreferences {
         return PreferencesBackupData(JsonObject(config), readers, themes)
     }
 
+    // Shared-config selection and the index-5/Config() fallback belong to the caller.
+    internal fun sharedReaderStyle(source: JsonObject): ReaderStylePreferences =
+        toReaderPreset(source, 0).toReaderStylePreferences()
+
     private fun parseConfig(xml: String): JsonObject {
         val document = Ksoup.parse(html = xml, parser = Parser.xmlParser())
         val root = document.selectFirst("map") ?: error("Android config.xml 缺少 map 元素")
@@ -81,6 +79,10 @@ object AndroidBackupPreferences {
 
     private fun toReaderPreset(source: JsonObject, index: Int): ReaderPreset {
         val normalized = source.toMutableMap()
+        // ReadBookConfig.Config at legado 5f5d314 defaults to 20, not the generic fallback of 24.
+        if (normalized["textSize"] == null || normalized["textSize"] == JsonNull) {
+            normalized["textSize"] = JsonPrimitive(20)
+        }
         val name = (source["name"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
         normalized["name"] = JsonPrimitive(name ?: "Android ${index + 1}")
         (source["paragraphIndent"] as? JsonPrimitive)?.let { indent ->
@@ -102,22 +104,20 @@ object AndroidBackupPreferences {
                 normalized["textFont"] = JsonNull
             }
         }
-        // Android tipColor 0=default, 1=follow text; divider -1=default, 0=transparent.
+        // PageView: tip 0 follows text; divider -1 is default and 0 follows text. Others are ARGB.
         (source["tipColor"] as? JsonPrimitive)?.intOrNull?.let {
-            if (it == 1) source["textColor"]?.let { color -> normalized["tipColorHex"] = color }
+            normalized["tipColorHex"] = if (it == 0) JsonNull else JsonPrimitive(androidColor(it))
         }
         (source["tipDividerColor"] as? JsonPrimitive)?.intOrNull?.let {
-            if (it == 0) normalized["tipDividerColorHex"] = JsonPrimitive("#00000000")
+            normalized["tipDividerColorHex"] = when (it) {
+                -1 -> JsonNull
+                0 -> JsonPrimitive("@text")
+                else -> JsonPrimitive(androidColor(it))
+            }
         }
         return json.decodeFromJsonElement(JsonObject(normalized))
     }
 
-    private val sharedLayoutFields = setOf(
-        "textFont", "textBold", "textSize", "letterSpacing", "lineSpacingExtra", "paragraphSpacing",
-        "titleMode", "titleSize", "titleTopSpacing", "titleBottomSpacing", "paddingBottom", "paddingLeft",
-        "paddingRight", "paddingTop", "headerPaddingBottom", "headerPaddingLeft", "headerPaddingRight",
-        "headerPaddingTop", "footerPaddingBottom", "footerPaddingLeft", "footerPaddingRight", "footerPaddingTop",
-        "showHeaderLine", "showFooterLine", "tipHeaderLeft", "tipHeaderMiddle", "tipHeaderRight",
-        "tipFooterLeft", "tipFooterMiddle", "tipFooterRight", "tipColor", "headerMode", "footerMode",
-    )
+    private fun androidColor(value: Int): String = "#" + value.toUInt().toString(16).padStart(8, '0')
+
 }

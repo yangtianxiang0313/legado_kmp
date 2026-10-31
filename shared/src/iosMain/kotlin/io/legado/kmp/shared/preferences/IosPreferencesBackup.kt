@@ -13,6 +13,7 @@ internal object IosPreferencesBackup {
     private val keys = setOf(
         "theme_mode",
         "keep_screen_on",
+        "keep_light",
         "bookshelf_layout",
         "bookshelf_layout_mode",
         "bookshelf_sort",
@@ -299,6 +300,10 @@ internal object IosPreferencesBackup {
         "2", "rss" -> "rss"
         "3", "my", "person", "settings" -> "settings"
         else -> "bookshelf"
+    }
+
+    fun writeBoolean(defaults: NSUserDefaults, key: String, enabled: Boolean) {
+        if (!restoreUiAlias(defaults, key, JsonPrimitive(enabled))) defaults.setBool(enabled, key)
     }
 
     private fun restoreUiAlias(defaults: NSUserDefaults, key: String, value: JsonPrimitive): Boolean {
