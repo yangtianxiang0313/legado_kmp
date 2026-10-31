@@ -6,6 +6,8 @@ import io.ktor.http.Url
 import io.legado.kmp.shared.domain.repository.CookieRepository
 import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.source.SourceStateStore
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import platform.Foundation.NSURL
@@ -161,27 +163,51 @@ class IosInteractiveSourceCapability(
     private suspend fun executeInteractiveWebView(request: LegacyWebViewRequest): String? {
         return withTimeout(WEB_VIEW_TIMEOUT_MILLIS) {
             suspendCancellableCoroutine { continuation ->
+                val lifetime = SupervisorJob(continuation.context[Job])
+                // Runner ownership and completion are confined to main.
+                var finished = false
                 var runner: InteractiveWebViewRunner? = null
 
-                continuation.invokeOnCancellation {
-                    onMain {
-                        runner?.cancel()
-                        runner = null
+                fun cleanUp() {
+                    if (finished) return
+                    finished = true
+                    lifetime.cancel()
+                    val container = runner
+                    runner = null
+                    container?.cancel()
+                }
+
+                fun finish(result: Result<String?>) {
+                    if (finished) return
+                    cleanUp()
+                    if (continuation.isActive) {
+                        result.onSuccess(continuation::resume)
+                        result.onFailure(continuation::resumeWithException)
                     }
                 }
 
+                continuation.invokeOnCancellation {
+                    lifetime.cancel()
+                    onMain { cleanUp() }
+                }
+
                 onMain {
-                    val container = InteractiveWebViewRunner(
-                        request = request,
-                        cookieRepository = cookieRepository,
-                        onComplete = { result ->
-                            if (continuation.isCompleted) return@InteractiveWebViewRunner
-                            result.onSuccess(continuation::resume)
-                            result.onFailure(continuation::resumeWithException)
-                        }
-                    )
-                    runner = container
-                    container.start()
+                    if (finished || !continuation.isActive || !lifetime.isActive) {
+                        cleanUp()
+                        return@onMain
+                    }
+                    try {
+                        val container = InteractiveWebViewRunner(
+                            request = request,
+                            cookieRepository = cookieRepository,
+                            lifetime = lifetime,
+                            onComplete = ::finish,
+                        )
+                        runner = container
+                        container.start()
+                    } catch (error: Throwable) {
+                        finish(Result.failure(error))
+                    }
                 }
             }
         }

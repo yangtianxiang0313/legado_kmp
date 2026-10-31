@@ -11,7 +11,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -47,10 +46,10 @@ import kotlin.native.Platform
 internal class InteractiveWebViewRunner(
     private val request: LegacyWebViewRequest,
     cookieRepository: CookieRepository,
+    private val lifetime: Job,
     onComplete: (Result<String?>) -> Unit,
 ) : NSObject(), WKNavigationDelegateProtocol {
 
-    private val lifetime = SupervisorJob()
     private val terminal = MutableStateFlow(false)
     private val scope = CoroutineScope(lifetime + Dispatchers.Main.immediate)
     private var completion: ((Result<String?>) -> Unit)? = onComplete
