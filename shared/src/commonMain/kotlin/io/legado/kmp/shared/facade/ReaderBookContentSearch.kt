@@ -1,14 +1,16 @@
 package io.legado.kmp.shared.facade
 
-import io.legado.kmp.shared.domain.repository.ChapterContentRepository
 import io.legado.kmp.shared.domain.usecase.ApplyReplaceRulesUseCase
 import io.legado.kmp.shared.domain.usecase.ObserveBookChaptersUseCase
 import io.legado.kmp.shared.domain.usecase.resolveDisplayChapterTitle
+import io.legado.kmp.shared.model.Book
+import io.legado.kmp.shared.model.BookChapter
 import io.legado.kmp.shared.preferences.AppPreferencesStore
 import io.legado.kmp.shared.util.ChineseConverter
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.yield
 
 data class ReaderContentSearchCompletion(
     val errorCode: String?,
@@ -19,7 +21,7 @@ data class ReaderContentSearchCompletion(
 internal class ReaderBookContentSearch(
     private val chapterLoader: ReaderChapterLoader,
     private val observeBookChaptersUseCase: ObserveBookChaptersUseCase,
-    private val chapterContentRepository: ChapterContentRepository,
+    private val readRawContent: suspend (Book, BookChapter) -> String?,
     private val applyReplaceRulesUseCase: ApplyReplaceRulesUseCase,
     private val preferencesStore: AppPreferencesStore,
 ) {
@@ -45,9 +47,9 @@ internal class ReaderBookContentSearch(
             0
         }
         for (chapter in chapters) {
-            coroutineContext.ensureActive()
+            yield()
             if (chapter.isVolume) continue
-            val rawContent = chapterContentRepository.getContent(book, chapter) ?: continue
+            val rawContent = readRawContent(book, chapter) ?: continue
             coroutineContext.ensureActive()
             val searchChapter = if (replaceEnabled == null) {
                 chapter
@@ -74,27 +76,44 @@ internal class ReaderBookContentSearch(
                 useReplace = useReplace,
             )
             val text = processed.content
-            val positions = mutableListOf<Int>()
-            var index = text.indexOf(keyword)
-            while (index >= 0) {
-                coroutineContext.ensureActive()
-                positions.add(index)
-                index = text.indexOf(keyword, index + keyword.length)
-            }
-            for (position in positions) {
-                coroutineContext.ensureActive()
-                val start = (position - 20).coerceAtLeast(0)
-                val end = (position + keyword.length + 20).coerceAtMost(text.length)
-                onResult(
-                    ContentSearchResult(
-                        chapterIndex = chapter.index,
-                        chapterTitle = displayTitle,
-                        matchText = text.substring(start, end),
-                        query = keyword,
-                        queryIndexInResult = position - start,
-                        queryIndexInChapter = position,
+            val searchContext = coroutineContext
+            var textIndex: ReaderSearchTextIndex? = null
+            val lastMatchStart = text.length - keyword.length
+            var searchIndex = 0
+            var matchesSinceYield = 0
+            while (searchIndex <= lastMatchStart) {
+                yield()
+                val batchStart = searchIndex
+                val batchEnd = batchStart + minOf(maxOf(8_192, keyword.length), lastMatchStart - batchStart + 1)
+                // Bound candidate starts but keep the tail needed for cross-window matches.
+                val batchText = text.substring(batchStart, batchEnd + keyword.length - 1)
+                var index = batchText.indexOf(keyword)
+                while (index >= 0) {
+                    coroutineContext.ensureActive()
+                    val position = batchStart + index
+                    val start = (position - 20).coerceAtLeast(0)
+                    val end = (position + keyword.length + 20).coerceAtMost(text.length)
+                    val coordinates = textIndex ?: ReaderSearchTextIndex.create(text) { searchContext.ensureActive() }
+                        .also { textIndex = it }
+                    onResult(
+                        ContentSearchResult(
+                            chapterIndex = chapter.index,
+                            chapterTitle = displayTitle,
+                            matchText = text.substring(start, end),
+                            query = keyword,
+                            queryIndexInResult = position - start,
+                            queryIndexInChapter = position,
+                        ).attachSearchCoordinates(coordinates)
                     )
-                )
+                    searchIndex = position + keyword.length
+                    matchesSinceYield++
+                    if (matchesSinceYield == 64) {
+                        yield()
+                        matchesSinceYield = 0
+                    }
+                    index = batchText.indexOf(keyword, searchIndex - batchStart)
+                }
+                searchIndex = maxOf(searchIndex, batchEnd)
             }
         }
         coroutineContext.ensureActive()
@@ -104,7 +123,7 @@ internal class ReaderBookContentSearch(
     fun start(
         bookUrl: String,
         keyword: String,
-        replaceEnabled: Boolean,
+        replaceEnabled: Boolean?,
         onResult: (ContentSearchResult) -> Unit,
         onFinished: (ReaderContentSearchCompletion) -> Unit,
     ): FlowSubscription = CancellableFacadeRequest.start(

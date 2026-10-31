@@ -146,7 +146,13 @@ class ReaderFacade(
     private val bookContentSearch = ReaderBookContentSearch(
         chapterLoader = chapterLoader,
         observeBookChaptersUseCase = observeBookChaptersUseCase,
-        chapterContentRepository = chapterContentRepository,
+        readRawContent = ReaderContentSearchSource(
+            chapterContentRepository = chapterContentRepository,
+            loadTxtLocalChapterContentUseCase = loadTxtLocalChapterContentUseCase,
+            loadEpubLocalChapterContentUseCase = loadEpubLocalChapterContentUseCase,
+            loadUmdLocalChapterContentUseCase = loadUmdLocalChapterContentUseCase,
+            loadMobiLocalChapterContentUseCase = loadMobiLocalChapterContentUseCase,
+        )::read,
         applyReplaceRulesUseCase = applyReplaceRulesUseCase,
         preferencesStore = preferencesStore,
     )
@@ -766,7 +772,7 @@ class ReaderFacade(
     }
 
     /**
-     * Cache-only content search retaining the original book/default replacement semantics.
+     * Content search retaining the original book/default replacement semantics.
      */
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun searchInBook(
@@ -793,6 +799,13 @@ class ReaderFacade(
             bookContentSearch.search(bookUrl, keyword, replaceEnabled, onResult, onFinished)
         }
     }
+
+    fun searchInBookRequest(
+        bookUrl: String,
+        keyword: String,
+        onResult: (ContentSearchResult) -> Unit,
+        onFinished: (ReaderContentSearchCompletion) -> Unit,
+    ): FlowSubscription = bookContentSearch.start(bookUrl, keyword, null, onResult, onFinished)
 
     fun searchInBookWithOptionsRequest(
         bookUrl: String,

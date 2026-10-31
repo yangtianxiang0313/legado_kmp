@@ -16,6 +16,15 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
         })
     private var bookURL: String
     private var bookBindingID = UUID()
+    private var cachedContentSearchClient: ReaderContentSearchClient?
+    @MainActor private var contentSearchClient: ReaderContentSearchClient {
+        if let cachedContentSearchClient { return cachedContentSearchClient }
+        let client = ReaderContentSearchClient(
+            binding: { [weak self] in (self?.bookURL ?? "", self?.bookBindingID ?? UUID()) },
+            facade: { [weak self] in self?.facade })
+        cachedContentSearchClient = client
+        return client
+    }
     private lazy var sourceChangeClient = ReaderSourceChangeClient(
         binding: { [weak self] in
             guard let self else { return (bookURL: "", generation: UUID()) }
@@ -72,7 +81,10 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
         chapterRequestGate = ReaderChapterRequestGate(bookURL: bookURL)
     }
 
+    deinit { cachedContentSearchClient?.invalidate() }
+
     func bootstrap() -> Result<Void, SharedRuntimeError> {
+        cachedContentSearchClient?.invalidate()
         let bindingID = UUID()
         bookBindingID = bindingID
         chapterRequestGate.bind(bookURL: bookURL, facade: nil)
@@ -151,6 +163,7 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
     func rebindBookURL(_ newBookURL: String, book: Book?, chapters: [BookChapter]) {
         let normalized = newBookURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalized.isEmpty == false else { return }
+        cachedContentSearchClient?.invalidate()
         onChapterLoadingActivityChange?(true)
         let bindingID = UUID()
         bookBindingID = bindingID
@@ -666,14 +679,7 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
 
     /// F60: 全文搜索
     func searchInBook(keyword: String, onResult: @escaping (ContentSearchResult) -> Void) async throws {
-        guard let facade else {
-            throw NSError(
-                domain: "io.legado.kmp.ios",
-                code: -1,
-                userInfo: [NSLocalizedDescriptionKey: L10n.Reader.unavailable]
-            )
-        }
-        try await facade.searchInBookAsync(bookUrl: bookURL, keyword: keyword, onResult: onResult)
+        try await contentSearchClient.searchInBook(keyword: keyword, onResult: onResult)
     }
 
     func searchInBook(
@@ -681,13 +687,7 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
         options: ReaderContentSearchOptions,
         onResult: @escaping (ContentSearchResult) -> Void
     ) async throws {
-        guard let facade else {
-            throw NSError(
-                domain: "io.legado.kmp.ios", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: L10n.Reader.unavailable])
-        }
-        try await facade.searchInBookAsync(
-            bookUrl: bookURL, keyword: keyword, replaceEnabled: options.replaceEnabled, onResult: onResult)
+        try await contentSearchClient.searchInBook(keyword: keyword, options: options, onResult: onResult)
     }
 
     func syncProgress() async throws -> SyncProgressResult {
@@ -1070,6 +1070,7 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
     }
 
     func unbind() {
+        cachedContentSearchClient?.invalidate()
         bookBindingID = UUID()
         suspendChapterLoading()
         progressQueue.suspendPresentation()

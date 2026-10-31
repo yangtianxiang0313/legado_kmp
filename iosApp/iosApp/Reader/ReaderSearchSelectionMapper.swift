@@ -25,44 +25,49 @@ enum ReaderSearchSelectionMapper {
     // Search indexes processed body text; layout indexes include the visible title and
     // image placeholders, but omit trimmed paragraph whitespace and HTML markup.
     static func range(for result: ContentSearchResult, content: String, pages: [ReaderPageLayout]) -> NSRange? {
-        let content = content as NSString
-        let query = result.query as NSString
-        let start = Int(result.queryIndexInChapter)
-        guard start >= 0, start <= content.length, query.length > 0,
-            query.length <= content.length - start
+        guard let (original, rendered) = indexedTexts(content: content, pages: pages) else { return nil }
+        let first: Int
+        let length: Int
+        if let fingerprint = result.searchTextFingerprint,
+            let position = result.queryIndexInVisibleText?.intValue,
+            let count = result.queryLengthInVisibleText?.intValue
+        {
+            // Different replacement options may trim indentation, but may not change actual words.
+            guard fingerprint == original.fingerprint else { return nil }
+            first = position
+            length = count
+        } else {
+            let text = content as NSString
+            let query = result.query as NSString
+            let start = Int(result.queryIndexInChapter)
+            guard start >= 0, start <= text.length, query.length > 0,
+                query.length <= text.length - start,
+                text.substring(with: NSRange(location: start, length: query.length)) == result.query,
+                let range = original.visibleRange(sourceStart: Int32(start), sourceLength: Int32(query.length))
+            else { return nil }
+            first = Int(range.start)
+            length = Int(range.length)
+        }
+        guard first >= 0, length > 0, first <= rendered.positions.count,
+            length <= rendered.positions.count - first
         else { return nil }
-        let requested = NSRange(location: start, length: query.length)
-        guard content.substring(with: requested) == result.query else { return nil }
-
-        guard let (original, rendered) = indexedTexts(content: content, pages: pages),
-            let first = original.positions.firstIndex(where: { $0 >= requested.location }),
-            let last = original.positions.lastIndex(where: { $0 < requested.upperBound }),
-            first <= last
-        else { return nil }
+        let normalizedQuery = Array(ReaderSearchTextIndex(content: result.query).normalizedText.utf16)
+        guard normalizedQuery == Array(rendered.units[first..<(first + length)]) else { return nil }
+        let last = first + length - 1
         let location = rendered.positions[first]
         return NSRange(location: location, length: rendered.positions[last] + 1 - location)
     }
 
     static func contentPosition(for sourcePosition: Int, content: String, pages: [ReaderPageLayout]) -> Int? {
-        guard let (original, rendered) = indexedTexts(content: content as NSString, pages: pages),
+        guard let (original, rendered) = indexedTexts(content: content, pages: pages),
             let first = rendered.positions.firstIndex(where: { $0 >= sourcePosition })
                 ?? rendered.positions.indices.last
         else { return nil }
-        return original.positions[first]
+        return original.sourcePosition(visibleIndex: Int32(first))?.intValue
     }
 
-    private static func indexedTexts(content: NSString, pages: [ReaderPageLayout]) -> (IndexedText, IndexedText)? {
-
-        var original = IndexedText()
-        let tags = try? NSRegularExpression(pattern: "<[^>]+>")
-        var cursor = 0
-        for tag in tags?.matches(in: content as String, range: NSRange(location: 0, length: content.length)) ?? [] {
-            original.append(
-                content, range: NSRange(location: cursor, length: tag.range.location - cursor), sourceStart: 0)
-            cursor = tag.range.upperBound
-        }
-        original.append(content, range: NSRange(location: cursor, length: content.length - cursor), sourceStart: 0)
-
+    private static func indexedTexts(content: String, pages: [ReaderPageLayout]) -> (ReaderSearchTextIndex, IndexedText)? {
+        let original = ReaderSearchTextIndex(content: content)
         var rendered = IndexedText()
         for page in pages {
             for fragment in page.textFragments where fragment.kind == .paragraph {
@@ -76,6 +81,6 @@ enum ReaderSearchSelectionMapper {
 
         // Preserve occurrence identity rather than guessing a nearby duplicate match.
         // Stale or differently processed results must never select unrelated words.
-        return original.units == rendered.units ? (original, rendered) : nil
+        return Array(original.normalizedText.utf16) == rendered.units ? (original, rendered) : nil
     }
 }

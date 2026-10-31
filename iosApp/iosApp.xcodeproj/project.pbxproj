@@ -130,6 +130,7 @@
 		F027E100000000000000000B /* MangaContentsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027E200000000000000000B; };
 		F027D1000000000000000006 /* ReaderProgressSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027D2000000000000000006 /* ReaderProgressSyncCoordinator.swift */; };
 		F027D1000000000000000007 /* ReaderSyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027D2000000000000000007 /* ReaderSyncClient.swift */; };
+		D81CC0010000000000000001 /* ReaderContentSearchClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81CC0020000000000000001 /* ReaderContentSearchClient.swift */; };
 		F027D1000000000000000001 /* CloudBackupScreenAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027D2000000000000000001 /* CloudBackupScreenAdapter.swift */; };
 		F027D1000000000000000002 /* CloudBackupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027D2000000000000000002 /* CloudBackupViewController.swift */; };
 		F027D1000000000000000003 /* CloudBackupStartupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027D2000000000000000003 /* CloudBackupStartupCoordinator.swift */; };
@@ -869,6 +870,7 @@
 		F027E200000000000000000B /* MangaContentsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaContentsViewController.swift; sourceTree = "<group>"; };
 		F027D2000000000000000006 /* ReaderProgressSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderProgressSyncCoordinator.swift; sourceTree = "<group>"; };
 		F027D2000000000000000007 /* ReaderSyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSyncClient.swift; sourceTree = "<group>"; };
+		D81CC0020000000000000001 /* ReaderContentSearchClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContentSearchClient.swift; sourceTree = "<group>"; };
 		F027D2000000000000000001 /* CloudBackupScreenAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupScreenAdapter.swift; sourceTree = "<group>"; };
 		F027D2000000000000000002 /* CloudBackupViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupViewController.swift; sourceTree = "<group>"; };
 		F027D2000000000000000003 /* CloudBackupStartupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupStartupCoordinator.swift; sourceTree = "<group>"; };
@@ -2116,6 +2118,7 @@
 				E20000000000000000000005 /* ReaderProgressQueue.swift */,
 				F027D2000000000000000006 /* ReaderProgressSyncCoordinator.swift */,
 				F027D2000000000000000007 /* ReaderSyncClient.swift */,
+				D81CC0020000000000000001 /* ReaderContentSearchClient.swift */,
                 E026A0020000000000000004 /* ReaderReadingSession.swift */,
 				E20000000000000000000006 /* ReaderReadAloudContent.swift */,
 				E20000000000000000000007 /* ReaderChapterLoadCoordinator.swift */,
@@ -2931,6 +2934,7 @@
 				E10000000000000000000005 /* ReaderProgressQueue.swift in Sources */,
 				F027D1000000000000000006 /* ReaderProgressSyncCoordinator.swift in Sources */,
 				F027D1000000000000000007 /* ReaderSyncClient.swift in Sources */,
+				D81CC0010000000000000001 /* ReaderContentSearchClient.swift in Sources */,
 				E10000000000000000000006 /* ReaderReadAloudContent.swift in Sources */,
 				E10000000000000000000007 /* ReaderChapterLoadCoordinator.swift in Sources */,
 				E10000000000000000000008 /* ReaderChapterRequestGate.swift in Sources */,

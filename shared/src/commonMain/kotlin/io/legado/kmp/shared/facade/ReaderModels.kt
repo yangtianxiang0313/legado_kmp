@@ -54,7 +54,31 @@ data class ContentSearchResult(
     val query: String,
     val queryIndexInResult: Int,
     val queryIndexInChapter: Int,
-)
+) {
+    private var searchCoordinates: SearchCoordinates? = null
+
+    val searchTextFingerprint: String?
+        get() = searchCoordinates?.fingerprint
+
+    val queryIndexInVisibleText: Int?
+        get() = searchCoordinates?.range?.start
+
+    val queryLengthInVisibleText: Int?
+        get() = searchCoordinates?.range?.length
+
+    internal fun attachSearchCoordinates(index: ReaderSearchTextIndex): ContentSearchResult {
+        if (searchCoordinates == null) {
+            val range = index.visibleRange(queryIndexInChapter, query.length)
+            searchCoordinates = SearchCoordinates(
+                fingerprint = if (range != null) index.fingerprint else null,
+                range = range,
+            )
+        }
+        return this
+    }
+
+    private class SearchCoordinates(val fingerprint: String?, val range: ReaderSearchVisibleRange?)
+}
 
 /**
  * Result of a progress sync operation against WebDAV.
