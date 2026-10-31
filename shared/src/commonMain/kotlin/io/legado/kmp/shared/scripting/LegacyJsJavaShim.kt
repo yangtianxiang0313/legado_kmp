@@ -178,7 +178,9 @@ internal val LEGACY_JS_JAVA_SHIM = """
       });
       JCollections = staticClass(collectionsMembers);
       $LEGACY_JS_JAVA_VALUES
+      $LEGACY_JS_JAVA_IO
       $LEGACY_JS_JAVA_CRYPTO
+      $LEGACY_JS_JAVA_RSA
       $LEGACY_JS_JAVA_CIPHER
       $LEGACY_JS_JAVA_URL
       $LEGACY_JS_JAVA_JSOUP
@@ -203,6 +205,17 @@ internal val LEGACY_JS_JAVA_SHIM = """
       registerClass('java.lang.Long', JLong);
       registerClass('java.lang.Double', JDouble);
       registerClass('java.lang.Boolean', JBoolean);
+      registerClass('java.io.ByteArrayInputStream', JByteArrayInputStream);
+      registerClass('java.io.ByteArrayOutputStream', JByteArrayOutputStream);
+      registerClass('java.security.spec.X509EncodedKeySpec', JX509EncodedKeySpec);
+      registerClass('java.security.spec.PKCS8EncodedKeySpec', JPKCS8EncodedKeySpec);
+      registerClass('java.security.KeyFactory', JKeyFactory);
+      registerClass('java.security.Signature', JSignature);
+      registerClass('java.security.Key', JKey);
+      registerClass('java.security.PublicKey', JPublicKey);
+      registerClass('java.security.PrivateKey', JPrivateKey);
+      registerClass('java.security.interfaces.RSAPublicKey', JRsaPublicKey);
+      registerClass('java.security.interfaces.RSAPrivateKey', JRsaPrivateKey);
       registerClass('java.lang.System', staticClass({ currentTimeMillis: function() { return now(); } }));
       registerClass('android.text.TextUtils', JTextUtils);
       registerClass('java.util.Base64', JBase64);

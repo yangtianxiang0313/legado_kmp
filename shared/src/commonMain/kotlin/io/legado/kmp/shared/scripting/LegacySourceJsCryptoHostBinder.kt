@@ -10,6 +10,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 
 /** Registration-only companion; the crypto implementations remain in their existing helpers. */
 internal suspend fun QuickJs.bindLegacyCryptoHost(json: Json) {
+    bindLegacyJavaRsaHost(json)
     function("__legacyJavaCipherConfig") { args ->
         require(args.size == 1) { "Unsupported Java Cipher config host arguments" }
         val transformation = args[0] as? String

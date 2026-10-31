@@ -119,6 +119,7 @@ internal val LEGACY_JS_JAVA_CIPHER = """
     JCipher.getInstance = function(transformation) {
       arity(arguments, 1, 1, 'Cipher.getInstance');
       transformation = text(transformation);
+      if (rsaCipherTransformation(transformation)) return rsaCipher(transformation);
       var config;
       try { config = cipherConfig(javaCipherConfig(transformation)); }
       catch (ignored) { throw new fail('NoSuchAlgorithmException: unsupported Cipher transformation'); }
