@@ -155,6 +155,12 @@ extension ReaderContainerViewController {
                 },
             ])
         }
+        if book.isLocal && book.isTxtLocalBook {
+            items.append(
+                readerOverflowItem("menu_toc_regex", title: "TXT目录规则", isEnabled: hasChapter) {
+                    $0.txtTocSelectionCoordinator.present()
+                })
+        }
         if book.isLocal == false {
             items.append(
                 readerOverflowItem(

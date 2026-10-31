@@ -4,6 +4,7 @@ import io.legado.kmp.shared.domain.localbook.EpubCatalogReflowPlan
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.model.BookChapter
 import io.legado.kmp.shared.model.BookProgress
+import io.legado.kmp.shared.model.Bookmark
 import kotlinx.coroutines.flow.Flow
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -28,6 +29,14 @@ data class ReadingProgressUpdateResult(
 data class ChapterListReorderResult(
     val book: Book,
     val chapters: List<BookChapter>,
+)
+
+/** The position to retain for an existing bookmark when selecting a TXT catalog. */
+data class TxtCatalogBookmarkLocation(
+    val time: Long,
+    val chapterIndex: Int,
+    val chapterPosition: Int,
+    val chapterTitle: String,
 )
 
 /**
@@ -123,6 +132,32 @@ interface BookRepository {
         variable: String,
         chapters: List<BookChapter>,
         fileModified: Long,
+    ): Book?
+
+    /**
+     * Replace a still-local TXT catalog in one synchronous, non-enclosing SQL transaction.
+     * Compare raw identity, charset/TOC/variable/count, all known reading settings, all four
+     * progress fields, every chapter column and every same-name/author bookmark column.
+     * Missing/non-TXT/changed state, malformed stored settings or ambiguous ownership of
+     * bookmarks being moved returns null without writes. The replacement must retain
+     * URL/origin/originName/type/name/author.
+     * Chapters must be nonempty, complete zero-based, unique by nonblank URL and belong to the
+     * logical book URL, with a matching total. Progress and all bookmark locations must be in
+     * range with nonnegative positions; bookmark times must be unique and fully covered.
+     * Invalid input throws. Save only replacement TOC/charset/word count/total/latest chapter
+     * metadata and index/title/position, retaining the latest reading time and all other raw
+     * columns. Bookmarks retain their identity, notes and snippets; only locations/titles change.
+     * Cancellation/failure before commit rolls back all SQL writes. Return the committed book
+     * without a post-commit query/check; no filesystem-wide atomicity is promised.
+     */
+    @Throws(Exception::class)
+    suspend fun replaceTxtCatalogIfUnchanged(
+        expected: Book,
+        expectedChapters: List<BookChapter>,
+        replacement: Book,
+        chapters: List<BookChapter>,
+        expectedBookmarks: List<Bookmark>,
+        bookmarkLocations: List<TxtCatalogBookmarkLocation>,
     ): Book?
 
     /**

@@ -114,6 +114,15 @@ final class ReaderJumpNavigationCoordinator {
 
     func cancelPreparedSearch() { preparedSearchLocation = nil }
 
+    func invalidateCatalogHistory() {
+        decisionContext?.invalidate()
+        decisionContext = nil
+        decisionDialog = nil
+        preparedSearchLocation = nil
+        isShowingSearchResults = false
+        history = ReaderJumpHistory()
+    }
+
     func beginSearchJump(in reader: ReaderContainerViewController) {
         if let preparedSearchLocation, preparedSearchLocation.bookURL == reader.bookURL {
             history.remember(preparedSearchLocation)

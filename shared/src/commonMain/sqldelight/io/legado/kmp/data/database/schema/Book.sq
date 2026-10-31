@@ -153,6 +153,26 @@ UPDATE books SET variable = :variable, total_chapter_num = :total_chapter_num,
 latest_chapter_time = :latest_chapter_time
 WHERE book_url = :book_url;
 
+updateTxtCatalogSelection:
+UPDATE books SET
+    toc_url = :toc_url,
+    charset = :charset,
+    word_count = :word_count,
+    total_chapter_num = :total_chapter_num,
+    latest_chapter_title = :latest_chapter_title,
+    latest_chapter_time = :latest_chapter_time,
+    dur_chapter_index = :dur_chapter_index,
+    dur_chapter_title = :dur_chapter_title,
+    dur_chapter_pos = :dur_chapter_pos
+WHERE book_url = :book_url;
+
+updateTxtCatalogBookmarkLocation:
+UPDATE bookmarks SET
+    chapter_index = :chapter_index,
+    chapter_pos = :chapter_pos,
+    chapter_name = :chapter_name
+WHERE time = :time AND book_name = :book_name AND book_author = :book_author;
+
 associateRemoteOriginIfUnchanged:
 UPDATE books SET origin = :origin, variable = :variable
 WHERE book_url = :book_url AND origin = :expected_origin AND type = :expected_type

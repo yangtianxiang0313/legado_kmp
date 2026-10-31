@@ -44,17 +44,35 @@ class TxtBookParser(
         source: LocalBookByteSource,
         tocRules: List<TxtTocRule>,
         checkActive: () -> Unit
+    ): ParsedTxtBook = parseSourceWithRule(book, source, tocRules, book.tocUrl, checkActive)
+
+    /**
+     * Read-only parsing; the caller owns [source]. Null/blank selects an enabled rule automatically,
+     * ignoring book.tocUrl. A nonblank rule is compiled strictly and never falls back to other rules.
+     * Call [TxtChapterIdentity.retain] with the stored directory before replacing chapter identities.
+     */
+    @Throws(Exception::class)
+    fun parseSourceWithRule(
+        book: Book,
+        source: LocalBookByteSource,
+        tocRules: List<TxtTocRule>,
+        selectedRegex: String?,
+        checkActive: () -> Unit
     ): ParsedTxtBook {
         checkActive()
         if (source.size == 0L) throw EmptyFileException("Unexpected Empty Txt File")
+        val forcedRule = selectedRegex?.takeIf { it.isNotBlank() }
+            ?.let { Regex(it, setOf(RegexOption.MULTILINE)) }
         val charsetName = book.charset?.takeIf { it.isNotBlank() } ?: detectTxtCharset(source, checkActive)
         val reader = TxtWindowReader(source, charsetName, bufferSize, checkActive)
-        val previewText = if (reader.startOffset < source.size) {
-            reader.window(reader.startOffset).content
-        } else {
-            ""
+        val tocRegex = forcedRule ?: run {
+            val previewText = if (reader.startOffset < source.size) {
+                reader.window(reader.startOffset).content
+            } else {
+                ""
+            }
+            selectTocRule(previewText, tocRules, checkActive)
         }
-        val tocRegex = selectTocRule(previewText, tocRules, checkActive)
         val (chapters, wordCount) = if (tocRegex == null) {
             analyzeWithoutRule(reader, checkActive)
         } else {

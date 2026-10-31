@@ -218,6 +218,10 @@
 		DA9EFB55242844DD8E22B8E1 /* ReaderLoadFailureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9EFB55242844DD8E22B8E2 /* ReaderLoadFailureView.swift */; };
 		E1000000000000000000000A /* ReaderChapterListRefreshCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000000000000000000000A /* ReaderChapterListRefreshCoordinator.swift */; };
 		ED0000000000000000000090 /* ReaderCatalogRefreshClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED0000000000000000000091 /* ReaderCatalogRefreshClient.swift */; };
+		D81CE0010000000000000001 /* ReaderTxtTocRuleDialogViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81CE0020000000000000001 /* ReaderTxtTocRuleDialogViewController.swift */; };
+		D81CE0010000000000000002 /* ReaderTxtTocRuleDialogBodyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81CE0020000000000000002 /* ReaderTxtTocRuleDialogBodyView.swift */; };
+		D81CE0010000000000000003 /* ReaderTxtTocRuleDialogCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81CE0020000000000000003 /* ReaderTxtTocRuleDialogCell.swift */; };
+		D81CE0010000000000000004 /* ReaderTxtTocSelectionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81CE0020000000000000004 /* ReaderTxtTocSelectionCoordinator.swift */; };
 		E10000000000000000000009 /* SharedCancellableAsync.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000009 /* SharedCancellableAsync.swift */; };
 		E10000000000000000000008 /* ReaderChapterRequestGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000008 /* ReaderChapterRequestGate.swift */; };
 		E10000000000000000000007 /* ReaderChapterLoadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000007 /* ReaderChapterLoadCoordinator.swift */; };
@@ -1065,6 +1069,10 @@
 		E20000000000000000000009 /* SharedCancellableAsync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCancellableAsync.swift; sourceTree = "<group>"; };
 		E2000000000000000000000A /* ReaderChapterListRefreshCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderChapterListRefreshCoordinator.swift; sourceTree = "<group>"; };
 		ED0000000000000000000091 /* ReaderCatalogRefreshClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderCatalogRefreshClient.swift; sourceTree = "<group>"; };
+		D81CE0020000000000000001 /* ReaderTxtTocRuleDialogViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTxtTocRuleDialogViewController.swift; sourceTree = "<group>"; };
+		D81CE0020000000000000002 /* ReaderTxtTocRuleDialogBodyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTxtTocRuleDialogBodyView.swift; sourceTree = "<group>"; };
+		D81CE0020000000000000003 /* ReaderTxtTocRuleDialogCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTxtTocRuleDialogCell.swift; sourceTree = "<group>"; };
+		D81CE0020000000000000004 /* ReaderTxtTocSelectionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTxtTocSelectionCoordinator.swift; sourceTree = "<group>"; };
 		E2000000000000000000000B /* ReaderSourceChangeActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSourceChangeActions.swift; sourceTree = "<group>"; };
 		E2000000000000000000000C /* ReaderSourceChangeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSourceChangeClient.swift; sourceTree = "<group>"; };
 		DA9EFB55242844DD8E22B8E2 /* ReaderLoadFailureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLoadFailureView.swift; sourceTree = "<group>"; };
@@ -2128,6 +2136,10 @@
 				E20000000000000000000008 /* ReaderChapterRequestGate.swift */,
 				E2000000000000000000000A /* ReaderChapterListRefreshCoordinator.swift */,
 				ED0000000000000000000091 /* ReaderCatalogRefreshClient.swift */,
+				D81CE0020000000000000001 /* ReaderTxtTocRuleDialogViewController.swift */,
+				D81CE0020000000000000002 /* ReaderTxtTocRuleDialogBodyView.swift */,
+				D81CE0020000000000000003 /* ReaderTxtTocRuleDialogCell.swift */,
+				D81CE0020000000000000004 /* ReaderTxtTocSelectionCoordinator.swift */,
 				E2000000000000000000000B /* ReaderSourceChangeActions.swift */,
 				E2000000000000000000000C /* ReaderSourceChangeClient.swift */,
 				DA9EFB55242844DD8E22B8E2 /* ReaderLoadFailureView.swift */,
@@ -2945,6 +2957,10 @@
 				E10000000000000000000009 /* SharedCancellableAsync.swift in Sources */,
 				E1000000000000000000000A /* ReaderChapterListRefreshCoordinator.swift in Sources */,
 				ED0000000000000000000090 /* ReaderCatalogRefreshClient.swift in Sources */,
+				D81CE0010000000000000001 /* ReaderTxtTocRuleDialogViewController.swift in Sources */,
+				D81CE0010000000000000002 /* ReaderTxtTocRuleDialogBodyView.swift in Sources */,
+				D81CE0010000000000000003 /* ReaderTxtTocRuleDialogCell.swift in Sources */,
+				D81CE0010000000000000004 /* ReaderTxtTocSelectionCoordinator.swift in Sources */,
 				E1000000000000000000000B /* ReaderSourceChangeActions.swift in Sources */,
 				E1000000000000000000000C /* ReaderSourceChangeClient.swift in Sources */,
 				DA9EFB55242844DD8E22B8E1 /* ReaderLoadFailureView.swift in Sources */,

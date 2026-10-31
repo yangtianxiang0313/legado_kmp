@@ -353,7 +353,7 @@ val localBookModule = module {
     single<MobiBookParser> { createPlatformMobiBookParser(get()) }
     factory { ParseTxtBookUseCase(get(), get()) }
     factory { LoadTxtChapterContentUseCase(get()) }
-    factory { ParseTxtLocalFileUseCase(get(), get()) }
+    factory { ParseTxtLocalFileUseCase(get(), get(), get(), get()) }
     factory { LoadTxtLocalChapterContentUseCase(get(), get()) }
     factory { ParseEpubLocalFileUseCase(get(), get()) }
     factory { io.legado.kmp.shared.domain.usecase.EpubCatalogReflowPreparer(get(), get(), get(), get(), get(), get(), get(), get()) }
@@ -373,6 +373,7 @@ val facadeModule = module {
     single { io.legado.kmp.shared.facade.CloudBackupFacade(get(), get()) }
     single { io.legado.kmp.shared.facade.ArchiveBookImportFacade(get(), get(), get(), get(), get(), get(), get(), get(), localBookFileNameResolver = get()) }
     factory { io.legado.kmp.shared.facade.LocalBookRelinkFacade(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { io.legado.kmp.shared.facade.TxtTocSelectionFacade(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { LocalBookFileNameFacade(get(), get()) }
     factory { io.legado.kmp.shared.facade.DirectLinkUploadFacade(get(), get()) }
     factory { io.legado.kmp.shared.facade.BackupCapabilitiesFacade(get(), get(), get(), get(), get(), get(), get(), get(), get()) }

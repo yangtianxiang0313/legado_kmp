@@ -173,6 +173,22 @@ final class ReaderCatalogRefreshClient {
         return ReaderCatalogSnapshot(book: book, chapters: chapters)
     }
 
+    func applyTxtRule(_ session: Session, ruleID: Int64) async throws -> Book {
+        guard await queue.drainCatalogBarrier(session.barrier), isCurrent(session) else {
+            throw CancellationError()
+        }
+        try Task.checkCancellation()
+        session.before = try await read(session)
+        try Task.checkCancellation()
+        guard isCurrent(session) else { throw CancellationError() }
+        let facade = try TxtTocSelectionFacade.companion.create()
+        session.didStartMutation = true
+        // This bridge awaits the actual shared terminal; a committed book wins over late cancellation.
+        return try await SharedLocalBookImportAsync.value { onResult in
+            facade.prepareApplyRequest(bookUrl: session.bookURL, ruleId: ruleID, onResult: onResult)
+        }
+    }
+
     func load(_ session: Session, index: Int) async throws -> ReaderChapterPayload {
         guard isCurrent(session) else { throw CancellationError() }
         let payload = try await session.reader.peekChapterAsync(bookUrl: session.bookURL, chapterIndex: Int32(index))

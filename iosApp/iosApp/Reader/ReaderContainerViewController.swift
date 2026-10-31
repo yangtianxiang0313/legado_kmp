@@ -8,6 +8,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
             if oldValue != bookURL {
                 exitCoordinator.readerContextDidChange(resetProgress: true)
                 chapterPrefetchCoordinator.contextDidChange()
+                txtTocSelectionCoordinator.cancel()
             }
         }
     }
@@ -24,6 +25,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     let chapterListRefreshCoordinator = ReaderChapterListRefreshCoordinator()
     let chapterListPresentationCoordinator = ReaderChapterListPresentationCoordinator()
     let chapterListOrderCoordinator = ReaderChapterListOrderCoordinator()
+    lazy var txtTocSelectionCoordinator = ReaderTxtTocSelectionCoordinator(reader: self)
     lazy var sourceChangeActions = ReaderSourceChangeActions(reader: self)
     lazy var contentEditingCoordinator = ReaderContentEditingCoordinator(reader: self)
     lazy var replaceRuleCoordinator = ReaderReplaceRuleCoordinator(reader: self)
@@ -258,6 +260,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
         sourceChangeActions.cancelPreparation()
         chapterListPresentationCoordinator.cancel()
         chapterListRefreshCoordinator.cancel(in: self)
+        txtTocSelectionCoordinator.readerWillDisappear()
         bookSettingsCoordinator.suspend()
         imageInteractionCoordinator.suspend()
         chapterLoadCoordinator.suspend(in: self)

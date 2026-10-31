@@ -9,10 +9,12 @@ import io.legado.kmp.shared.domain.repository.BookRepository
 import io.legado.kmp.shared.domain.repository.ChapterListReorderResult
 import io.legado.kmp.shared.domain.repository.ReadingProgressUpdateResult
 import io.legado.kmp.shared.domain.repository.ReadingProgressImportGuard
+import io.legado.kmp.shared.domain.repository.TxtCatalogBookmarkLocation
 import io.legado.kmp.shared.model.Book
 import io.legado.kmp.shared.domain.localbook.EpubCatalogReflowPlan
 import io.legado.kmp.shared.model.BookChapter
 import io.legado.kmp.shared.model.BookProgress
+import io.legado.kmp.shared.model.Bookmark
 import io.legado.kmp.shared.model.BookType
 import io.legado.kmp.shared.model.ReadConfig
 import io.legado.kmp.shared.model.isTxtLocalBook
@@ -278,6 +280,17 @@ class BookRepositoryImpl(
         fileModified: Long,
     ): Book? = relinkLocalBookFileIfUnchanged(
         database, expected, expectedChapters, variable, chapters, fileModified, ::mapToBook,
+    )
+
+    override suspend fun replaceTxtCatalogIfUnchanged(
+        expected: Book,
+        expectedChapters: List<BookChapter>,
+        replacement: Book,
+        chapters: List<BookChapter>,
+        expectedBookmarks: List<Bookmark>,
+        bookmarkLocations: List<TxtCatalogBookmarkLocation>,
+    ): Book? = replaceTxtBookCatalogIfUnchanged(
+        database, expected, expectedChapters, replacement, chapters, expectedBookmarks, bookmarkLocations, ::mapToBook,
     )
 
     override suspend fun mergeWebFileMetadataIfUnchanged(expectedOnlineBook: Book, expectedLocalBook: Book): Book? =
