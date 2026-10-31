@@ -226,6 +226,8 @@ extension ReaderContainerViewController {
         guard #available(iOS 13.4, *) else { return }
         let recognizer = UIPanGestureRecognizer(target: self, action: #selector(readerHardwareScrollWheelCommand(_:)))
         recognizer.allowedScrollTypesMask = .discrete
+        // allowedScrollTypesMask and allowedTouchTypes filter inputs independently.
+        recognizer.allowedTouchTypes = []
         recognizer.cancelsTouchesInView = false
         renderView.addGestureRecognizer(recognizer)
     }
