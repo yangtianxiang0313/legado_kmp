@@ -208,7 +208,7 @@ final class AndroidReplicaBookDetailPageView: UIView {
         readButton.configuration = readConfig
         readButton.configurationUpdateHandler = { button in
             var configuration = button.configuration
-            let highlighted = button.isHighlighted
+            let highlighted = button.isEnabled && button.isHighlighted
             configuration?.background.backgroundColorTransformer = UIConfigurationColorTransformer { _ in
                 highlighted ? BookDetailActionPalette.pressedAccent : AndroidReplicaTheme.accent
             }
@@ -365,6 +365,22 @@ final class AndroidReplicaBookDetailPageView: UIView {
 
 private final class BookDetailActionButton: UIButton {
     var onLayoutChange: (() -> Void)?
+
+    override var isEnabled: Bool {
+        didSet {
+            if !isEnabled { cancelTracking(with: nil) }
+        }
+    }
+
+    override func cancelTracking(with event: UIEvent?) {
+        super.cancelTracking(with: event)
+        isHighlighted = false
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { cancelTracking(with: nil) }
+    }
 
     override func updateConfiguration() {
         super.updateConfiguration()

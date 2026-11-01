@@ -58,6 +58,9 @@ final class AndroidSearchResultCell: UITableViewCell {
         configureViews()
         installConstraints()
         updateFonts()
+        applyPalette()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applyPalette), name: .androidReplicaThemeDidChange, object: nil)
     }
 
     @available(*, unavailable)
@@ -65,11 +68,15 @@ final class AndroidSearchResultCell: UITableViewCell {
         preconditionFailure("init(coder:) is unavailable")
     }
 
-    deinit { coverTask?.cancel() }
+    deinit {
+        coverTask?.cancel()
+        NotificationCenter.default.removeObserver(self)
+    }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         setPresentationActive(false)
+        setSelected(false, animated: false)
         coverRequestKey = nil
         coverBook = nil
         defaultCoverView.onLoadingPolicyChange = nil
@@ -103,12 +110,25 @@ final class AndroidSearchResultCell: UITableViewCell {
     func setPresentationActive(_ active: Bool) {
         isPresentationActive = active
         accessibilityElementsHidden = !active
+        if !active { setHighlighted(false, animated: false) }
         if active { loadCoverIfNeeded() } else { cancelCoverLoading() }
+    }
+
+    override func setHighlighted(_ highlighted: Bool, animated: Bool) {
+        super.setHighlighted(highlighted, animated: animated)
+        // item_search has no row selector; only AccentBgTextView has a pressed fill.
+        kindBar.isPressed = highlighted && isPresentationActive
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window == nil { cancelCoverLoading() } else { loadCoverIfNeeded() }
+        applyPalette()
+        if window == nil {
+            setHighlighted(false, animated: false)
+            cancelCoverLoading()
+        } else {
+            loadCoverIfNeeded()
+        }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -117,6 +137,9 @@ final class AndroidSearchResultCell: UITableViewCell {
             || previousTraitCollection?.displayScale != traitCollection.displayScale
         {
             updateFonts()
+        }
+        if previousTraitCollection?.hasDifferentColorAppearance(comparedTo: traitCollection) != false {
+            applyPalette()
         }
     }
 
@@ -211,12 +234,9 @@ final class AndroidSearchResultCell: UITableViewCell {
 
     private func configureViews() {
         backgroundColor = AndroidReplicaTheme.background
-        contentView.backgroundColor = AndroidReplicaTheme.background
+        contentView.backgroundColor = .clear
         accessoryType = .none
-        selectionStyle = .default
-        let selectedView = UIView()
-        selectedView.backgroundColor = AndroidReplicaTheme.activeIndicator
-        selectedBackgroundView = selectedView
+        selectionStyle = .none
 
         isAccessibilityElement = true
         accessibilityTraits = [.button]
@@ -266,6 +286,16 @@ final class AndroidSearchResultCell: UITableViewCell {
             item.isAccessibilityElement = false
             contentView.addSubview(item)
         }
+    }
+
+    @objc private func applyPalette() {
+        backgroundColor = AndroidReplicaTheme.background.resolvedColor(with: traitCollection)
+        for label in [titleLabel, authorLabel, latestLabel, introLabel] {
+            label.textColor = AndroidReplicaTheme.primaryText.resolvedColor(with: traitCollection)
+        }
+        originBadge.backgroundColor = AndroidReplicaTheme.accent.resolvedColor(with: traitCollection)
+        originBadge.textColor = SearchScopeStyle.checkedTextColor(traits: traitCollection)
+        kindBar.applyPalette()
     }
 
     private func installConstraints() {
@@ -428,6 +458,12 @@ private final class AndroidSearchInsetLabel: AndroidExploreTextLabel {
 }
 
 private final class AndroidSearchKindBar: UIView {
+    var isPressed = false {
+        didSet {
+            if isPressed != oldValue { applyPalette() }
+        }
+    }
+
     var font = UIFont.systemFont(ofSize: 12) {
         didSet {
             for label in labels { label.font = font }
@@ -483,8 +519,29 @@ private final class AndroidSearchKindBar: UIView {
             }
         }
         isHidden = values.isEmpty
+        applyPalette()
         invalidateIntrinsicContentSize()
         setNeedsLayout()
+    }
+
+    func applyPalette() {
+        let accent = AndroidReplicaTheme.accent.resolvedColor(with: traitCollection)
+        var fill = accent
+        if isPressed {
+            var hue: CGFloat = 0
+            var saturation: CGFloat = 0
+            var brightness: CGFloat = 0
+            var alpha: CGFloat = 0
+            if accent.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) {
+                // AccentBgTextView -> ColorUtils.darkenColor: HSV value *= 0.9.
+                fill = UIColor(hue: hue, saturation: saturation, brightness: brightness * 0.9, alpha: alpha)
+            }
+        }
+        let textColor = SearchScopeStyle.checkedTextColor(traits: traitCollection)
+        for label in labels {
+            label.backgroundColor = fill
+            label.textColor = textColor
+        }
     }
 
     private func makeLabel() -> AndroidSearchInsetLabel {
@@ -513,7 +570,8 @@ private final class AndroidSearchKindBar: UIView {
                 continue
             }
             let width = min(label.intrinsicContentSize.width, remainingWidth)
-            let x = isRTL ? bounds.maxX - offset - width : bounds.minX + offset
+            // LabelsBar uses a physical right margin, not marginEnd.
+            let x = isRTL ? bounds.maxX - offset - 2 - width : bounds.minX + offset
             label.frame = CGRect(x: x, y: bounds.minY, width: width, height: max(0, bounds.height))
             offset += width + 2
         }

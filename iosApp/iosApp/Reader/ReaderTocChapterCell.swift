@@ -108,6 +108,16 @@ final class ReaderTocChapterCell: UITableViewCell {
         updateDividerHeight()
     }
 
+    override func layoutSubviews() {
+        let direction: UISemanticContentAttribute =
+            effectiveUserInterfaceLayoutDirection == .rightToLeft ? .forceRightToLeft : .forceLeftToRight
+        // Preserve locale-driven text and paddingEnd inside the physically ordered rows.
+        for view in [textStack, wordCountLabel, tagLabel, lockSlot] {
+            if view.semanticContentAttribute != direction { view.semanticContentAttribute = direction }
+        }
+        super.layoutSubviews()
+    }
+
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         updateFonts()
@@ -151,6 +161,8 @@ final class ReaderTocChapterCell: UITableViewCell {
 
         metadataStack.axis = .horizontal
         metadataStack.alignment = .firstBaseline
+        // item_chapter_list uses Left/Right constraints, not Start/End, for both rows.
+        metadataStack.semanticContentAttribute = .forceLeftToRight
         // item_chapter_list:45 is padding on the word count, including when no tag exists.
         wordCountLabel.endPadding = 18
         metadataStack.spacing = 0
@@ -169,6 +181,7 @@ final class ReaderTocChapterCell: UITableViewCell {
         statusSlot.addSubview(statusImageView)
         rowStack.axis = .horizontal
         rowStack.alignment = .center
+        rowStack.semanticContentAttribute = .forceLeftToRight
         rowStack.spacing = 0
         rowStack.addArrangedSubview(lockSlot)
         rowStack.addArrangedSubview(textStack)
@@ -181,8 +194,8 @@ final class ReaderTocChapterCell: UITableViewCell {
             view.isAccessibilityElement = false
         }
         NSLayoutConstraint.activate([
-            rowStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-            rowStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            rowStack.leftAnchor.constraint(equalTo: contentView.leftAnchor, constant: 12),
+            rowStack.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -12),
             rowStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
             rowStack.bottomAnchor.constraint(equalTo: dividerView.topAnchor, constant: -12),
             lockWidth,

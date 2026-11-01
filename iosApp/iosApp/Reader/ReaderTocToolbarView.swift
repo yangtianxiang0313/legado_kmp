@@ -219,6 +219,7 @@ final class ReaderTocToolbarView: UIView {
     }
 
     func setSearchExpanded(_ expanded: Bool) {
+        if isSearchExpanded != expanded { searchButton.cancelTracking(with: nil) }
         isSearchExpanded = expanded
         invalidateIntrinsicContentSize()
         updateHeightConstraint()
@@ -260,6 +261,11 @@ final class ReaderTocToolbarView: UIView {
         attributes[.foregroundColor] = palette.toolbarText
         attributes[.kern] = CGFloat(0)
         searchField.defaultTextAttributes = attributes
+        let isLightToolbar = ReaderPaletteColor.isLight(palette.titleBackground)
+        let pressColor = UIColor(white: isLightToolbar ? 0 : 1, alpha: isLightToolbar ? 31.0 / 255 : 51.0 / 255)
+        for button in [backButton, searchButton, moreButton] {
+            (button as? ReaderTocToolbarIconButton)?.applyPressColor(pressColor)
+        }
         updateUnderlineColor()
     }
 
@@ -371,6 +377,67 @@ private final class ReaderTocToolbarSearchField: UITextField {
 
 private final class ReaderTocToolbarIconButton: UIButton {
     var imageStartOffset: CGFloat = 0
+    private let pressView = UIView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        pressView.isUserInteractionEnabled = false
+        pressView.isAccessibilityElement = false
+        insertSubview(pressView, at: 0)
+        updatePressState()
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
+
+    override var isHighlighted: Bool {
+        didSet { updatePressState() }
+    }
+
+    override var isEnabled: Bool {
+        didSet {
+            if !isEnabled { cancelTracking(with: nil) }
+            updatePressState()
+        }
+    }
+
+    override var isHidden: Bool {
+        didSet {
+            if isHidden { cancelTracking(with: nil) }
+            updatePressState()
+        }
+    }
+
+    override func cancelTracking(with event: UIEvent?) {
+        super.cancelTracking(with: event)
+        isHighlighted = false
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { cancelTracking(with: nil) }
+        updatePressState()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let diameter = max(bounds.width, bounds.height)
+        pressView.frame = CGRect(
+            x: bounds.midX - diameter / 2, y: bounds.midY - diameter / 2,
+            width: diameter, height: diameter)
+        pressView.layer.cornerRadius = diameter / 2
+        sendSubviewToBack(pressView)
+    }
+
+    func applyPressColor(_ color: UIColor) {
+        // AppCompat toolbar controlBackground/actionBarItemBackground and SearchView's X
+        // retain the borderless #1F000000 / #33FFFFFF selector; only the tabs disable it.
+        pressView.backgroundColor = color
+    }
+
+    private func updatePressState() {
+        pressView.isHidden = !isHighlighted || !isEnabled || isHidden
+    }
 
     override func imageRect(forContentRect contentRect: CGRect) -> CGRect {
         let size = max(0, min(24, contentRect.width, contentRect.height))
