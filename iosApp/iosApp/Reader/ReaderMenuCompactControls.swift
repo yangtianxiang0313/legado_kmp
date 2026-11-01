@@ -8,7 +8,189 @@ private enum ReaderMenuCompactTextMetrics {
     }
 }
 
-final class ReaderMenuChapterButton: UIButton {
+class ReaderMenuPressButton: UIButton {
+    var showsBorderlessFeedback = true {
+        didSet { updateFeedback() }
+    }
+
+    var feedbackColor = UIColor.clear {
+        didSet { updateFeedback() }
+    }
+
+    // nil follows RippleDrawable's automatic radius; AppCompat navigation uses 20dp.
+    var feedbackRadius: CGFloat? {
+        didSet { updateFeedback() }
+    }
+
+    private let feedbackLayer = CAShapeLayer()
+    private var isCancellingActivation = false
+    private var isSceneSuspended = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        configuration = nil
+        backgroundColor = .clear
+        adjustsImageWhenHighlighted = false
+        adjustsImageWhenDisabled = false
+        tintAdjustmentMode = .normal
+        feedbackLayer.isHidden = true
+        layer.insertSublayer(feedbackLayer, at: 0)
+        let center = NotificationCenter.default
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification] {
+            center.addObserver(self, selector: #selector(applicationBecameInactive), name: name, object: nil)
+        }
+        center.addObserver(
+            self, selector: #selector(applicationBecameActive),
+            name: UIApplication.didBecomeActiveNotification, object: nil)
+        for name in [UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification] {
+            center.addObserver(self, selector: #selector(sceneBecameInactive(_:)), name: name, object: nil)
+        }
+        center.addObserver(
+            self, selector: #selector(sceneBecameActive(_:)), name: UIScene.didActivateNotification, object: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        preconditionFailure("init(coder:) is unavailable")
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    override var isHighlighted: Bool {
+        get { super.isHighlighted }
+        set {
+            super.isHighlighted = newValue && canActivate
+            updateFeedback()
+        }
+    }
+
+    override var isEnabled: Bool {
+        didSet { if !isEnabled { cancelPendingActivation() } }
+    }
+
+    override var isHidden: Bool {
+        didSet { if isHidden { cancelPendingActivation() } }
+    }
+
+    override var alpha: CGFloat {
+        didSet { if alpha <= 0.01 { cancelPendingActivation() } }
+    }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet { if !isUserInteractionEnabled { cancelPendingActivation() } }
+    }
+
+    override func willMove(toSuperview newSuperview: UIView?) {
+        if newSuperview !== superview { cancelPendingActivation() }
+        super.willMove(toSuperview: newSuperview)
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        if newWindow !== window { cancelPendingActivation() }
+        super.willMove(toWindow: newWindow)
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        isSceneSuspended = window?.windowScene?.activationState != .foregroundActive
+        updateFeedback()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        updateFeedback()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if !canActivate, isTracking || isHighlighted {
+            cancelPendingActivation()
+        }
+        updateFeedback()
+    }
+
+    override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        guard canActivate else { return false }
+        return super.beginTracking(touch, with: event)
+    }
+
+    override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        guard canActivate else {
+            cancelTracking(with: event)
+            return false
+        }
+        return super.continueTracking(touch, with: event)
+    }
+
+    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        guard canActivate else {
+            cancelTracking(with: event)
+            return
+        }
+        super.endTracking(touch, with: event)
+    }
+
+    override func cancelTracking(with event: UIEvent?) {
+        guard !isCancellingActivation else { return }
+        isCancellingActivation = true
+        defer { isCancellingActivation = false }
+        super.cancelTracking(with: event)
+        isHighlighted = false
+    }
+
+    func cancelPendingActivation() {
+        cancelTracking(with: nil)
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard canActivate && !isTracking else { return false }
+        sendActions(for: .touchUpInside)
+        return true
+    }
+
+    fileprivate var canActivate: Bool {
+        !isCancellingActivation && !isSceneSuspended && ReaderMenuToolbarInteraction.isAvailable(self)
+    }
+
+    private func updateFeedback() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        feedbackLayer.isHidden = !showsBorderlessFeedback || !isHighlighted || !canActivate
+        guard !feedbackLayer.isHidden else { return }
+        let automaticRadius = hypot(bounds.width, bounds.height) / 2
+        let radius = feedbackRadius.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? automaticRadius
+        feedbackLayer.bounds = bounds
+        feedbackLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        feedbackLayer.path =
+            UIBezierPath(
+                ovalIn: CGRect(x: bounds.midX - radius, y: bounds.midY - radius, width: radius * 2, height: radius * 2)
+            ).cgPath
+        feedbackLayer.fillColor = feedbackColor.resolvedColor(with: traitCollection).cgColor
+    }
+
+    @objc private func applicationBecameInactive() {
+        isSceneSuspended = true
+        cancelPendingActivation()
+    }
+
+    @objc private func applicationBecameActive() {
+        isSceneSuspended = window?.windowScene?.activationState != .foregroundActive
+    }
+
+    @objc private func sceneBecameInactive(_ notification: Notification) {
+        guard let scene = notification.object as? UIScene, scene === window?.windowScene else { return }
+        isSceneSuspended = true
+        cancelPendingActivation()
+    }
+
+    @objc private func sceneBecameActive(_ notification: Notification) {
+        guard let scene = notification.object as? UIScene, scene === window?.windowScene else { return }
+        isSceneSuspended = false
+    }
+}
+
+final class ReaderMenuChapterButton: ReaderMenuPressButton {
     private var textFont = ReaderAndroidDefaultFont.font(size: 14) ?? .systemFont(ofSize: 14)
 
     var preferredHeight: CGFloat {
@@ -34,10 +216,11 @@ final class ReaderMenuChapterButton: UIButton {
     }
 }
 
-class ReaderMenuActionButton: UIButton {
+class ReaderMenuActionButton: ReaderMenuPressButton {
     var onTap: (() -> Void)?
 
     private var onSecondaryAction: (() -> Bool)?
+    private var secondaryActionRecognizer: UILongPressGestureRecognizer?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -56,6 +239,7 @@ class ReaderMenuActionButton: UIButton {
         // Cancel only this press; a later, independent tap must remain available.
         longPress.cancelsTouchesInView = true
         addGestureRecognizer(longPress)
+        secondaryActionRecognizer = longPress
         accessibilityCustomActions = [
             UIAccessibilityCustomAction(name: name) { [weak self] _ in
                 self?.performSecondaryAction() ?? false
@@ -63,8 +247,15 @@ class ReaderMenuActionButton: UIButton {
         ]
     }
 
+    override func cancelPendingActivation() {
+        super.cancelPendingActivation()
+        guard let recognizer = secondaryActionRecognizer, recognizer.isEnabled else { return }
+        recognizer.isEnabled = false
+        recognizer.isEnabled = true
+    }
+
     @objc private func handleTap() {
-        guard ReaderMenuToolbarInteraction.isAvailable(self) else { return }
+        guard canActivate else { return }
         onTap?()
     }
 
@@ -75,7 +266,9 @@ class ReaderMenuActionButton: UIButton {
 
     @discardableResult
     private func performSecondaryAction() -> Bool {
-        guard ReaderMenuToolbarInteraction.isAvailable(self) else { return false }
+        guard canActivate else { return false }
+        // End the button press without resetting the recognizer delivering this action.
+        cancelTracking(with: nil)
         return onSecondaryAction?() ?? false
     }
 }
@@ -109,7 +302,8 @@ final class ReaderMenuBottomActionButton: ReaderMenuActionButton {
         titleLabel?.lineBreakMode = .byTruncatingMiddle
         imageView?.contentMode = .scaleAspectFit
         accessibilityLabel = title
-        clipsToBounds = true
+        // Borderless feedback may extend beyond the fixed XML-sized control.
+        clipsToBounds = false
     }
 
     @available(*, unavailable)
@@ -139,12 +333,22 @@ final class ReaderMenuBottomActionButton: ReaderMenuActionButton {
     }
 }
 
-final class ReaderMenuFloatingButton: UIButton {
+final class ReaderMenuFloatingButton: ReaderMenuPressButton {
     private var restingBackground = UIColor.clear
     private var pressedBackground = UIColor.clear
 
     override var isHighlighted: Bool {
         didSet { updateBackground() }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        showsBorderlessFeedback = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        preconditionFailure("init(coder:) is unavailable")
     }
 
     func apply(background: UIColor, pressedBackground: UIColor) {

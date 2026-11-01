@@ -17,12 +17,12 @@ final class ReaderMenuToolbarView: UIView {
     var onBookAction: (() -> Void)?
     var onMore: (() -> Void)?
 
-    private let backButton = ReaderMenuActionButton(type: .system)
-    private let titleButton = UIButton(type: .custom)
-    private let changeSourceButton = ReaderMenuActionButton(type: .system)
-    private let refreshButton = ReaderMenuActionButton(type: .system)
-    private let bookActionButton = ReaderMenuActionButton(type: .system)
-    private let moreButton = ReaderMenuActionButton(type: .system)
+    private let backButton = ReaderMenuActionButton(type: .custom)
+    private let titleButton = ReaderMenuPressButton(type: .custom)
+    private let changeSourceButton = ReaderMenuActionButton(type: .custom)
+    private let refreshButton = ReaderMenuActionButton(type: .custom)
+    private let bookActionButton = ReaderMenuActionButton(type: .custom)
+    private let moreButton = ReaderMenuActionButton(type: .custom)
     private var changeSourceWidthConstraint: NSLayoutConstraint?
     private var refreshWidthConstraint: NSLayoutConstraint?
     private var navigationLeadingConstraint: NSLayoutConstraint?
@@ -34,6 +34,10 @@ final class ReaderMenuToolbarView: UIView {
 
     var titleAccessibilityElement: UIView { titleButton }
     var overflowAnchorView: UIView { moreButton }
+
+    private var pressButtons: [ReaderMenuPressButton] {
+        [backButton, titleButton, changeSourceButton, refreshButton, bookActionButton, moreButton]
+    }
 
     var refreshMenuAnchor: UIView? {
         ReaderMenuToolbarInteraction.isAvailable(refreshButton) ? refreshButton : nil
@@ -64,6 +68,8 @@ final class ReaderMenuToolbarView: UIView {
     }
 
     func updateBookTitle(_ title: String) {
+        // Different books can share a title; even an equal string may replace the action's owner.
+        cancelPendingActivation()
         // Toolbar.setTitle uses a single-line TextView transformation, not a first-line crop.
         let display = title.replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: "\u{FEFF}")
@@ -74,6 +80,10 @@ final class ReaderMenuToolbarView: UIView {
 
     func setRefreshEnabled(_ enabled: Bool) {
         refreshButton.isEnabled = enabled
+    }
+
+    func cancelPendingActivation() {
+        for button in pressButtons { button.cancelPendingActivation() }
     }
 
     func updateLayout(availableSize: CGSize) -> CGFloat {
@@ -99,25 +109,31 @@ final class ReaderMenuToolbarView: UIView {
 
     func apply(textColor: UIColor) {
         titleButton.setTitleColor(textColor, for: .normal)
+        let feedback = UIColor { traits in
+            ReaderMenuToolbarInteraction.feedbackColor(for: textColor, traits: traits)
+        }
         for button in [backButton, changeSourceButton, refreshButton, bookActionButton, moreButton] {
             button.tintColor = textColor
+            button.feedbackColor = feedback
         }
     }
 
     func updateBookLocalState(isLocal: Bool) {
+        let nextIdentifier = isLocal ? "reader.menu.charset" : UIIdentifiers.Reader.downloadButton
+        if bookActionButton.accessibilityIdentifier != nextIdentifier { cancelPendingActivation() }
         // Android's entire online action group is visible regardless of source-name availability.
         changeSourceButton.isHidden = isLocal
         refreshButton.isHidden = isLocal
         changeSourceWidthConstraint?.constant = isLocal ? 0 : Metrics.actionWidth
         refreshWidthConstraint?.constant = isLocal ? 0 : Metrics.actionWidth
         bookActionButton.setImage((isLocal ? ReaderMenuAndroidIcon.charset : .download).image(), for: .normal)
-        bookActionButton.accessibilityIdentifier =
-            isLocal ? "reader.menu.charset" : UIIdentifiers.Reader.downloadButton
+        bookActionButton.accessibilityIdentifier = nextIdentifier
         bookActionButton.accessibilityLabel =
             isLocal ? L10n.Reader.setCharsetTitle : L10n.Reader.offlineCache
     }
 
     private func configureView() {
+        backButton.feedbackRadius = 20
         configureButton(backButton, icon: .back, label: L10n.Reader.backAction) { [weak self] in
             self?.onBack?()
         }
@@ -143,6 +159,8 @@ final class ReaderMenuToolbarView: UIView {
             self?.onRefreshLongPress?() ?? false
         }
 
+        // ReadMenu binds the toolbar's click, without a selectable background on its title.
+        titleButton.showsBorderlessFeedback = false
         titleButton.contentHorizontalAlignment = .leading
         titleButton.contentVerticalAlignment = .center
         titleButton.titleLabel?.numberOfLines = 1
@@ -151,7 +169,11 @@ final class ReaderMenuToolbarView: UIView {
         titleButton.titleLabel?.lineBreakMode = .byTruncatingTail
         titleButton.clipsToBounds = true
         titleButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        titleButton.addAction(UIAction { [weak self] _ in self?.onBookInfo?() }, for: .touchUpInside)
+        titleButton.addAction(
+            UIAction { [weak self] _ in
+                guard let self, ReaderMenuToolbarInteraction.isAvailable(self.titleButton) else { return }
+                self.onBookInfo?()
+            }, for: .touchUpInside)
         updateTypography()
         for item in [backButton, titleButton, changeSourceButton, refreshButton, bookActionButton, moreButton] {
             item.translatesAutoresizingMaskIntoConstraints = false
@@ -240,8 +262,20 @@ final class ReaderMenuToolbarView: UIView {
 }
 
 enum ReaderMenuToolbarInteraction {
+    static func feedbackColor(for textColor: UIColor, traits: UITraitCollection) -> UIColor {
+        let resolved = textColor.resolvedColor(with: traits)
+        // AppCompat ripple_material_dark/light: light reader text uses 0x33, dark text 0x1F.
+        // isLight computes sRGB relative luminance via getRed, including non-gray custom colors.
+        let isLight = ReaderPaletteColor.isLight(resolved)
+        let alpha: CGFloat = isLight ? 51.0 / 255 : 31.0 / 255
+        return UIColor(white: isLight ? 1 : 0, alpha: alpha)
+    }
+
     static func isAvailable(_ control: UIControl) -> Bool {
-        guard control.isEnabled, let window = control.window, !control.bounds.isEmpty else {
+        guard control.isEnabled, UIApplication.shared.applicationState == .active,
+            let window = control.window, window.windowScene?.activationState == .foregroundActive,
+            !control.bounds.isEmpty
+        else {
             return false
         }
         var visibleFrame = control.convert(control.bounds, to: window).intersection(window.bounds)

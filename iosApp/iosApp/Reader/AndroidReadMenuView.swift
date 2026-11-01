@@ -123,6 +123,16 @@ final class AndroidReadMenuView: UIView {
 
     deinit { NotificationCenter.default.removeObserver(self) }
 
+    override func willMove(toSuperview newSuperview: UIView?) {
+        if newSuperview !== superview { cancelPendingInteraction() }
+        super.willMove(toSuperview: newSuperview)
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        updateProgressInteraction()
+    }
+
     override func didMoveToWindow() {
         super.didMoveToWindow()
         updateMenuTextMetrics()
@@ -175,6 +185,7 @@ final class AndroidReadMenuView: UIView {
                 UITraitCollection(userInterfaceStyle: $0 ? .dark : .light)
             } ?? traitCollection
         let palette = ReaderMenuPalette(readerTheme: readerTheme, traits: menuTraits)
+        let feedbackColor = ReaderMenuToolbarInteraction.feedbackColor(for: palette.bodyText, traits: menuTraits)
         menuTextColor = palette.bodyText
         menuAccentColor = palette.accent
         menuDisabledColor = palette.disabled
@@ -202,6 +213,14 @@ final class AndroidReadMenuView: UIView {
         for button in actionButtons {
             button.tintColor = menuTextColor
             button.setTitleColor(menuTextColor, for: .normal)
+            if let button = button as? ReaderMenuBottomActionButton {
+                button.feedbackColor = feedbackColor
+                button.showsBorderlessFeedback = true
+            }
+        }
+        for button in [previousButton, nextButton] {
+            button.feedbackColor = feedbackColor
+            button.showsBorderlessFeedback = true
         }
         previousButton.setTitleColor(menuTextColor, for: .normal)
         nextButton.setTitleColor(menuTextColor, for: .normal)
@@ -298,15 +317,55 @@ final class AndroidReadMenuView: UIView {
     }
 
     private func updateProgressInteraction() {
-        pageSlider.setInteractionActive(
+        let active =
             isPresented && window?.windowScene?.activationState == .foregroundActive
-                && UIApplication.shared.applicationState == .active)
+            && UIApplication.shared.applicationState == .active
+        pageSlider.setInteractionActive(active)
+        backgroundButton.isEnabled = active && isUserInteractionEnabled && !isProgressTracking
+    }
+
+    private var canPerformMenuAction: Bool {
+        isPresented && !isHidden && isUserInteractionEnabled
+            && window?.windowScene?.activationState == .foregroundActive
+            && UIApplication.shared.applicationState == .active
+    }
+
+    private func canActivate(_ control: UIControl) -> Bool {
+        canPerformMenuAction && ReaderMenuToolbarInteraction.isAvailable(control)
+    }
+
+    private func performMenuAction(_ action: (() -> Void)?) {
+        guard canPerformMenuAction else { return }
+        action?()
+    }
+
+    private func cancelPendingInteraction() {
+        toolbarView.cancelPendingActivation()
+        titleAdditionView.cancelPendingActivation()
+        previousButton.cancelPendingActivation()
+        nextButton.cancelPendingActivation()
+        for button in actionButtons.compactMap({ $0 as? ReaderMenuPressButton }) {
+            button.cancelPendingActivation()
+        }
+        // Preserve the slider's rollback and single tracking-end callback; never synthesize a release.
+        pageSlider.setInteractionActive(false)
+        pageSlider.isHighlighted = false
+        let controls: [UIControl] = [backgroundButton, brightnessAutoButton, brightnessPositionButton, brightnessSlider]
+        for control in controls {
+            control.cancelTracking(with: nil)
+            control.isHighlighted = false
+        }
+        backgroundButton.isEnabled = false
+        for recognizer in brightnessPanel.gestureRecognizers ?? [] where recognizer.isEnabled {
+            recognizer.isEnabled = false
+            recognizer.isEnabled = true
+        }
     }
 
     @objc private func sceneActivationChanged(_ notification: Notification) {
         guard let scene = notification.object as? UIScene, scene === window?.windowScene else { return }
         if notification.name == UIScene.willDeactivateNotification {
-            pageSlider.setInteractionActive(false)
+            cancelPendingInteraction()
         } else {
             resumeProgressInteraction()
         }
@@ -347,7 +406,7 @@ final class AndroidReadMenuView: UIView {
         backgroundButton.backgroundColor = .clear
         backgroundButton.accessibilityLabel = "关闭菜单"
         backgroundButton.accessibilityTraits = .button
-        backgroundButton.addTarget(self, action: #selector(hideSelf), for: .touchUpInside)
+        backgroundButton.addTarget(self, action: #selector(handleBackgroundTap), for: .touchUpInside)
 
         titleBar.backgroundColor = AndroidReplicaTheme.background.withAlphaComponent(0.96)
         titleBar.translatesAutoresizingMaskIntoConstraints = false
@@ -472,6 +531,10 @@ final class AndroidReadMenuView: UIView {
     }
 
     func setPresented(_ presented: Bool, animated: Bool, completion: (() -> Void)? = nil) {
+        if !presented {
+            isUserInteractionEnabled = false
+            cancelPendingInteraction()
+        }
         if presented == isPresented, isPresentationTransitioning {
             if let completion { presentationCompletions.append(completion) }
             return
@@ -488,7 +551,7 @@ final class AndroidReadMenuView: UIView {
         isPresented = presented
         isPresentationTransitioning = true
         isUserInteractionEnabled = presented
-        updateProgressInteraction()
+        if presented { updateProgressInteraction() }
         backgroundButton.isEnabled = presented && !isProgressTracking
         layoutIfNeeded()
         let finish = { [weak self] in
@@ -518,28 +581,38 @@ final class AndroidReadMenuView: UIView {
     }
 
     private func configureTitleBar() {
-        toolbarView.onBack = { [weak self] in self?.onBack?() }
-        toolbarView.onBookInfo = { [weak self] in self?.onBookInfo?() }
-        toolbarView.onChangeSource = { [weak self] in self?.onChangeSource?() }
-        toolbarView.onRefresh = { [weak self] in self?.onRefresh?() }
+        toolbarView.onBack = { [weak self] in self?.performMenuAction(self?.onBack) }
+        toolbarView.onBookInfo = { [weak self] in self?.performMenuAction(self?.onBookInfo) }
+        toolbarView.onChangeSource = { [weak self] in
+            guard let self, !self.isLocalBook else { return }
+            self.performMenuAction(self.onChangeSource)
+        }
+        toolbarView.onRefresh = { [weak self] in
+            guard let self, !self.isLocalBook else { return }
+            self.performMenuAction(self.onRefresh)
+        }
         toolbarView.onBookAction = { [weak self] in
-            guard let self else { return }
+            guard let self, self.canPerformMenuAction else { return }
             if self.isLocalBook {
                 self.onSetCharset?()
             } else {
                 self.onDownload?()
             }
         }
-        toolbarView.onMore = { [weak self] in self?.onMore?() }
+        toolbarView.onMore = { [weak self] in self?.performMenuAction(self?.onMore) }
         toolbarView.onChangeSourceLongPress = { [weak self] in
-            guard let self, self.isPresented, let action = self.onChangeSourceLongPress else {
+            guard let self, self.canPerformMenuAction, !self.isLocalBook,
+                let action = self.onChangeSourceLongPress
+            else {
                 return false
             }
             action()
             return true
         }
         toolbarView.onRefreshLongPress = { [weak self] in
-            guard let self, self.isPresented, let action = self.onRefreshLongPress else {
+            guard let self, self.canPerformMenuAction, !self.isLocalBook,
+                let action = self.onRefreshLongPress
+            else {
                 return false
             }
             action()
@@ -594,11 +667,11 @@ final class AndroidReadMenuView: UIView {
         floatingStack.axis = .horizontal
         floatingStack.alignment = .fill
         floatingStack.distribution = .equalSpacing
-        let searchButton = addFloatingButton("magnifyingglass", androidIcon: .search, action: #selector(handleSearch))
-        autoPageButton = addFloatingButton("play.rectangle", androidIcon: .autoPage, action: #selector(handleAutoPage))
+        let searchButton = addFloatingButton("magnifyingglass", androidIcon: .search, action: #selector(handleSearch(_:)))
+        autoPageButton = addFloatingButton("play.rectangle", androidIcon: .autoPage, action: #selector(handleAutoPage(_:)))
         let replaceRuleButton = addFloatingButton(
-            "text.magnifyingglass", androidIcon: .findReplace, action: #selector(handleReplace))
-        nightThemeButton = addFloatingButton("moon", androidIcon: .brightness, action: #selector(handleNight))
+            "text.magnifyingglass", androidIcon: .findReplace, action: #selector(handleReplace(_:)))
+        nightThemeButton = addFloatingButton("moon", androidIcon: .brightness, action: #selector(handleNight(_:)))
         searchButton.accessibilityLabel = L10n.Reader.menuSearch
         replaceRuleButton.accessibilityLabel = L10n.Reader.quickReplaceAction
         nightThemeButton?.accessibilityLabel = L10n.Reader.menuNightTheme
@@ -634,7 +707,9 @@ final class AndroidReadMenuView: UIView {
             button.titleLabel?.numberOfLines = 1
             button.titleLabel?.adjustsFontSizeToFitWidth = false
             button.titleLabel?.lineBreakMode = .byTruncatingTail
-            button.clipsToBounds = true
+            // Text stays clipped to its label; the XML borderless background projects outside the button.
+            button.clipsToBounds = false
+            button.titleLabel?.clipsToBounds = true
             button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             let height = button.heightAnchor.constraint(equalToConstant: button.preferredHeight)
             chapterButtonHeightConstraints.append(height)
@@ -658,7 +733,7 @@ final class AndroidReadMenuView: UIView {
         pageSlider.onTrackingChange = { [weak self] tracking in
             guard let self else { return }
             self.isProgressTracking = tracking
-            self.backgroundButton.isEnabled = self.isPresented && !tracking
+            self.backgroundButton.isEnabled = self.canPerformMenuAction && !tracking
             self.updateBrightnessLayout()
         }
 
@@ -673,19 +748,21 @@ final class AndroidReadMenuView: UIView {
         menuStack.alignment = .fill
         menuStack.insetsLayoutMarginsFromSafeArea = false
         let tocButton = addMenuButton(
-            title: L10n.Reader.menuToc, icon: .toc, action: #selector(handleToc))
+            title: L10n.Reader.menuToc, icon: .toc, action: #selector(handleToc(_:)))
         readAloudButton = addMenuButton(
-            title: L10n.Reader.menuReadAloud, icon: .readAloud, action: #selector(handleReadAloud))
+            title: L10n.Reader.menuReadAloud, icon: .readAloud, action: #selector(handleReadAloud(_:)))
         let settingsButton = addMenuButton(
-            title: L10n.Reader.menuInterface, icon: .interfaceSetting, action: #selector(handleSettings))
+            title: L10n.Reader.menuInterface, icon: .interfaceSetting, action: #selector(handleSettings(_:)))
         let moreButton = addMenuButton(
-            title: L10n.Reader.menuSettings, icon: .settings, action: #selector(handleMoreSettings))
+            title: L10n.Reader.menuSettings, icon: .settings, action: #selector(handleMoreSettings(_:)))
         tocButton.accessibilityIdentifier = UIIdentifiers.Reader.tocButton
         readAloudButton?.accessibilityIdentifier = UIIdentifiers.Reader.readAloudButton
         settingsButton.accessibilityIdentifier = UIIdentifiers.Reader.interfaceButton
         moreButton.accessibilityIdentifier = UIIdentifiers.Reader.settingsButton
         readAloudButton?.configureSecondaryAction(name: "朗读设置") { [weak self] in
-            guard let self, self.isPresented, let action = self.onReadAloudLongPress else { return false }
+            guard let self, let button = self.readAloudButton, self.canActivate(button),
+                let action = self.onReadAloudLongPress
+            else { return false }
             self.performAfterMenuOut(action)
             return true
         }
@@ -875,7 +952,13 @@ final class AndroidReadMenuView: UIView {
         )
     }
 
-    @objc private func hideSelf() {
+    @objc private func handleBackgroundTap() {
+        guard canActivate(backgroundButton) else { return }
+        hideSelf()
+    }
+
+    private func hideSelf() {
+        guard canPerformMenuAction else { return }
         guard let onDismiss else {
             setPresented(false, animated: true)
             return
@@ -884,47 +967,57 @@ final class AndroidReadMenuView: UIView {
     }
 
     @objc private func handlePrevious() {
+        guard canActivate(previousButton) else { return }
         onPreviousChapter?()
     }
 
     @objc private func handleNext() {
+        guard canActivate(nextButton) else { return }
         onNextChapter?()
     }
 
-    @objc private func handleSearch() {
+    @objc private func handleSearch(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         performAfterMenuOut(onSearch)
     }
 
-    @objc private func handleAutoPage() {
+    @objc private func handleAutoPage(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         performAfterMenuOut(onAutoPage)
     }
 
-    @objc private func handleReplace() {
+    @objc private func handleReplace(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         onReplace?()
     }
 
-    @objc private func handleNight() {
+    @objc private func handleNight(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         onNight?()
     }
 
-    @objc private func handleToc() {
+    @objc private func handleToc(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         performAfterMenuOut(onToc)
     }
 
-    @objc private func handleReadAloud() {
+    @objc private func handleReadAloud(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         performAfterMenuOut(onReadAloud)
     }
 
-    @objc private func handleSettings() {
+    @objc private func handleSettings(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         performAfterMenuOut(onSettings)
     }
 
-    @objc private func handleMoreSettings() {
+    @objc private func handleMoreSettings(_ sender: UIButton) {
+        guard canActivate(sender) else { return }
         performAfterMenuOut(onMoreSettings)
     }
 
     private func performAfterMenuOut(_ action: (() -> Void)?) {
-        guard isPresented, let action, let window, let scene = window.windowScene else { return }
+        guard canPerformMenuAction, let action, let window, let scene = window.windowScene else { return }
         // Notify the owner immediately, then append to its in-flight dismissal completion.
         hideSelf()
         setPresented(false, animated: true) { [weak self, weak window, weak scene] in
@@ -937,16 +1030,17 @@ final class AndroidReadMenuView: UIView {
     }
 
     @objc private func handleSource() {
-        guard sourceMenuAnchor != nil else { return }
+        guard canPerformMenuAction, sourceMenuAnchor != nil else { return }
         onSource?()
     }
 
     @objc private func handleChapterSource() {
-        guard isPresented, !isLocalBook, hasChapterSource else { return }
+        guard canPerformMenuAction, !titleAdditionView.isHidden, !isLocalBook, hasChapterSource else { return }
         onChapterSource?()
     }
 
     @objc private func handleBrightnessSlider() {
+        guard canActivate(brightnessSlider), !localSettings.brightnessAuto else { return }
         localSettings.brightnessAuto = false
         localSettings.persist()
         onBrightnessChange?(brightnessSlider.value)
@@ -954,6 +1048,7 @@ final class AndroidReadMenuView: UIView {
     }
 
     @objc private func handleBrightnessAuto() {
+        guard canActivate(brightnessAutoButton) else { return }
         localSettings.brightnessAuto.toggle()
         if localSettings.brightnessAuto {
             brightnessSlider.value = Float(UIScreen.main.brightness)
@@ -964,6 +1059,7 @@ final class AndroidReadMenuView: UIView {
     }
 
     @objc private func handleBrightnessPosition() {
+        guard canActivate(brightnessPositionButton) else { return }
         localSettings.brightnessOnRight.toggle()
         localSettings.persist()
         updateBrightnessControls()
@@ -980,7 +1076,7 @@ final class AndroidReadMenuView: UIView {
     }
 
     private func applyBrightnessPanelLocation(_ point: CGPoint) {
-        guard !localSettings.brightnessAuto, brightnessSlider.isEnabled else { return }
+        guard canActivate(brightnessSlider), !localSettings.brightnessAuto else { return }
         let location = brightnessSliderHost.convert(point, from: brightnessPanel)
         guard brightnessSliderHost.bounds.contains(location) else { return }
         let progress = 1 - Float((location.y - 8) / max(brightnessSliderHost.bounds.height - 16, 1))

@@ -59,10 +59,17 @@ final class ReaderMenuTitleAdditionView: UIView {
         isLocal: Bool,
         showsAddition: Bool
     ) {
-        self.isLocal = isLocal
         let chapterURL = isLocal ? nil : url
         let hasChapter = !chapter.isEmpty || chapterURL != nil
         let sourceName = source.isEmpty ? L10n.Reader.sourceInfoTitle : source
+        let hidesAddition = !showsAddition || !hasChapter
+        if self.isLocal != isLocal || chapterButton.accessibilityLabel != chapter
+            || urlButton.accessibilityLabel != chapterURL || sourceButton.currentTitle != sourceName
+            || isHidden != hidesAddition
+        {
+            cancelPendingActivation()
+        }
+        self.isLocal = isLocal
 
         chapterButton.setTitle(Self.singleLine(chapter), for: .normal)
         chapterButton.accessibilityLabel = chapter
@@ -84,9 +91,15 @@ final class ReaderMenuTitleAdditionView: UIView {
             [chapterButton, urlButton].filter { !$0.isHidden }
             + (sourceContainer.isHidden ? [] : [sourceButton])
         // Android pins the source slot to the URL row; it must not create its own row.
-        isHidden = !showsAddition || !hasChapter
+        isHidden = hidesAddition
         invalidateIntrinsicContentSize()
         setNeedsLayout()
+    }
+
+    func cancelPendingActivation() {
+        for button in [chapterButton, urlButton, sourceButton] {
+            button.cancelPendingActivation()
+        }
     }
 
     func apply(
@@ -108,6 +121,8 @@ final class ReaderMenuTitleAdditionView: UIView {
         updateTypography()
 
         for button in [chapterButton, urlButton, sourceButton] {
+            // Chapter TextViews have no selectable background; only the accent source changes fill.
+            button.showsBorderlessFeedback = false
             button.titleLabel?.adjustsFontForContentSizeCategory = false
             button.titleLabel?.adjustsFontSizeToFitWidth = false
             button.titleLabel?.lineBreakMode = .byClipping
@@ -227,7 +242,7 @@ final class ReaderMenuTitleAdditionView: UIView {
     }
 }
 
-private class ReaderMenuSummaryButton: UIButton {
+private class ReaderMenuSummaryButton: ReaderMenuPressButton {
     var wrapsTitle = false
 
     // UIButton can query titleRect while lazily creating titleLabel; never read the label there.
