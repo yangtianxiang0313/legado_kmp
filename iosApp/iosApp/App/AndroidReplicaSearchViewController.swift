@@ -540,7 +540,8 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
         cancelHistorySelection()
         let requestID = historySelectionID
         let alert = ReaderRestoreProgressDialogViewController(
-            title: "提醒", message: L10n.Search.clearHistoryConfirm,
+            title: NSLocalizedString("search.clear_history_title", value: "提醒", comment: "Search history confirmation"),
+            message: L10n.Search.clearHistoryConfirm,
             accessibilityIdentifierPrefix: "search.clearHistory"
         ) { [weak self] accepted in
             guard accepted, let self, self.historySelectionID == requestID,

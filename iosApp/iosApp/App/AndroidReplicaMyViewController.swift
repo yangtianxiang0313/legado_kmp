@@ -150,7 +150,8 @@ final class AndroidReplicaMyViewController: UIViewController, UITableViewDataSou
                         iconName: "MyAndroidTranslate", identifier: UIIdentifiers.Settings.dictRuleRow,
                         action: .open { DictRuleViewController().configuredForDrillDownPresentation() }),
                     Row(
-                        title: "Web 服务", summary: "前台服务",
+                        title: Self.androidText("web_service", "Web 服务"),
+                        summary: Self.androidText("foreground_service", "前台服务"),
                         iconName: "MyAndroidFolder", identifier: "settings.webService.row",
                         action: .open { ForegroundWebViewController().configuredForDrillDownPresentation() }),
                     Row(
@@ -197,7 +198,8 @@ final class AndroidReplicaMyViewController: UIViewController, UITableViewDataSou
                         iconName: "BookshelfAndroidHistory", identifier: UIIdentifiers.Settings.readRecordRow,
                         action: .open { ReadRecordViewController().configuredForDrillDownPresentation() }),
                     Row(
-                        title: L10n.Settings.fileManageTitle, summary: "本地文件 / 远程书籍",
+                        title: L10n.Settings.fileManageTitle,
+                        summary: Self.androidText("file_management_summary", "本地文件 / 远程书籍"),
                         iconName: "MyAndroidFolder", identifier: UIIdentifiers.Settings.fileManageRow,
                         action: .open { SandboxFilesViewController() }),
                     Row(

@@ -404,7 +404,8 @@ final class AndroidReadMenuView: UIView {
     private func configureViews() {
         backgroundColor = .clear
         backgroundButton.backgroundColor = .clear
-        backgroundButton.accessibilityLabel = "关闭菜单"
+        backgroundButton.accessibilityLabel = NSLocalizedString(
+            "reader.menu_dismiss", value: "关闭菜单", comment: "Dismiss the reader menu")
         backgroundButton.accessibilityTraits = .button
         backgroundButton.addTarget(self, action: #selector(handleBackgroundTap), for: .touchUpInside)
 
@@ -759,7 +760,9 @@ final class AndroidReadMenuView: UIView {
         readAloudButton?.accessibilityIdentifier = UIIdentifiers.Reader.readAloudButton
         settingsButton.accessibilityIdentifier = UIIdentifiers.Reader.interfaceButton
         moreButton.accessibilityIdentifier = UIIdentifiers.Reader.settingsButton
-        readAloudButton?.configureSecondaryAction(name: "朗读设置") { [weak self] in
+        readAloudButton?.configureSecondaryAction(
+            name: NSLocalizedString("reader.read_aloud_options", value: "朗读设置", comment: "Read aloud secondary action")
+        ) { [weak self] in
             guard let self, let button = self.readAloudButton, self.canActivate(button),
                 let action = self.onReadAloudLongPress
             else { return false }

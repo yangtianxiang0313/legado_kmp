@@ -152,10 +152,14 @@ final class ReaderMenuToolbarView: UIView {
         changeSourceButton.accessibilityIdentifier = UIIdentifiers.Reader.changeSourceButton
         refreshButton.accessibilityIdentifier = UIIdentifiers.Reader.refreshButton
         moreButton.accessibilityIdentifier = UIIdentifiers.Reader.moreButton
-        changeSourceButton.configureSecondaryAction(name: "换源选项") { [weak self] in
+        changeSourceButton.configureSecondaryAction(
+            name: NSLocalizedString("reader.change_source_options", value: "换源选项", comment: "Source secondary action")
+        ) { [weak self] in
             self?.onChangeSourceLongPress?() ?? false
         }
-        refreshButton.configureSecondaryAction(name: "刷新选项") { [weak self] in
+        refreshButton.configureSecondaryAction(
+            name: NSLocalizedString("reader.refresh_options", value: "刷新选项", comment: "Refresh secondary action")
+        ) { [weak self] in
             self?.onRefreshLongPress?() ?? false
         }
 

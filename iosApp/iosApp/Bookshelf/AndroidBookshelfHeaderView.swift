@@ -89,7 +89,12 @@ final class AndroidBookshelfHeaderView: UIView {
                     id: -1, title: NSLocalizedString("bookshelf.all_group", value: "全部", comment: "")
                 )
             ]
-            : groups
+            : groups.map { group in
+                // Only the canonical built-in label is UI copy; custom group names remain user content.
+                guard group.id == -1, group.title == "全部" else { return group }
+                return AndroidBookshelfHeaderGroup(
+                    id: group.id, title: NSLocalizedString("bookshelf.all_group", value: "全部", comment: "All books group"))
+            }
         let displayedSelection =
             displayedGroups.first { $0.id == selectedGroupId }?.id
             ?? displayedGroups[0].id

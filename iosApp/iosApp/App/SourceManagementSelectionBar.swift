@@ -23,7 +23,12 @@ final class SourceManagementSelectionBar: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         configure(selectAllButton, title: nil, identifier: "selectAll", action: #selector(handleSelectAll))
-        configure(invertButton, title: "反选", identifier: "invertSelection", action: #selector(invert))
+        configure(
+            invertButton,
+            title: NSLocalizedString("source_management.invert_selection", value: "反选", comment: "Legado revert_selection"),
+            identifier: "invertSelection", action: #selector(invert))
+        invertButton.accessibilityLabel = NSLocalizedString(
+            "source_management.invert_selection_accessibility", value: "反选", comment: "Invert selected sources")
         configure(deleteButton, title: L10n.Common.delete, identifier: "deleteSelection", action: #selector(deleteSelection))
         configure(moreButton, title: nil, identifier: "batchActions", action: #selector(more))
         moreButton.setImage(ReaderMenuAndroidIcon.more.image(), for: .normal)
@@ -69,7 +74,10 @@ final class SourceManagementSelectionBar: UIView {
         let all = self.totalCount > 0 && self.selectedCount >= self.totalCount
         let title = all ? L10n.Bookshelf.deselectAll : L10n.Bookshelf.selectAll
         // SelectActionBar.upCountView places the count in the checkbox text, not a second caption.
-        selectionTitleLabel.text = "\(title)（\(self.selectedCount)/\(self.totalCount)）"
+        selectionTitleLabel.text = String(
+            format: NSLocalizedString(
+                "source_management.selection_count_format", value: "%@（%ld/%ld）", comment: "Selection action and selected/total count"),
+            locale: Locale.current, title, self.selectedCount, self.totalCount)
         selectionIcon.image = all ? ReplaceRuleEditorIcons.checked : ReplaceRuleEditorIcons.unchecked
         selectAllButton.accessibilityLabel = title
         selectAllButton.accessibilityValue = "\(self.selectedCount)/\(self.totalCount)"
