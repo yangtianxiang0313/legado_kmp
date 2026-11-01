@@ -32,7 +32,10 @@ final class BookSourceImportCoordinator: NSObject, UIDocumentPickerDelegate {
         guard !trimmed.isEmpty else {
             throw NSError(
                 domain: "io.legado.kmp.ios", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "请输入导入内容"])
+                userInfo: [
+                    NSLocalizedDescriptionKey: NSLocalizedString(
+                        "errors.source_import_empty", value: "请输入导入内容", comment: "Empty book source import input")
+                ])
         }
         if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
             return .url(trimmed)
@@ -195,7 +198,12 @@ final class BookSourceImportCoordinator: NSObject, UIDocumentPickerDelegate {
             self.preview = nil
             self.onImported()
             if self.isHostAttached(), let result = self.result {
-                presenter.showTransientMessage("导入完成：新增 \(result.addedCount)，更新 \(result.updatedCount)")
+                presenter.showTransientMessage(
+                    String.localizedStringWithFormat(
+                        NSLocalizedString(
+                            "source_import.success_message_added_updated", value: "导入完成：新增 %d，更新 %d",
+                            comment: "Book source import completion: added and updated counts"),
+                        result.addedCount, result.updatedCount))
             }
             self.result = nil
         }

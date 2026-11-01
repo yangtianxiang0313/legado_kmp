@@ -130,9 +130,108 @@ enum SourceImportPreviewAndroidStyle {
 
 /// Touch-up must not survive a scroll, coverage change or background round-trip.
 final class SourceImportPreviewActionButton: UIButton {
+    enum Feedback: Equatable { case none, bounded, toolbar }
+
+    var feedback: Feedback = .none {
+        didSet {
+            if feedback != .none, var configuration {
+                // UIButton.plain otherwise adds its own capsule on top of the Android mask.
+                configuration.background = .clear()
+                configuration.background.backgroundColorTransformer = UIConfigurationColorTransformer { _ in .clear }
+                self.configuration = configuration
+            }
+            updateFeedback()
+        }
+    }
     var canInteract: (() -> Bool)?
+    private let feedbackLayer = CAShapeLayer()
     private var touchArmed = false
     private var trackingLocation: CGPoint?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        feedbackLayer.isHidden = true
+        layer.insertSublayer(feedbackLayer, at: 0)
+        let center = NotificationCenter.default
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification] {
+            center.addObserver(self, selector: #selector(cancelFeedback), name: name, object: nil)
+        }
+        for name in [UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification] {
+            center.addObserver(self, selector: #selector(sceneInactive(_:)), name: name, object: nil)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    override var isHighlighted: Bool {
+        didSet { updateFeedback() }
+    }
+
+    override var isEnabled: Bool {
+        didSet { if !isEnabled { cancelTracking(with: nil) } }
+    }
+
+    override var isHidden: Bool {
+        didSet { if isHidden { cancelTracking(with: nil) } }
+    }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet { if !isUserInteractionEnabled { cancelTracking(with: nil) } }
+    }
+
+    override var alpha: CGFloat {
+        didSet { if alpha <= 0.01 { cancelTracking(with: nil) } }
+    }
+
+    override func willMove(toSuperview newSuperview: UIView?) {
+        if newSuperview !== superview { cancelTracking(with: nil) }
+        super.willMove(toSuperview: newSuperview)
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        if newWindow !== window { cancelTracking(with: nil) }
+        super.willMove(toWindow: newWindow)
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        updateFeedback()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateFeedback()
+    }
+
+    private func updateFeedback() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        feedbackLayer.isHidden = feedback == .none || !isHighlighted || !available
+        guard !feedbackLayer.isHidden else { return }
+        let toolbar = feedback == .toolbar
+        let color =
+            toolbar
+            ? ReaderPaletteColor.argb(
+                ReaderPaletteColor.isLight(ReaderTocPalette(traits: traitCollection).titleBackground) ? 0x1F00_0000 : 0x33FF_FFFF)
+            : ReaderPaletteColor.argb(ReaderPaletteColor.isNightResource(traits: traitCollection) ? 0x33FF_FFFF : 0x1F00_0000)
+        feedbackLayer.frame = bounds
+        // AppCompat action items are borderless; item_source_import's Open is bounded.
+        let radius = hypot(bounds.width, bounds.height) / 2
+        let circle = CGRect(x: bounds.midX - radius, y: bounds.midY - radius, width: radius * 2, height: radius * 2)
+        feedbackLayer.path = toolbar ? UIBezierPath(ovalIn: circle).cgPath : UIBezierPath(rect: bounds).cgPath
+        feedbackLayer.fillColor = color.resolvedColor(with: traitCollection).cgColor
+    }
+
+    @objc private func cancelFeedback() { cancelTracking(with: nil) }
+
+    @objc private func sceneInactive(_ notification: Notification) {
+        guard let scene = notification.object as? UIScene, scene === window?.windowScene else { return }
+        cancelTracking(with: nil)
+    }
 
     private var available: Bool {
         guard isEnabled, canInteract?() != false, let window, window.isKeyWindow,
@@ -260,6 +359,7 @@ final class SourceImportPreviewToolbar: UIView {
             button.tintColor = palette.toolbarText
             button.configuration?.baseForegroundColor = palette.toolbarText
             button.setTitleColor(palette.toolbarText, for: .normal)
+            button.setNeedsLayout()
         }
     }
 
@@ -354,6 +454,7 @@ final class SourceImportPreviewCell: UITableViewCell {
         checkbox.isAccessibilityElement = true
         checkbox.addTarget(self, action: #selector(toggle), for: .touchUpInside)
         openButton.addTarget(self, action: #selector(open), for: .touchUpInside)
+        openButton.feedback = .bounded
         for button in [checkbox, openButton] {
             button.canInteract = { [weak self] in self?.canInteract?() == true }
             contentView.addSubview(button)

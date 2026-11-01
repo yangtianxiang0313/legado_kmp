@@ -314,6 +314,8 @@ final class SourceImportPreviewViewController: UIViewController, UIAdaptivePrese
     }
 
     private func configureToolbarActions() {
+        moreButton.feedback = .toolbar
+        groupButton.feedback = .toolbar
         moreButton.setImage(ReaderMenuAndroidIcon.more.image() ?? UIImage(systemName: "ellipsis"), for: .normal)
         moreButton.accessibilityLabel = SourceImportPreviewText.more
         moreButton.accessibilityIdentifier = "sourceImport.preview.more"

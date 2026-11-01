@@ -310,7 +310,7 @@ final class BookSourceOnlineImportDialogViewController: UIViewController, UIText
         titleLabel.text = title
         titleLabel.numberOfLines = 0
         titleLabel.lineBreakMode = .byWordWrapping
-        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.adjustsFontForContentSizeCategory = false
         titleLabel.accessibilityTraits = .header
         titleLabel.accessibilityIdentifier = "sourceManagement.importUrl.title"
         entryView.textView.text = initialText
@@ -358,11 +358,11 @@ final class BookSourceOnlineImportDialogViewController: UIViewController, UIText
         dialogView.backgroundColor = palette.background
         footerView.backgroundColor = palette.background
         titleLabel.textColor = palette.primaryText
-        titleLabel.font = UIFontMetrics(forTextStyle: .headline).scaledFont(
-            for: .systemFont(ofSize: 20, weight: .medium), compatibleWith: traitCollection)
+        titleLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 20, textStyle: .headline, weight: 500, compatibleWith: traitCollection)
         errorLabel.textColor = palette.accent
-        errorLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(
-            for: .systemFont(ofSize: 13), compatibleWith: traitCollection)
+        errorLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 13, textStyle: .footnote, compatibleWith: traitCollection)
         entryView.apply(traits: traitCollection)
         historyView.apply(traits: traitCollection)
         cancelControl.apply(traits: traitCollection)

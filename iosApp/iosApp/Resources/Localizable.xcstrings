@@ -1021,6 +1021,23 @@
         }
       }
     },
+    "errors.source_import_empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter content to import"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入导入内容"
+          }
+        }
+      }
+    },
     "errors.source_payload_empty" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3074,6 +3091,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "成功导入 %d 条书源。"
+          }
+        }
+      }
+    },
+    "source_import.success_message_added_updated" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import complete: added %d, updated %d"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入完成：新增 %d，更新 %d"
           }
         }
       }

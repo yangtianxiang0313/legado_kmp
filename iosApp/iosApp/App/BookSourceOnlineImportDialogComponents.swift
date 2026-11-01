@@ -5,7 +5,8 @@ final class BookSourceOnlineImportInputView: UIView {
     private let placeholderLabel = UILabel()
     private let underline = UIView()
     private var palette = ReaderTocPalette(traits: .current)
-    private var inputFont = UIFont.systemFont(ofSize: 16)
+    private var inputFont = ReaderAndroidDefaultFont.scaledFont(
+        size: 18, textStyle: .body, compatibleWith: .current)
 
     var showsError = false {
         didSet { refreshUnderline() }
@@ -17,7 +18,7 @@ final class BookSourceOnlineImportInputView: UIView {
         textView.isScrollEnabled = false
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 4, bottom: 8, right: 4)
         textView.textContainer.lineFragmentPadding = 0
-        textView.adjustsFontForContentSizeCategory = true
+        textView.adjustsFontForContentSizeCategory = false
         textView.autocapitalizationType = .none
         textView.autocorrectionType = .no
         textView.spellCheckingType = .no
@@ -35,7 +36,7 @@ final class BookSourceOnlineImportInputView: UIView {
         placeholderLabel.text = "url"
         placeholderLabel.isAccessibilityElement = false
         placeholderLabel.isUserInteractionEnabled = false
-        placeholderLabel.adjustsFontForContentSizeCategory = true
+        placeholderLabel.adjustsFontForContentSizeCategory = false
         underline.isUserInteractionEnabled = false
         underline.isAccessibilityElement = false
         for item in [textView, placeholderLabel, underline] { addSubview(item) }
@@ -49,8 +50,8 @@ final class BookSourceOnlineImportInputView: UIView {
 
     func apply(traits: UITraitCollection) {
         palette = ReaderTocPalette(traits: traits)
-        let font = UIFontMetrics(forTextStyle: .body).scaledFont(
-            for: .systemFont(ofSize: 16), compatibleWith: traits)
+        // AppCompat AutoCompleteTextView inherits textAppearanceMediumInverse (18sp).
+        let font = ReaderAndroidDefaultFont.scaledFont(size: 18, textStyle: .body, compatibleWith: traits)
         inputFont = font
         // Recolor attributes only after composition commits, without assigning the draft text.
         if textView.markedTextRange == nil {
@@ -174,9 +175,14 @@ final class BookSourceOnlineImportHistoryView: UIView, UITableViewDataSource {
     private let divider = UIView()
     private var values: [String] = []
     private var palette = ReaderTocPalette(traits: .current)
-    private var rowFont = UIFont.systemFont(ofSize: 16)
+    private var rowFont = ReaderAndroidDefaultFont.scaledFont(
+        size: 14, textStyle: .subheadline, compatibleWith: .current)
 
-    var firstRowHeight: CGFloat { max(48, ceil(rowFont.lineHeight) + 20) }
+    var firstRowHeight: CGFloat {
+        let padding = AndroidExploreTextMetrics.padding(font: rowFont, scale: traitCollection.displayScale)
+        // item_1line_text_and_del: 6dp padding around a TextView and a 24dp icon.
+        return ceil(max(24, rowFont.lineHeight + padding.top + padding.bottom)) + 12
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -207,8 +213,7 @@ final class BookSourceOnlineImportHistoryView: UIView, UITableViewDataSource {
 
     func apply(traits: UITraitCollection) {
         palette = ReaderTocPalette(traits: traits)
-        rowFont = UIFontMetrics(forTextStyle: .body).scaledFont(
-            for: .systemFont(ofSize: 16), compatibleWith: traits)
+        rowFont = ReaderAndroidDefaultFont.scaledFont(size: 14, textStyle: .subheadline, compatibleWith: traits)
         tableView.backgroundColor = palette.background
         tableView.indicatorStyle = traits.userInterfaceStyle == .dark ? .white : .black
         tableView.rowHeight = firstRowHeight
@@ -265,8 +270,8 @@ private final class BookSourceOnlineImportHistoryTableView: UITableView {
 private final class BookSourceOnlineImportHistoryCell: UITableViewCell {
     var onSelect: ((String) -> Void)?
     var onDelete: ((String) -> Void)?
-    private let chooseControl = UIButton(type: .system)
-    private let deleteControl = UIButton(type: .system)
+    private let chooseControl = BookSourceOnlineImportPressButton(frame: .zero)
+    private let deleteControl = BookSourceOnlineImportPressButton(frame: .zero)
     private var value = ""
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -275,10 +280,12 @@ private final class BookSourceOnlineImportHistoryCell: UITableViewCell {
         isAccessibilityElement = false
         chooseControl.contentHorizontalAlignment = .leading
         chooseControl.titleLabel?.numberOfLines = 1
-        chooseControl.titleLabel?.lineBreakMode = .byTruncatingMiddle
-        chooseControl.titleLabel?.adjustsFontForContentSizeCategory = true
+        chooseControl.titleLabel?.lineBreakMode = .byTruncatingTail
+        chooseControl.titleLabel?.adjustsFontForContentSizeCategory = false
         chooseControl.addTarget(self, action: #selector(choose), for: .touchUpInside)
-        deleteControl.setImage(UIImage(systemName: "xmark"), for: .normal)
+        deleteControl.setImage(
+            UIImage(systemName: "trash", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)),
+            for: .normal)
         deleteControl.accessibilityLabel = L10n.Common.delete
         deleteControl.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.Common.delete))
         deleteControl.addTarget(self, action: #selector(remove), for: .touchUpInside)
@@ -293,6 +300,7 @@ private final class BookSourceOnlineImportHistoryCell: UITableViewCell {
     }
 
     func configure(value: String, index: Int, font: UIFont, palette: ReaderTocPalette) {
+        clearPressedFeedback()
         self.value = value
         backgroundColor = palette.background
         chooseControl.setTitle(value, for: .normal)
@@ -300,38 +308,123 @@ private final class BookSourceOnlineImportHistoryCell: UITableViewCell {
         chooseControl.titleLabel?.font = font
         chooseControl.accessibilityLabel = value
         chooseControl.accessibilityIdentifier = "sourceManagement.importUrl.history.fill.\(index)"
-        deleteControl.tintColor = palette.secondaryText
+        deleteControl.tintColor = palette.primaryText
         deleteControl.accessibilityValue = value
         deleteControl.accessibilityIdentifier = "sourceManagement.importUrl.history.delete.\(index)"
+        setNeedsLayout()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let bounds = contentView.bounds
-        let deleteWidth = min(44, bounds.width)
+        let inset = min(6, bounds.width / 2)
+        let deleteWidth = min(24, max(0, bounds.width - inset * 2))
         let rtl = effectiveUserInterfaceLayoutDirection == .rightToLeft
         deleteControl.frame = CGRect(
-            x: rtl ? 0 : bounds.width - deleteWidth, y: 0, width: deleteWidth, height: bounds.height)
+            x: rtl ? inset : bounds.width - inset - deleteWidth,
+            y: max(0, (bounds.height - 24) / 2), width: deleteWidth, height: min(24, bounds.height))
         chooseControl.frame = CGRect(
-            x: rtl ? deleteWidth : 4, y: 0, width: max(0, bounds.width - deleteWidth - 4), height: bounds.height)
+            x: rtl ? inset + deleteWidth : 0, y: 0,
+            width: max(0, bounds.width - deleteWidth - inset), height: bounds.height)
+        let padding = AndroidExploreTextMetrics.padding(
+            font: chooseControl.titleLabel?.font ?? .systemFont(ofSize: 14), scale: traitCollection.displayScale)
+        chooseControl.contentEdgeInsets = UIEdgeInsets(
+            top: 6 + padding.top, left: rtl ? 0 : inset, bottom: 6 + padding.bottom, right: rtl ? inset : 0)
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        clearPressedFeedback()
+        value = ""
+        onSelect = nil
+        onDelete = nil
+    }
+
+    private func clearPressedFeedback() {
+        chooseControl.cancelPendingActivation()
+        deleteControl.cancelPendingActivation()
     }
 
     @objc private func choose() { onSelect?(value) }
     @objc private func remove() { onDelete?(value) }
 }
 
-final class BookSourceOnlineImportActionControl: UIControl {
+class BookSourceOnlineImportPressButton: ReaderMenuPressButton {
+    // AppCompat ripple_material_light/dark: #1F000000 / #33FFFFFF.
+    private let pressedFeedback = BookshelfItemFeedbackView()
+    private var feedbackObservations: [NSKeyValueObservation] = []
+
+    var pressedFeedbackInsets = UIEdgeInsets.zero {
+        didSet { setNeedsLayout() }
+    }
+
+    var pressedFeedbackCornerRadius: CGFloat = 0 {
+        didSet { pressedFeedback.layer.cornerRadius = pressedFeedbackCornerRadius }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        showsBorderlessFeedback = false
+        clipsToBounds = true
+        insertSubview(pressedFeedback, at: 0)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        preconditionFailure("init(coder:) is unavailable")
+    }
+
+    override var isHighlighted: Bool {
+        didSet { updatePressedFeedback() }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        pressedFeedback.frame = CGRect(
+            x: min(pressedFeedbackInsets.left, bounds.width / 2),
+            y: min(pressedFeedbackInsets.top, bounds.height / 2),
+            width: max(0, bounds.width - pressedFeedbackInsets.left - pressedFeedbackInsets.right),
+            height: max(0, bounds.height - pressedFeedbackInsets.top - pressedFeedbackInsets.bottom))
+        updatePressedFeedback()
+    }
+
+    private func updatePressedFeedback() {
+        // Keep the existing press engine; only replace its borderless appearance with a bounded mask.
+        pressedFeedback.isHidden = !isHighlighted || !ReaderMenuToolbarInteraction.isAvailable(self)
+        guard !pressedFeedback.isHidden else {
+            feedbackObservations.removeAll()
+            return
+        }
+        guard feedbackObservations.isEmpty else { return }
+        var ancestor = superview
+        while let view = ancestor {
+            let changed: () -> Void = { [weak self] in
+                guard let self, !ReaderMenuToolbarInteraction.isAvailable(self) else { return }
+                self.cancelPendingActivation()
+            }
+            feedbackObservations.append(view.observe(\.isUserInteractionEnabled, options: [.new]) { _, _ in changed() })
+            feedbackObservations.append(view.observe(\.isHidden, options: [.new]) { _, _ in changed() })
+            feedbackObservations.append(view.observe(\.alpha, options: [.new]) { _, _ in changed() })
+            ancestor = view.superview
+        }
+    }
+}
+
+final class BookSourceOnlineImportActionControl: BookSourceOnlineImportPressButton {
     private let label = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var accent = UIColor.clear
 
     init(title: String, identifier: String) {
         super.init(frame: .zero)
+        // btn_borderless_material masks to btn_default_mtrl_shape: 4dp/6dp insets, 2dp corners.
+        pressedFeedbackInsets = UIEdgeInsets(top: 6, left: 4, bottom: 6, right: 4)
+        pressedFeedbackCornerRadius = 2
         label.text = title
         label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
         label.textAlignment = .center
-        label.adjustsFontForContentSizeCategory = true
+        label.adjustsFontForContentSizeCategory = false
         label.isAccessibilityElement = false
         label.isUserInteractionEnabled = false
         spinner.hidesWhenStopped = true
@@ -359,13 +452,8 @@ final class BookSourceOnlineImportActionControl: UIControl {
     override var isEnabled: Bool {
         didSet {
             label.alpha = isEnabled ? 1 : 0.5
-            if !isEnabled { isHighlighted = false }
             accessibilityTraits = isEnabled ? .button : [.button, .notEnabled]
         }
-    }
-
-    override var isHighlighted: Bool {
-        didSet { backgroundColor = isHighlighted ? accent.withAlphaComponent(0.12) : .clear }
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -381,16 +469,10 @@ final class BookSourceOnlineImportActionControl: UIControl {
         spinner.center = CGPoint(x: bounds.midX, y: bounds.midY)
     }
 
-    override func accessibilityActivate() -> Bool {
-        guard isEnabled else { return false }
-        sendActions(for: .touchUpInside)
-        return true
-    }
-
     func apply(traits: UITraitCollection) {
         accent = ReaderTocPalette(traits: traits).accent
-        label.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
-            for: .systemFont(ofSize: 14, weight: .medium), compatibleWith: traits)
+        label.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 14, textStyle: .subheadline, weight: 500, compatibleWith: traits)
         label.textColor = accent
         spinner.color = accent
         setNeedsLayout()
