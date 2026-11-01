@@ -461,7 +461,8 @@ final class MediaAudioDiskCache: @unchecked Sendable {
     }
 
     private func allocationBound(_ count: Int) -> Int64 {
-        let block = (try? storage.files?.allocationUnit()) ?? 4096
+        // Admission and post-write checks still use actual stat.st_blocks allocation.
+        let block = (try? storage.files?.reservationBlockSize()) ?? 4096
         return ((Int64(count) + block - 1) / block + 1) * block
     }
 

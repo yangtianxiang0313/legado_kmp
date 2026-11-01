@@ -223,11 +223,14 @@ final class MediaAudioDiskCacheFiles {
         return try size(root)
     }
 
-    func allocationUnit() throws -> Int64 {
+    func reservationBlockSize() throws -> Int64 {
         try checkRoot()
-        var info = statfs()
-        guard statfs(root.path, &info) == 0 else { throw MediaAudioDiskCacheFileError.io }
-        return max(4096, Int64(info.f_bsize))
+        var info = stat()
+        guard fstat(lockDescriptor, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG,
+            info.st_dev == rootDevice
+        else { throw MediaAudioDiskCacheFileError.io }
+        // This is an I/O reservation quantum, not the volume's allocation unit or free capacity.
+        return max(4096, Int64(info.st_blksize))
     }
 
     func removeOrphans(keeping manifests: [MediaAudioDiskCacheManifest]) throws {

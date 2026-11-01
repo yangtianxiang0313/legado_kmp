@@ -13,6 +13,7 @@ final class AndroidReplicaRssSourceManagementViewController: UIViewController, N
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let emptyLabel = UILabel()
     private let selectionBar = RssSourceManagementSelectionBar()
+    private let hasBundledSources = Bundle.main.legadoDefaultRssSourcesPayload() != nil
     private var selectionBarHeight: NSLayoutConstraint?
     private lazy var management = RssSourceManagementActions(screen: screen, presenter: self)
     private var allSources: [RssSource] { management.sources }
@@ -232,7 +233,7 @@ final class AndroidReplicaRssSourceManagementViewController: UIViewController, N
     private func makeMoreMenu() -> UIMenu {
         let unavailable: UIMenuElement.Attributes = management.isSelecting ? [.disabled] : []
         let sourceURLs = allSources.map(\.sourceUrl)
-        return UIMenu(children: [
+        var items: [UIMenuElement] = [
             UIAction(
                 title: "多选", image: UIImage(systemName: "checkmark.circle"),
                 attributes: management.isSelecting || sourceURLs.isEmpty ? [.disabled] : []
@@ -265,11 +266,14 @@ final class AndroidReplicaRssSourceManagementViewController: UIViewController, N
                 self.navigationController?.pushViewController(
                     AndroidReplicaRssImportViewController(screen: self.screen), animated: true)
             },
-            UIAction(title: "导入内置源", image: UIImage(systemName: "square.and.arrow.down"), attributes: unavailable) {
+        ]
+        if hasBundledSources {
+            items.append(UIAction(title: "导入内置源", image: UIImage(systemName: "square.and.arrow.down"), attributes: unavailable) {
                 [weak self] _ in
                 self?.importBundledSources()
-            },
-        ])
+            })
+        }
+        return UIMenu(children: items)
     }
 
     private func paddedIconView(name: String) -> UIView {
