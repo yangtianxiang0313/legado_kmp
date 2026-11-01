@@ -18,7 +18,7 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
         case actions
     }
 
-    private enum AboutRow {
+    private enum AboutRow: String {
         case version
         case build
         case contributors
@@ -42,28 +42,33 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
         configureTopBar()
         configureTableView()
         layoutViews()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(refreshPalette), name: .androidReplicaThemeDidChange, object: nil)
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
+        refreshPalette()
     }
 
     private func configureTopBar() {
         topBar.backgroundColor = AndroidReplicaTheme.toolbarBackground
         topBar.translatesAutoresizingMaskIntoConstraints = false
 
-        backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
+        backButton.setImage(UIImage(systemName: "chevron.backward"), for: .normal)
         backButton.tintColor = AndroidReplicaTheme.toolbarText
         backButton.addTarget(self, action: #selector(handleBack), for: .touchUpInside)
         backButton.translatesAutoresizingMaskIntoConstraints = false
         backButton.accessibilityLabel = L10n.Reader.backAction
+        backButton.accessibilityIdentifier = "about.back"
 
         titleLabel.text = L10n.Settings.aboutTitle
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
         titleLabel.textColor = AndroidReplicaTheme.toolbarText
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.accessibilityTraits = .header
 
         topDividerView.backgroundColor = AndroidReplicaTheme.divider
         topDividerView.translatesAutoresizingMaskIntoConstraints = false
@@ -78,6 +83,9 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
         tableView.backgroundColor = AndroidReplicaTheme.background
         tableView.separatorStyle = .none
         tableView.contentInsetAdjustmentBehavior = .never
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 56
+        tableView.accessibilityIdentifier = "about.table"
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(AndroidReplicaAboutCell.self, forCellReuseIdentifier: AndroidReplicaAboutCell.reuseIdentifier)
@@ -121,12 +129,8 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
         rowsBySection[section].count
     }
 
-    func tableView(_: UITableView, heightForRowAt _: IndexPath) -> CGFloat {
-        56
-    }
-
     func tableView(_: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        section == 0 ? 18 : 40
+        section == 0 ? 18 : max(40, UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 16, compatibleWith: traitCollection) + 24)
     }
 
     func tableView(_: UITableView, heightForFooterInSection _: Int) -> CGFloat {
@@ -141,7 +145,8 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
         }
         let label = UILabel()
         label.text = title
-        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: 13, weight: .semibold))
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = AndroidReplicaTheme.secondaryText
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
@@ -156,6 +161,7 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: AndroidReplicaAboutCell.reuseIdentifier, for: indexPath) as! AndroidReplicaAboutCell
         let row = rowsBySection[indexPath.section][indexPath.row]
+        cell.accessibilityIdentifier = "about." + row.rawValue
         let isLastRow = indexPath.row == rowsBySection[indexPath.section].count - 1
         switch row {
         case .version:
@@ -180,6 +186,7 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard canPerformNavigationAction, presentedViewController == nil else { return }
         let row = rowsBySection[indexPath.section][indexPath.row]
         switch row {
         case .version, .build:
@@ -197,7 +204,7 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
         case .rateApp:
             requestAppReview()
         case .shareApp:
-            shareApp()
+            shareApp(at: indexPath)
         }
     }
 
@@ -207,18 +214,7 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
     }
 
     private func showOpenSourceLicenses() {
-        let licenses = [
-            ("Kotlin Multiplatform", "Apache License 2.0"),
-            ("Ksoup", "MIT License"),
-            ("Kingfisher", "MIT License"),
-            ("SnapKit", "MIT License"),
-            ("Then", "MIT License"),
-            ("Ktor", "Apache License 2.0"),
-            ("SQLDelight", "Apache License 2.0"),
-            ("Koin", "Apache License 2.0"),
-        ]
-        let content = licenses.map { "\($0.0)\n\($0.1)" }.joined(separator: "\n\n")
-        showTextDetail(title: L10n.Settings.aboutOpenSourceLicense, content: content)
+        navigationController?.pushViewController(OpenSourceLicensesViewController(), animated: true)
     }
 
     private func requestAppReview() {
@@ -228,14 +224,30 @@ final class AboutViewController: UIViewController, NavigationCustomToolbarProvid
         }
     }
 
-    private func shareApp() {
+    private func shareApp(at indexPath: IndexPath) {
         let text = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
             ?? L10n.Settings.aboutShareText
         let activityVC = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = tableView
+            popover.sourceRect = tableView.rectForRow(at: indexPath)
+            popover.permittedArrowDirections = .any
+        }
         present(activityVC, animated: true)
     }
 
+    @objc private func refreshPalette() {
+        view.backgroundColor = AndroidReplicaTheme.background
+        topBar.backgroundColor = AndroidReplicaTheme.toolbarBackground
+        titleLabel.textColor = AndroidReplicaTheme.toolbarText
+        backButton.tintColor = AndroidReplicaTheme.toolbarText
+        topDividerView.backgroundColor = AndroidReplicaTheme.divider
+        tableView.backgroundColor = AndroidReplicaTheme.background
+        tableView.reloadData()
+    }
+
     @objc private func handleBack() {
+        guard canPerformNavigationAction else { return }
         if let navigationController {
             navigationController.popViewController(animated: true)
         } else {
@@ -348,8 +360,9 @@ private final class AndroidReplicaAboutCell: UITableViewCell {
 
     private let titleLabel = UILabel()
     private let detailLabel = UILabel()
-    private let chevronView = UIImageView(image: UIImage(systemName: "chevron.right"))
+    private let chevronView = UIImageView(image: UIImage(systemName: "chevron.forward"))
     private let dividerView = UIView()
+    private let labels = UIStackView()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -370,40 +383,49 @@ private final class AndroidReplicaAboutCell: UITableViewCell {
             return view
         }()
 
-        titleLabel.font = .systemFont(ofSize: 16)
+        titleLabel.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: 16))
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = AndroidReplicaTheme.primaryText
-        titleLabel.numberOfLines = 1
-        titleLabel.adjustsFontSizeToFitWidth = true
-        titleLabel.minimumScaleFactor = 0.86
+        titleLabel.numberOfLines = 0
+        titleLabel.lineBreakMode = .byWordWrapping
+        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        detailLabel.font = .systemFont(ofSize: 14)
+        detailLabel.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: .systemFont(ofSize: 14))
+        detailLabel.adjustsFontForContentSizeCategory = true
         detailLabel.textColor = AndroidReplicaTheme.secondaryText
-        detailLabel.textAlignment = .right
-        detailLabel.numberOfLines = 1
-        detailLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        detailLabel.textAlignment = .natural
+        detailLabel.numberOfLines = 0
+        detailLabel.lineBreakMode = .byWordWrapping
+        detailLabel.setContentHuggingPriority(.required, for: .horizontal)
+        detailLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
         chevronView.tintColor = AndroidReplicaTheme.secondaryText
         dividerView.backgroundColor = AndroidReplicaTheme.divider
 
-        for item in [titleLabel, detailLabel, chevronView, dividerView] {
+        labels.axis = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
+        labels.alignment = labels.axis == .vertical ? .leading : .center
+        labels.spacing = 12
+        labels.addArrangedSubview(titleLabel)
+        labels.addArrangedSubview(detailLabel)
+        let row = UIStackView(arrangedSubviews: [labels, chevronView])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 12
+        for item in [row, dividerView] {
             item.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(item)
         }
 
         NSLayoutConstraint.activate([
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: detailLabel.leadingAnchor, constant: -12),
-
-            detailLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            detailLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -12),
-
-            chevronView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
-            chevronView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+            row.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            row.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            row.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            row.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
             chevronView.widthAnchor.constraint(equalToConstant: 9),
             chevronView.heightAnchor.constraint(equalToConstant: 15),
 
-            dividerView.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            dividerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             dividerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             dividerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             dividerView.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
@@ -411,12 +433,30 @@ private final class AndroidReplicaAboutCell: UITableViewCell {
     }
 
     func configure(title: String, detail: String?, showsChevron: Bool, isLastRow: Bool) {
+        backgroundColor = AndroidReplicaTheme.background
+        contentView.backgroundColor = AndroidReplicaTheme.background
+        titleLabel.textColor = AndroidReplicaTheme.primaryText
+        detailLabel.textColor = AndroidReplicaTheme.secondaryText
+        chevronView.tintColor = AndroidReplicaTheme.secondaryText
+        dividerView.backgroundColor = AndroidReplicaTheme.divider
+        selectedBackgroundView?.backgroundColor = AndroidReplicaTheme.activeIndicator
         titleLabel.text = title
         detailLabel.text = detail
         detailLabel.isHidden = detail == nil
         chevronView.isHidden = !showsChevron
         dividerView.isHidden = isLastRow
         selectionStyle = showsChevron || detail == nil ? .default : .none
+        isAccessibilityElement = true
+        accessibilityLabel = [title, detail].compactMap { $0 }.joined(separator: ", ")
+        accessibilityTraits = selectionStyle == .none ? .staticText : .button
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        labels.axis = vertical ? .vertical : .horizontal
+        labels.alignment = vertical ? .leading : .center
+        labels.spacing = vertical ? 8 : 12
     }
 }
 
@@ -455,10 +495,11 @@ private final class AndroidReplicaAboutTextViewController: UIViewController, Nav
 
     private func configureViews() {
         topBar.backgroundColor = AndroidReplicaTheme.toolbarBackground
-        backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
+        backButton.setImage(UIImage(systemName: "chevron.backward"), for: .normal)
         backButton.tintColor = AndroidReplicaTheme.toolbarText
         backButton.addTarget(self, action: #selector(handleBack), for: .touchUpInside)
         backButton.accessibilityLabel = L10n.Reader.backAction
+        backButton.accessibilityIdentifier = "about.text.back"
 
         titleLabel.text = titleText
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
@@ -468,7 +509,10 @@ private final class AndroidReplicaAboutTextViewController: UIViewController, Nav
         dividerView.backgroundColor = AndroidReplicaTheme.divider
 
         textView.text = content
-        textView.font = .systemFont(ofSize: 16)
+        textView.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: 16))
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textAlignment = .natural
+        textView.accessibilityIdentifier = "about.text"
         textView.textColor = AndroidReplicaTheme.primaryText
         textView.backgroundColor = AndroidReplicaTheme.background
         textView.isEditable = false

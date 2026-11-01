@@ -1,0 +1,527 @@
+{
+  "version": 1,
+  "components": [
+    {
+      "id": "project",
+      "title": "Legado KMP",
+      "license": "GPL-3.0",
+      "category": "project",
+      "homepage": "https://github.com/yangtianxiang0313/legado_kmp",
+      "documents": [
+        {
+          "title": "Project License",
+          "resource": "Project-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        },
+        {
+          "title": "Project Notice",
+          "resource": "Project-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "snapkit",
+      "title": "SnapKit",
+      "license": "MIT",
+      "category": "library",
+      "homepage": "https://github.com/SnapKit/SnapKit",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "SnapKit-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "kingfisher",
+      "title": "Kingfisher",
+      "license": "MIT",
+      "category": "library",
+      "homepage": "https://github.com/onevcat/Kingfisher",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Kingfisher-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "then",
+      "title": "Then",
+      "license": "MIT",
+      "category": "library",
+      "homepage": "https://github.com/devxoul/Then",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Then-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "color-picker",
+      "title": "ColorPicker (UIKit Adaptation)",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/jaredrummler/ColorPicker",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "ColorPicker-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "ColorPicker-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "mamba",
+      "title": "mamba",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/Comcast/mamba",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Mamba-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "Mamba-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "swift-nio",
+      "title": "SwiftNIO",
+      "license": "Apache-2.0; third-party notices",
+      "category": "library",
+      "homepage": "https://github.com/apple/swift-nio",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "SwiftNIO-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "SwiftNIO-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "swift-nio-llhttp",
+      "title": "llhttp (SwiftNIO)",
+      "license": "MIT",
+      "category": "library",
+      "homepage": "https://github.com/nodejs/llhttp",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "SwiftNIO-llhttp-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "swift-collections",
+      "title": "Swift Collections",
+      "license": "Apache-2.0 with Runtime Library Exception",
+      "category": "library",
+      "homepage": "https://github.com/apple/swift-collections",
+      "documents": [
+        {
+          "title": "License and Runtime Library Exception",
+          "resource": "SwiftCollections-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "swift-atomics",
+      "title": "Swift Atomics",
+      "license": "Apache-2.0 with Runtime Library Exception",
+      "category": "library",
+      "homepage": "https://github.com/apple/swift-atomics",
+      "documents": [
+        {
+          "title": "License and Runtime Library Exception",
+          "resource": "SwiftAtomics-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "swift-system",
+      "title": "Swift System",
+      "license": "Apache-2.0 with Runtime Library Exception",
+      "category": "library",
+      "homepage": "https://github.com/apple/swift-system",
+      "documents": [
+        {
+          "title": "License and Runtime Library Exception",
+          "resource": "SwiftSystem-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "reader-android-default",
+      "title": "Roboto 3.011 (Reader Default Font)",
+      "license": "OFL-1.1",
+      "category": "resource",
+      "homepage": "https://github.com/googlefonts/roboto-3-classic/releases/tag/v3.011",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "ReaderAndroidDefault-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "ReaderAndroidDefault-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "reader-android-number",
+      "title": "Roboto 2011 (Reader Number Font)",
+      "license": "Apache-2.0",
+      "category": "resource",
+      "homepage": "https://github.com/gedoor/legado",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "ReaderAndroidNumber-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "ReaderAndroidNumber-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "reader-android-monospace",
+      "title": "Droid Sans Mono (Reader Monospace Font)",
+      "license": "Apache-2.0",
+      "category": "resource",
+      "homepage": null,
+      "documents": [
+        {
+          "title": "License",
+          "resource": "ReaderAndroidMonospace-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "ReaderAndroidMonospace-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "legado-menu-icons",
+      "title": "Legado and AppCompat Icons and Controls",
+      "license": "GPL-3.0; Apache-2.0 (see NOTICE)",
+      "category": "resource",
+      "homepage": "https://github.com/gedoor/legado",
+      "documents": [
+        {
+          "title": "Legado License",
+          "resource": "LegadoMenuIcons-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice and AppCompat License",
+          "resource": "LegadoMenuIcons-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "android-spinner",
+      "title": "Android Holo Spinner Backgrounds",
+      "license": "Apache-2.0",
+      "category": "resource",
+      "homepage": null,
+      "documents": [
+        {
+          "title": "Apache License Referenced by the Notice",
+          "resource": "ColorPicker-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "AndroidSpinner-NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        }
+      ]
+    },
+    {
+      "id": "reader-backgrounds",
+      "title": "Legado Reader Backgrounds and Layout Templates",
+      "license": "GPL-3.0 (upstream NOTICE)",
+      "category": "resource",
+      "homepage": "https://github.com/gedoor/legado",
+      "documents": [
+        {
+          "title": "Upstream License Referenced by the Notice",
+          "resource": "LegadoMenuIcons-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": null
+        },
+        {
+          "title": "Notice",
+          "resource": "NOTICE",
+          "fileExtension": "txt",
+          "subdirectory": "ReaderBackgrounds"
+        }
+      ]
+    },
+    {
+      "id": "kotlin",
+      "title": "Kotlin Multiplatform",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/JetBrains/kotlin",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Kotlin-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        },
+        {
+          "title": "Copyright",
+          "resource": "Kotlin-COPYRIGHT",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "kotlin-coroutines",
+      "title": "Kotlin Coroutines 1.9.0",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/Kotlin/kotlinx.coroutines",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "KotlinCoroutines-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "kotlin-serialization",
+      "title": "Kotlin Serialization 1.8.0",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/Kotlin/kotlinx.serialization",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "KotlinSerialization-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "kotlin-datetime",
+      "title": "Kotlin Datetime 0.6.1",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/Kotlin/kotlinx-datetime",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "KotlinDatetime-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "kotlin-atomicfu",
+      "title": "Kotlin Atomicfu 0.27.0",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/Kotlin/kotlinx-atomicfu",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "KotlinAtomicfu-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        },
+        {
+          "title": "License",
+          "resource": "Kotlin-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "ktor",
+      "title": "Ktor 3.0.1",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/ktorio/ktor",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Ktor-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "koin",
+      "title": "Koin 4.0.0",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/InsertKoinIO/koin",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Koin-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "sqldelight",
+      "title": "SQLDelight 2.0.2",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/sqldelight/sqldelight",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "SQLDelight-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "quickjs-kt",
+      "title": "QuickJS-KT 1.0.0-alpha13",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/dokar3/quickjs-kt",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "QuickJSkt-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "ksoup",
+      "title": "Ksoup 0.2.4",
+      "license": "MIT",
+      "category": "library",
+      "homepage": "https://github.com/fleeksoft/ksoup",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Ksoup-0.2.4-LICENSE",
+          "fileExtension": "md",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "okio",
+      "title": "Okio 3.10.2",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/square/okio",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Okio-3.10.2-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "jsonpath4k",
+      "title": "JsonPath4K 3.0.1",
+      "license": "Apache-2.0",
+      "category": "library",
+      "homepage": "https://github.com/a-sit-plus/jsonpath4k",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "Jsonpath4k-3.0.1-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
+      "id": "quickjs",
+      "title": "QuickJS (QuickJS-KT native engine)",
+      "license": "MIT",
+      "category": "library",
+      "homepage": "https://github.com/bellard/quickjs",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "QuickJS-36911f0d3ab1a4c190a4d5cbe7c2db225a455389-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    }
+  ]
+}

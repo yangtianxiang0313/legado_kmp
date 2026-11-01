@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F02B02010000000000000006 /* OpenSourceLicenses in Resources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000006 /* OpenSourceLicenses */; };
+		F02B02010000000000000005 /* OpenSourceLicenses.json in Resources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000005 /* OpenSourceLicenses.json */; };
+		F02B02010000000000000004 /* OpenSourceLicenseTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000004 /* OpenSourceLicenseTextViewController.swift */; };
+		F02B02010000000000000003 /* OpenSourceLicensesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000003 /* OpenSourceLicensesViewController.swift */; };
+		F02B02010000000000000002 /* OpenSourceLicensesUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000002 /* OpenSourceLicensesUI.swift */; };
+		F02B02010000000000000001 /* OpenSourceLicenseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000001 /* OpenSourceLicenseCatalog.swift */; };
 		F02AE1010000000000000003 /* MangaReaderProgressSyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02AE1020000000000000003; };
 		F02AE1010000000000000001 /* MangaProgressSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02AE1020000000000000001; };
 		F02AE1010000000000000002 /* MangaReaderExitFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02AE1020000000000000002; };
@@ -758,6 +764,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F02B02020000000000000006 /* OpenSourceLicenses */ = {isa = PBXFileReference; lastKnownFileType = folder; path = OpenSourceLicenses; sourceTree = "<group>"; };
+		F02B02020000000000000005 /* OpenSourceLicenses.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = OpenSourceLicenses.json; sourceTree = "<group>"; };
+		F02B02020000000000000004 /* OpenSourceLicenseTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceLicenseTextViewController.swift; sourceTree = "<group>"; };
+		F02B02020000000000000003 /* OpenSourceLicensesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceLicensesViewController.swift; sourceTree = "<group>"; };
+		F02B02020000000000000002 /* OpenSourceLicensesUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceLicensesUI.swift; sourceTree = "<group>"; };
+		F02B02020000000000000001 /* OpenSourceLicenseCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceLicenseCatalog.swift; sourceTree = "<group>"; };
 		F02AE1020000000000000003 /* MangaReaderProgressSyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReaderProgressSyncClient.swift"; sourceTree = "<group>"; };
 		F02AE1020000000000000001 /* MangaProgressSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaProgressSyncCoordinator.swift; sourceTree = "<group>"; };
 		F02AE1020000000000000002 /* MangaReaderExitFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaReaderExitFlow.swift; sourceTree = "<group>"; };
@@ -1945,6 +1957,10 @@
                 E026A0020000000000000003 /* ReadRecordViewController.swift */,
 				A20000000000000000000008 /* SettingsViewController.swift */,
 				A20000000000000000000050 /* AboutViewController.swift */,
+				F02B02020000000000000004 /* OpenSourceLicenseTextViewController.swift */,
+				F02B02020000000000000003 /* OpenSourceLicensesViewController.swift */,
+				F02B02020000000000000002 /* OpenSourceLicensesUI.swift */,
+				F02B02020000000000000001 /* OpenSourceLicenseCatalog.swift */,
 				A20000000000000000000051 /* TxtTocRuleListViewController.swift */,
 				A20000000000000000000052 /* SettingsScreenAdapter.swift */,
 				BA1200000000000000000002 /* SettingsMenuModels.swift */,
@@ -2353,6 +2369,8 @@
 				A2000000000000000000001E /* Localizable.xcstrings */,
 				A20000000000000000000027 /* Assets.xcassets */,
 				F027AC020000000000000001 /* PrivacyInfo.xcprivacy */,
+				F02B02020000000000000006 /* OpenSourceLicenses */,
+				F02B02020000000000000005 /* OpenSourceLicenses.json */,
 				E20000000000000000000034 /* LegadoMenuIcons-LICENSE.txt */,
 				E20000000000000000000035 /* LegadoMenuIcons-NOTICE.txt */,
 				D81BE0020000000000000011 /* ColorPicker-LICENSE.txt */,
@@ -2522,6 +2540,8 @@
 				A1000000000000000000001C /* Localizable.xcstrings in Resources */,
 				A10000000000000000000025 /* Assets.xcassets in Resources */,
 				F027AC010000000000000001 /* PrivacyInfo.xcprivacy in Resources */,
+				F02B02010000000000000006 /* OpenSourceLicenses in Resources */,
+				F02B02010000000000000005 /* OpenSourceLicenses.json in Resources */,
 				E10000000000000000000034 /* LegadoMenuIcons-LICENSE.txt in Resources */,
 				E10000000000000000000035 /* LegadoMenuIcons-NOTICE.txt in Resources */,
 				D81BE0010000000000000011 /* ColorPicker-LICENSE.txt in Resources */,
@@ -2891,6 +2911,10 @@
 				D818A001000000000000010B /* ChangeCoverChromeView.swift in Sources */,
 				A10000000000000000000008 /* SettingsViewController.swift in Sources */,
 				A10000000000000000000050 /* AboutViewController.swift in Sources */,
+				F02B02010000000000000004 /* OpenSourceLicenseTextViewController.swift in Sources */,
+				F02B02010000000000000003 /* OpenSourceLicensesViewController.swift in Sources */,
+				F02B02010000000000000002 /* OpenSourceLicensesUI.swift in Sources */,
+				F02B02010000000000000001 /* OpenSourceLicenseCatalog.swift in Sources */,
 				A10000000000000000000051 /* TxtTocRuleListViewController.swift in Sources */,
 				A10000000000000000000052 /* SettingsScreenAdapter.swift in Sources */,
 				BA1200000000000000000001 /* SettingsMenuModels.swift in Sources */,
