@@ -605,10 +605,17 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
     private func reportVisiblePage() {
         guard !chapterMessageVisible, !isUpdatingContent, pageCount > 0, pageSlotHeight > 0 else { return }
         let pageHeight = pageSlotHeight
-        let visibleMidY = scrollView.contentOffset.y + currentVisibleRect().midY
-        let slot = Int((visibleMidY / pageHeight).rounded(.down))
-        let clampedSlot = min(max(slot, 0), max(spreadCount - 1, 0))
-        reportPageIndexIfNeeded(leadingPageIndex(forSlotIndex: clampedSlot))
+        let offsetY = scrollView.contentOffset.y
+        guard pageHeight.isFinite, offsetY.isFinite else { return }
+        // Android retains the leading page until the whole slot scrolls past, not its midpoint.
+        // UIKit quantizes offsets to pixels; keep half-pixel ties inclusive despite division roundoff.
+        let halfPixel = 0.5 / chromeDisplayScale
+        let slotProgress = (offsetY + halfPixel) / pageHeight
+        let roundingTolerance = max(abs(slotProgress), 1) * CGFloat.ulpOfOne * 4
+        // Clamp before conversion so overscroll and visual-only continuation stay in this chapter.
+        let clampedProgress = min(max(slotProgress + roundingTolerance, 0), CGFloat(spreadCount - 1))
+        let slot = Int(clampedProgress.rounded(.down))
+        reportPageIndexIfNeeded(leadingPageIndex(forSlotIndex: slot))
     }
 
     private func reportPageIndexIfNeeded(_ index: Int) {

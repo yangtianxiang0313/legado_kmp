@@ -66,18 +66,20 @@ final class ReaderPaginationCoordinator {
 
     func suspend() {
         isSuspended = true
-        cancel()
+        // A temporary cover must not rebuild valid pages and reset a fractional scroll offset.
+        cancel(invalidatingPagination: false)
     }
 
     func resume() {
         isSuspended = false
     }
 
-    private func cancel() {
+    private func cancel(invalidatingPagination: Bool = true) {
+        let needsRetry = needsPagination || task != nil || !hasRestoredChapter
         requestID = nil
         task?.cancel()
         task = nil
-        needsPagination = chapter != nil
+        needsPagination = chapter != nil && (invalidatingPagination || needsRetry)
     }
 
     @MainActor

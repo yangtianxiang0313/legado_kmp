@@ -656,6 +656,7 @@
 		A10000000000000000000031 /* SearchContentViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* SearchContentViewController.swift */; };
 		D818F0010000000000000001 /* ReaderContentSearchPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D818F0020000000000000001 /* ReaderContentSearchPageView.swift */; };
 		D818F0010000000000000002 /* ReaderContentSearchResultCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = D818F0020000000000000002 /* ReaderContentSearchResultCell.swift */; };
+		D81F11010000000000000001 /* ReaderContentSearchFocusRestoration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81F11020000000000000001 /* ReaderContentSearchFocusRestoration.swift */; };
 		D818F0010000000000000003 /* ReaderSearchSelectionMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D818F0020000000000000003 /* ReaderSearchSelectionMapper.swift */; };
 		D81AA0010000000000000001 /* ReaderContentSearchOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81AA0020000000000000001 /* ReaderContentSearchOptions.swift */; };
 		D81AA0010000000000000002 /* ChangeChapterSourceTocView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81AA0020000000000000002 /* ChangeChapterSourceTocView.swift */; };
@@ -1405,6 +1406,7 @@
 		A20000000000000000000031 /* SearchContentViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchContentViewController.swift; sourceTree = "<group>"; };
 		D818F0020000000000000001 /* ReaderContentSearchPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContentSearchPageView.swift; sourceTree = "<group>"; };
 		D818F0020000000000000002 /* ReaderContentSearchResultCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContentSearchResultCell.swift; sourceTree = "<group>"; };
+		D81F11020000000000000001 /* ReaderContentSearchFocusRestoration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContentSearchFocusRestoration.swift; sourceTree = "<group>"; };
 		D818F0020000000000000003 /* ReaderSearchSelectionMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSearchSelectionMapper.swift; sourceTree = "<group>"; };
 		D81AA0020000000000000001 /* ReaderContentSearchOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContentSearchOptions.swift; sourceTree = "<group>"; };
 		D81AA0020000000000000002 /* ChangeChapterSourceTocView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeChapterSourceTocView.swift; sourceTree = "<group>"; };
@@ -2321,6 +2323,7 @@
 				A20000000000000000000031 /* SearchContentViewController.swift */,
 				D818F0020000000000000001 /* ReaderContentSearchPageView.swift */,
 				D818F0020000000000000002 /* ReaderContentSearchResultCell.swift */,
+				D81F11020000000000000001 /* ReaderContentSearchFocusRestoration.swift */,
 				D818F0020000000000000003 /* ReaderSearchSelectionMapper.swift */,
 				D81AA0020000000000000001 /* ReaderContentSearchOptions.swift */,
 				D819A0020000000000000004 /* ReaderContentEditingCoordinator.swift */,
@@ -3127,6 +3130,7 @@
 				A10000000000000000000031 /* SearchContentViewController.swift in Sources */,
 				D818F0010000000000000001 /* ReaderContentSearchPageView.swift in Sources */,
 				D818F0010000000000000002 /* ReaderContentSearchResultCell.swift in Sources */,
+				D81F11010000000000000001 /* ReaderContentSearchFocusRestoration.swift in Sources */,
 				D818F0010000000000000003 /* ReaderSearchSelectionMapper.swift in Sources */,
 				D81AA0010000000000000001 /* ReaderContentSearchOptions.swift in Sources */,
 				D81AA0010000000000000002 /* ChangeChapterSourceTocView.swift in Sources */,

@@ -38,10 +38,11 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
     private let page = ReaderContentSearchPageView()
     private var searchField: UITextField { page.toolbar.searchField }
     private var tableView: UITableView { page.tableView }
+    private lazy var focusedResultRestoration = ReaderContentSearchFocusRestoration(tableView: tableView)
     private let screen: ReaderScreenAdapterSearchable
     private let initialQuery: String?
     private let cachedResults: [ContentSearchResult]
-    private let focusedResultIndex: Int?
+    private var pendingFocusedResultIndex: Int?
     private let currentChapterIndex: Int
     private var options: ReaderContentSearchOptions
     private var resultOptions: ReaderContentSearchOptions
@@ -55,7 +56,6 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
     private var isSearching = false
     private var acceptsResults = false
     private var isStopRequested = false
-    private var shouldScrollToFocusedResult = false
     private var isClosing = false
     private var didNotifyClose = false
     private var overflowMenu: ReaderOverflowMenuView?
@@ -88,7 +88,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         self.screen = screen
         self.initialQuery = initialQuery
         self.cachedResults = cachedResults
-        self.focusedResultIndex = focusedResultIndex
+        pendingFocusedResultIndex = cachedResults.isEmpty ? nil : focusedResultIndex
         self.currentChapterIndex = currentChapterIndex
         self.options = options
         resultOptions = cachedResultOptions
@@ -113,10 +113,13 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         page.stopButton.addTarget(self, action: #selector(stopSearch), for: .touchUpInside)
         page.onFastScrollStateChange = { [weak self] active in
             guard let self else { return }
+            if active { self.cancelFocusedResultRestoration() }
             if !active { self.scheduleDelivery() }
             self.updateNavigationControls()
         }
         searchField.delegate = self
+        searchField.addTarget(
+            self, action: #selector(cancelFocusedResultRestoration), for: [.editingDidBegin, .editingChanged])
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(
@@ -135,7 +138,6 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         if !cachedResults.isEmpty {
             results = cachedResults
             searchField.text = query.isEmpty ? cachedResults.first?.query : query
-            shouldScrollToFocusedResult = focusedResultIndex != nil
             tableView.reloadData()
             updateSummary()
         } else if query.isEmpty {
@@ -165,6 +167,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        cancelFocusedResultRestoration()
         isPresentationVisible = false
         isDeparting = isLeavingPresentation
         refreshInteractionAvailability()
@@ -230,7 +233,6 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         submittedQuery = query
         needsResultReset = true
         needsDelivery = true
-        shouldScrollToFocusedResult = false
         acceptsResults = true
         isSearching = true
         flushPendingResults()
@@ -256,6 +258,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
             return
         }
         guard canUseControls, !page.isFastScrolling, !isSourceInvalidated, canOpenResult?() != false else { return }
+        cancelFocusedResultRestoration()
         let generation = searchGeneration
         let menuOptions = options
         let menu = ReaderOverflowMenuView(
@@ -410,6 +413,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
     }
 
     private func cancelSearch() {
+        cancelFocusedResultRestoration()
         searchGeneration &+= 1
         acceptsResults = false
         pendingResults.removeAll(keepingCapacity: true)
@@ -506,6 +510,8 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         let surfaceEnabled = canUseSearchSurface && !isSourceInvalidated && canOpenResult?() != false
         let enabled = surfaceEnabled && overflowMenu == nil
         if !enabled {
+            focusedResultRestoration.cancel()
+            if canInteract?() == false || canOpenResult?() == false { pendingFocusedResultIndex = nil }
             selectionSnapshot = nil
             highlightedSnapshot = nil
             page.cancelFastScrolling()
@@ -525,10 +531,30 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
             needsInitialFocus = false
             searchField.becomeFirstResponder()
         }
-        if shouldScrollToFocusedResult, let focusedResultIndex, results.indices.contains(focusedResultIndex) {
-            shouldScrollToFocusedResult = false
-            tableView.scrollToRow(at: IndexPath(row: focusedResultIndex, section: 0), at: .top, animated: false)
+        restoreFocusedResultIfNeeded()
+    }
+
+    private func restoreFocusedResultIfNeeded() {
+        guard let index = pendingFocusedResultIndex else {
+            focusedResultRestoration.layoutDidChange()
+            return
         }
+        pendingFocusedResultIndex = nil
+        guard let result = results[safe: index] else { return }
+        let generation = resultsGeneration
+        let query = searchField.text
+        focusedResultRestoration.restore(row: index) { [weak self] in
+            guard let self else { return false }
+            return self.canUseControls && !self.isListBusy && !self.isSourceInvalidated
+                && self.canOpenResult?() != false && !self.needsResultReset
+                && self.searchGeneration == generation && self.resultsGeneration == generation
+                && self.results[safe: index] === result && self.searchField.text == query
+        }
+    }
+
+    @objc private func cancelFocusedResultRestoration() {
+        pendingFocusedResultIndex = nil
+        focusedResultRestoration.cancel()
     }
 
     private func scheduleDeferredDeliveryRetry() {
@@ -552,16 +578,19 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         isSceneSuspended =
             notification.name != UIApplication.didBecomeActiveNotification
             && notification.name != UIScene.didActivateNotification
+        if isSceneSuspended { cancelFocusedResultRestoration() }
         refreshInteractionAvailability()
     }
 
     @objc private func listPanChanged(_ recognizer: UIPanGestureRecognizer) {
+        if recognizer.state == .began { cancelFocusedResultRestoration() }
         if recognizer.state == .ended || recognizer.state == .cancelled || recognizer.state == .failed {
             scheduleDelivery()
         }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        cancelFocusedResultRestoration()
         selectionSnapshot = nil
         highlightedSnapshot = nil
     }
@@ -573,6 +602,15 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { scheduleDelivery() }
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) { scheduleDelivery() }
     func scrollViewDidScrollToTop(_ scrollView: UIScrollView) { scheduleDelivery() }
+
+    func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        cancelFocusedResultRestoration()
+        return true
+    }
+
+    func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
+        focusedResultRestoration.layoutDidChange()
+    }
 
     @objc private func focusQuery() {
         guard canUseControls, !isSourceInvalidated, canOpenResult?() != false, !page.isFastScrolling else { return }
@@ -586,6 +624,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         guard canUseControls, !isSourceInvalidated, canOpenResult?() != false,
             resultsGeneration == searchGeneration, !needsResultReset, !results.isEmpty, !page.isFastScrolling
         else { return }
+        cancelFocusedResultRestoration()
         view.endEditing(true)
         tableView.scrollToRow(at: IndexPath(row: last ? results.count - 1 : 0, section: 0), at: .top, animated: false)
         scheduleDelivery()
@@ -645,7 +684,12 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         selectableSnapshot(at: indexPath) != nil
     }
 
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        focusedResultRestoration.layoutDidChange()
+    }
+
     func tableView(_ tableView: UITableView, didHighlightRowAt indexPath: IndexPath) {
+        cancelFocusedResultRestoration()
         highlightedSnapshot = selectableSnapshot(at: indexPath)
     }
 
