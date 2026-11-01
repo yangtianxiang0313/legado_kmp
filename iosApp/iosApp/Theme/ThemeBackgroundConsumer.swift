@@ -35,11 +35,12 @@ enum ThemeBackgroundConsumer {
         precondition(Thread.isMainThread)
         guard roots.contains(root) else { return }
         let backdrop = backdrop(in: root)
+        backdrop?.detach()
+        objc_setAssociatedObject(root, &surfaceKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        roots.remove(root)
         reconcileTree(root, hasImage: false, backdrop: backdrop, removingBindings: true)
         backdrop?.restoreDetachedSurfaces(from: nil)
         backdrop?.removeFromSuperview()
-        objc_setAssociatedObject(root, &surfaceKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        roots.remove(root)
     }
 
     static func refreshAll() {
@@ -100,7 +101,9 @@ enum ThemeBackgroundConsumer {
         if let surface = objc_getAssociatedObject(root, &surfaceKey) as? ThemeBackgroundSurfaceView { return surface }
         let backdrop = ThemeBackgroundSurfaceView(frame: root.bounds)
         backdrop.onImageChange = { [weak root, weak backdrop] in
-            guard let root, let backdrop else { return }
+            guard let root, let backdrop, roots.contains(root),
+                ThemeBackgroundConsumer.backdrop(in: root) === backdrop
+            else { return }
             reconcile(root, backdrop: backdrop)
         }
         objc_setAssociatedObject(root, &surfaceKey, backdrop, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
@@ -160,12 +163,29 @@ private final class ThemeBackgroundBinding {
 }
 
 private final class ThemeBackgroundSurfaceView: UIView {
+    private struct ImageIdentity: Equatable {
+        let channel: ThemeBackgroundChannel
+        let path: String
+    }
+
+    private struct RenderKey: Equatable {
+        let configuration: ThemeBackgroundConfiguration
+        let maximumPixels: Int
+        let isAvailable: Bool
+
+        var identity: ImageIdentity? {
+            configuration.imagePath.map { ImageIdentity(channel: configuration.channel, path: $0) }
+        }
+    }
+
     var onImageChange: (() -> Void)?
     var hasImage: Bool { imageView.image != nil && !isHidden }
     private let imageView = UIImageView()
-    private var renderKey: String?
+    private var renderKey: RenderKey?
+    private var displayedKey: RenderKey?
     private var task: Task<Void, Never>?
     private var generation: UInt64 = 0
+    private var isDetached = false
     private var scrollObservations: [NSKeyValueObservation] = []
     private var observedScrollViews: [ObjectIdentifier] = []
     private var refreshScheduled = false
@@ -190,6 +210,20 @@ private final class ThemeBackgroundSurfaceView: UIView {
 
     deinit { task?.cancel() }
 
+    func detach() {
+        guard !isDetached else { return }
+        isDetached = true
+        generation &+= 1
+        task?.cancel()
+        task = nil
+        renderKey = nil
+        onImageChange = nil
+        for observation in scrollObservations { observation.invalidate() }
+        scrollObservations = []
+        observedScrollViews = []
+        refreshScheduled = false
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         if lastSize != bounds.size {
@@ -210,7 +244,7 @@ private final class ThemeBackgroundSurfaceView: UIView {
     }
 
     func observeScrollSurfaces(in root: UIView) {
-        guard hasImage else {
+        guard !isDetached, hasImage else {
             observedScrollViews = []
             scrollObservations = []
             return
@@ -234,10 +268,10 @@ private final class ThemeBackgroundSurfaceView: UIView {
     }
 
     private func scheduleRefresh() {
-        guard !refreshScheduled else { return }
+        guard !isDetached, !refreshScheduled else { return }
         refreshScheduled = true
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, !self.isDetached else { return }
             self.refreshScheduled = false
             self.onImageChange?()
         }
@@ -253,9 +287,7 @@ private final class ThemeBackgroundSurfaceView: UIView {
         }
     }
 
-    func refresh() {
-        backgroundColor = AndroidReplicaTheme.background
-        guard window != nil else { return }
+    private func currentRenderKey() -> RenderKey {
         let mode = UserDefaults.standard.string(forKey: "theme_mode") ?? "SYSTEM"
         let isNight: Bool
         switch mode {
@@ -267,30 +299,60 @@ private final class ThemeBackgroundSurfaceView: UIView {
         let path = configuration.imagePath
         let available = path.flatMap(ThemeBackgroundImageStore.fileURL(for:)) != nil && mode != "E_INK"
         let pixels = min(2048, max(256, Int(ceil(max(bounds.width, bounds.height) * max(1, traitCollection.displayScale)))))
-        let key = "\(isNight)|\(path ?? "")|\(configuration.blurring)|\(pixels)|\(available)"
+        return RenderKey(configuration: configuration, maximumPixels: pixels, isAvailable: available)
+    }
+
+    private func clearDisplayedImage() {
+        let hadImage = hasImage
+        UIView.performWithoutAnimation {
+            imageView.image = nil
+            displayedKey = nil
+            isHidden = true
+            if hadImage { onImageChange?() }
+        }
+    }
+
+    func refresh() {
+        guard !isDetached else { return }
+        backgroundColor = AndroidReplicaTheme.background
+        let key = currentRenderKey()
         guard renderKey != key else { return }
         renderKey = key
         generation &+= 1
         let expected = generation
         task?.cancel()
         task = nil
-        imageView.image = nil
-        isHidden = true
-        onImageChange?()
-        guard available else { return }
+        // Keep the decor bitmap during resampling, but never across wallpaper identities or removal.
+        if !key.isAvailable || displayedKey?.identity != key.identity { clearDisplayedImage() }
+        guard generation == expected, renderKey == key, key.isAvailable else { return }
+        guard window != nil else {
+            renderKey = nil
+            return
+        }
         task = Task { @MainActor [weak self] in
+            let image: UIImage?
             do {
-                let image = try await ThemeBackgroundImageStore.shared.image(configuration: configuration, maximumPixels: pixels)
-                guard let self, !Task.isCancelled, self.generation == expected else { return }
-                self.imageView.image = image
-                self.isHidden = image == nil
-                if image == nil { self.renderKey = nil }
-                self.task = nil
-                self.onImageChange?()
+                image = try await ThemeBackgroundImageStore.shared.image(
+                    configuration: key.configuration, maximumPixels: key.maximumPixels)
             } catch {
-                guard let self, !Task.isCancelled, self.generation == expected else { return }
-                self.task = nil
+                image = nil
+            }
+            guard let self, !self.isDetached, self.generation == expected, self.renderKey == key else { return }
+            self.task = nil
+            guard self.currentRenderKey() == key else {
                 self.renderKey = nil
+                self.refresh()
+                return
+            }
+            guard !Task.isCancelled, let image else {
+                // A retained bitmap is only a fallback; this request must remain retryable.
+                self.renderKey = nil
+                return
+            }
+            UIView.performWithoutAnimation {
+                self.imageView.image = image
+                self.displayedKey = key
+                self.isHidden = false
                 self.onImageChange?()
             }
         }

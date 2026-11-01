@@ -29,7 +29,7 @@ final class AndroidSearchResultCell: UITableViewCell {
     private var coverBook: SearchBook?
     private var needsCoverLoad = false
     private var isPresentationActive = false
-    private var titleLeadingConstraint: NSLayoutConstraint?
+    private var titleLeftConstraint: NSLayoutConstraint?
 
     private struct CoverRequestKey: Equatable {
         let bookUrl: String
@@ -93,7 +93,7 @@ final class AndroidSearchResultCell: UITableViewCell {
         originBadge.text = nil
         originBadge.isHidden = true
         bookshelfDotView.isHidden = true
-        titleLeadingConstraint?.constant = 8
+        titleLeftConstraint?.constant = 8
         onActivate = nil
         accessibilityLabel = nil
         accessibilityValue = nil
@@ -227,7 +227,7 @@ final class AndroidSearchResultCell: UITableViewCell {
     func setInBookshelf(_ isInBookshelf: Bool) {
         // SearchAdapter uses isVisible (GONE), unlike the badge's INVISIBLE zero state.
         bookshelfDotView.isHidden = !isInBookshelf
-        titleLeadingConstraint?.constant = isInBookshelf ? 24 : 8
+        titleLeftConstraint?.constant = isInBookshelf ? 24 : 8
         accessibilityValue = metadataAccessibilityValue + (isInBookshelf ? "，已在书架" : "，未在书架")
         setNeedsLayout()
     }
@@ -299,11 +299,19 @@ final class AndroidSearchResultCell: UITableViewCell {
     }
 
     private func installConstraints() {
-        let titleLeading = titleLabel.leadingAnchor.constraint(equalTo: coverClipView.trailingAnchor, constant: 8)
-        titleLeadingConstraint = titleLeading
+        // item_search fixes cover/dot to physical Left and the badge to physical Right.
+        // In RTL its name Start/End resolve to left=badge.right+8, right=dot.left-8.
+        // Those anchors cross: retain a bounded text corridor, not Android solver/pixel parity.
+        let titleLeft = titleLabel.leftAnchor.constraint(equalTo: coverClipView.rightAnchor, constant: 8)
+        titleLeftConstraint = titleLeft
+        let titleRight = titleLabel.rightAnchor.constraint(equalTo: originBadge.leftAnchor, constant: -8)
+        let metadataRight = metadataView.rightAnchor.constraint(equalTo: titleLabel.rightAnchor)
+        // At constrained widths, collapse text rather than requiring a negative width.
+        titleRight.priority = UILayoutPriority(999)
+        metadataRight.priority = UILayoutPriority(999)
         NSLayoutConstraint.activate([
             contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 128),
-            coverClipView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
+            coverClipView.leftAnchor.constraint(equalTo: contentView.leftAnchor, constant: 8),
             coverClipView.widthAnchor.constraint(equalToConstant: 80),
             coverClipView.heightAnchor.constraint(equalToConstant: 112),
             coverClipView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -319,21 +327,23 @@ final class AndroidSearchResultCell: UITableViewCell {
             coverImageView.bottomAnchor.constraint(equalTo: coverClipView.bottomAnchor),
 
             originBadge.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            originBadge.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            originBadge.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -8),
+            originBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 16),
             originBadge.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8),
 
             titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            titleLeading,
-            titleLabel.trailingAnchor.constraint(equalTo: originBadge.leadingAnchor, constant: -8),
+            titleLeft,
+            titleRight,
             titleLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
-            bookshelfDotView.leadingAnchor.constraint(equalTo: coverClipView.trailingAnchor, constant: 8),
+            bookshelfDotView.leftAnchor.constraint(equalTo: coverClipView.rightAnchor, constant: 8),
             bookshelfDotView.topAnchor.constraint(equalTo: titleLabel.topAnchor, constant: 8),
             bookshelfDotView.widthAnchor.constraint(equalToConstant: 8),
             bookshelfDotView.heightAnchor.constraint(equalToConstant: 8),
 
             metadataView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 3),
-            metadataView.leadingAnchor.constraint(equalTo: coverClipView.trailingAnchor, constant: 8),
-            metadataView.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            metadataView.leftAnchor.constraint(equalTo: coverClipView.rightAnchor),
+            metadataRight,
+            metadataView.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
             metadataView.bottomAnchor.constraint(equalTo: coverClipView.bottomAnchor),
             metadataView.heightAnchor.constraint(greaterThanOrEqualToConstant: 0),
         ])
@@ -376,6 +386,10 @@ private final class AndroidSearchMetadataView: UIView {
         self.introView = introView
         super.init(frame: .zero)
         clipsToBounds = true
+        // The XML combines physical Left/Right constraints with marginStart=8.
+        // Inset the rows so only that margin changes sides, not the metadata column.
+        insetsLayoutMarginsFromSafeArea = false
+        directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 0)
         for view in rows + [introView] { addSubview(view) }
     }
 
@@ -387,13 +401,16 @@ private final class AndroidSearchMetadataView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         // Android's fixed-height LinearLayout clips metadata; the intro gets only its remainder.
+        let margins = layoutMargins
+        let x = bounds.minX + margins.left
+        let width = max(0, bounds.width - margins.left - margins.right)
         var y: CGFloat = 0
         for view in rows where !view.isHidden {
             let height = max(0, ceil(view.intrinsicContentSize.height))
-            view.frame = CGRect(x: 0, y: y, width: bounds.width, height: height)
+            view.frame = CGRect(x: x, y: y, width: width, height: height)
             y += height
         }
-        introView.frame = CGRect(x: 0, y: y, width: bounds.width, height: max(0, bounds.height - y))
+        introView.frame = CGRect(x: x, y: y, width: width, height: max(0, bounds.height - y))
     }
 }
 
