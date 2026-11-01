@@ -109,6 +109,13 @@ final class AndroidReplicaBookDetailTextButton: UIButton {
         didSet { updateBackground() }
     }
 
+    override var isEnabled: Bool {
+        didSet {
+            if !isEnabled { isHighlighted = false }
+            updateBackground()
+        }
+    }
+
     override var intrinsicContentSize: CGSize {
         let font = textFont
         let title = currentTitle ?? ""
@@ -161,7 +168,8 @@ final class AndroidReplicaBookDetailTextButton: UIButton {
 
     private func updateBackground() {
         guard hasAccentBackground else { return }
-        backgroundColor = isHighlighted ? BookDetailActionPalette.pressedAccent : AndroidReplicaTheme.accent
+        backgroundColor =
+            isEnabled && isHighlighted ? BookDetailActionPalette.pressedAccent : AndroidReplicaTheme.accent
     }
 }
 

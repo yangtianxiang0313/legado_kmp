@@ -54,6 +54,8 @@ final class AndroidReplicaBottomTabButton: UIControl {
             updateBadge.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 2),
             updateBadge.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2),
         ])
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applyPalette), name: .androidReplicaThemeDidChange, object: nil)
         setSelected(false)
     }
 
@@ -62,17 +64,28 @@ final class AndroidReplicaBottomTabButton: UIControl {
         preconditionFailure("init(coder:) is unavailable")
     }
 
+    deinit { NotificationCenter.default.removeObserver(self) }
+
     override var isHighlighted: Bool {
+        didSet { applyPalette() }
+    }
+
+    override var isEnabled: Bool {
         didSet {
-            backgroundColor = isHighlighted ? AndroidReplicaTheme.activeIndicator : .clear
+            if !isEnabled {
+                cancelTracking(with: nil)
+                isHighlighted = false
+            }
+            applyPalette()
         }
     }
 
     func setSelected(_ selected: Bool) {
         isCurrentTab = selected
+        isSelected = selected
         iconView.image = icon.image(selected: selected)
-        iconView.tintColor = selected ? AndroidReplicaTheme.accent : AndroidReplicaTheme.secondaryText
         accessibilityTraits = selected ? [.button, .selected] : .button
+        applyPalette()
     }
 
     func setPendingUpdateCount(_ count: Int) {
@@ -83,7 +96,29 @@ final class AndroidReplicaBottomTabButton: UIControl {
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        setSelected(isCurrentTab)
+        applyPalette()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            cancelTracking(with: nil)
+            isHighlighted = false
+        }
+        applyPalette()
+    }
+
+    @objc private func applyPalette() {
+        // ThemeBottomNavigationVIew derives contrast from bottomBackground, not night mode.
+        let surface = AndroidReplicaTheme.bottomBackground.resolvedColor(with: traitCollection)
+        let lightSurface = ReaderPaletteColor.isLight(surface)
+        let resourceTraits = UITraitCollection(userInterfaceStyle: lightSurface ? .light : .dark)
+        let normalColor = lightSurface ? AndroidReplicaTheme.secondaryText : AndroidReplicaTheme.primaryText
+        iconView.tintColor = isCurrentTab
+            ? AndroidReplicaTheme.accent.resolvedColor(with: traitCollection)
+            : normalColor.resolvedColor(with: resourceTraits)
+        backgroundColor = isHighlighted && isEnabled && !ReaderPaletteColor.isEInk
+            ? AndroidReplicaTheme.activeIndicator.resolvedColor(with: resourceTraits) : .clear
     }
 }
 
@@ -138,8 +173,12 @@ final class AndroidReplicaTitleBar: NavigationToolbarView {
         translatesAutoresizingMaskIntoConstraints = false
 
         titleLabel.text = title
-        titleLabel.font = .systemFont(ofSize: 20)
+        titleLabel.numberOfLines = 1
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.75
+        titleLabel.accessibilityTraits = [.header, .staticText]
         titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         actionStack.axis = .horizontal
@@ -154,12 +193,117 @@ final class AndroidReplicaTitleBar: NavigationToolbarView {
             heightAnchor.constraint(equalToConstant: 56),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleLabel.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: AndroidToolbarLayout.titleVerticalMargins),
+            titleLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -AndroidToolbarLayout.titleVerticalMargins),
+            titleLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: actionStack.leadingAnchor, constant: -8),
 
             actionStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             actionStack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applyPalette), name: .androidReplicaThemeDidChange, object: nil)
+        updateTypography()
         applyPalette()
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        preconditionFailure("init(coder:) is unavailable")
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.hasDifferentColorAppearance(comparedTo: traitCollection) != false {
+            applyPalette()
+        }
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            updateTypography()
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        applyPalette()
+    }
+
+    func addAction(systemName: String, accessibilityLabel: String, target: Any?, action: Selector) {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: systemName), for: .normal)
+        button.accessibilityLabel = accessibilityLabel
+        button.addInteraction(UIToolTipInteraction(defaultToolTip: accessibilityLabel))
+        button.addTarget(target, action: action, for: .touchUpInside)
+        button.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        actionStack.addArrangedSubview(button)
+        applyPalette()
+    }
+
+    private func updateTypography() {
+        // Keep the fixed 56-point toolbar, as AndroidEditorTitleBar does.
+        titleLabel.font = UIFontMetrics(forTextStyle: .headline).scaledFont(
+            for: .systemFont(ofSize: 20), maximumPointSize: 32, compatibleWith: traitCollection)
+    }
+
+    @objc private func applyPalette() {
+        let color = AndroidReplicaTheme.toolbarText.resolvedColor(with: traitCollection)
+        titleLabel.textColor = color
+        for case let button as UIButton in actionStack.arrangedSubviews {
+            button.tintColor = color
+            if button.configuration == nil {
+                button.setTitleColor(color, for: .normal)
+            }
+        }
+    }
+}
+
+final class AndroidReplicaSearchPill: UIControl {
+    private let icon = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+    private let label = UILabel()
+    private lazy var surfaceHeightConstraint = heightAnchor.constraint(equalToConstant: 30)
+
+    init(placeholder: String = "搜索") {
+        super.init(frame: .zero)
+        backgroundColor = AndroidReplicaTheme.menuBackground
+        layer.cornerRadius = 15
+        translatesAutoresizingMaskIntoConstraints = false
+        isAccessibilityElement = true
+        accessibilityLabel = placeholder
+        accessibilityTraits = .button
+
+        icon.tintColor = AndroidReplicaTheme.secondaryText
+        icon.isAccessibilityElement = false
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        label.text = placeholder
+        label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+        label.textAlignment = effectiveUserInterfaceLayoutDirection == .rightToLeft ? .right : .left
+        label.textColor = AndroidReplicaTheme.secondaryText
+        label.isAccessibilityElement = false
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        label.setContentCompressionResistancePriority(.required, for: .vertical)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(icon)
+        addSubview(label)
+        surfaceHeightConstraint.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(greaterThanOrEqualToConstant: 30),
+            surfaceHeightConstraint,
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 15),
+            icon.heightAnchor.constraint(equalToConstant: 15),
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            label.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 4),
+            label.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        updateTypography()
     }
 
     @available(*, unavailable)
@@ -169,67 +313,38 @@ final class AndroidReplicaTitleBar: NavigationToolbarView {
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        guard previousTraitCollection?.hasDifferentColorAppearance(comparedTo: traitCollection) != false else { return }
-        applyPalette()
-    }
-
-    func addAction(systemName: String, accessibilityLabel: String, target: Any?, action: Selector) {
-        let button = UIButton(type: .system)
-        button.tintColor = AndroidReplicaTheme.toolbarText
-        button.setTitleColor(AndroidReplicaTheme.toolbarText, for: .normal)
-        button.setImage(UIImage(systemName: systemName), for: .normal)
-        button.accessibilityLabel = accessibilityLabel
-        button.addTarget(target, action: action, for: .touchUpInside)
-        button.widthAnchor.constraint(equalToConstant: 42).isActive = true
-        button.heightAnchor.constraint(equalToConstant: 42).isActive = true
-        actionStack.addArrangedSubview(button)
-    }
-
-    private func applyPalette() {
-        titleLabel.textColor = AndroidReplicaTheme.toolbarText
-        for case let button as UIButton in actionStack.arrangedSubviews {
-            button.tintColor = AndroidReplicaTheme.toolbarText
-            if button.configuration == nil {
-                button.setTitleColor(AndroidReplicaTheme.toolbarText, for: .normal)
-            }
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory
+            || previousTraitCollection?.displayScale != traitCollection.displayScale
+        {
+            updateTypography()
         }
     }
-}
 
-final class AndroidReplicaSearchPill: UIControl {
-    init(placeholder: String = "搜索") {
-        super.init(frame: .zero)
-        backgroundColor = AndroidReplicaTheme.menuBackground
-        layer.cornerRadius = 15
-        translatesAutoresizingMaskIntoConstraints = false
-
-        let icon = UIImageView(image: UIImage(systemName: "magnifyingglass"))
-        icon.tintColor = AndroidReplicaTheme.secondaryText
-        icon.translatesAutoresizingMaskIntoConstraints = false
-
-        let label = UILabel()
-        label.text = placeholder
-        label.font = .systemFont(ofSize: 14)
-        label.textColor = AndroidReplicaTheme.secondaryText
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        addSubview(icon)
-        addSubview(label)
-        NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 15),
-            icon.heightAnchor.constraint(equalToConstant: 15),
-            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+        let alignment: NSTextAlignment = effectiveUserInterfaceLayoutDirection == .rightToLeft ? .right : .left
+        if label.textAlignment != alignment { label.textAlignment = alignment }
     }
 
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        preconditionFailure("init(coder:) is unavailable")
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        // Use the existing 10-point outer margins, without growing the 30-point surface.
+        bounds.insetBy(dx: -max(0, (44 - bounds.width) / 2), dy: -max(0, (44 - bounds.height) / 2))
+            .contains(point)
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard isEnabled, isUserInteractionEnabled, !isHidden, window != nil else { return false }
+        sendActions(for: .touchUpInside)
+        return true
+    }
+
+    private func updateTypography() {
+        label.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
+            for: .systemFont(ofSize: 14), compatibleWith: traitCollection)
+        surfaceHeightConstraint.constant = max(
+            AndroidToolbarLayout.searchSurfaceHeight(font: label.font, displayScale: traitCollection.displayScale),
+            ceil(label.font.lineHeight) + 8)
     }
 }
 

@@ -79,8 +79,8 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         didSet { updateCatalogAvailability() }
     }
 
-    private let primaryScrollView = UIScrollView()
-    private let detailsScrollView = UIScrollView()
+    private let primaryScrollView = ActionScrollView()
+    private let detailsScrollView = ActionScrollView()
     private let refreshControl = UIRefreshControl()
     private var isRefreshInFlight = false
     private var didRefreshDuringDrag = false
@@ -119,6 +119,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
     private var tagBadges: [TagBadge] = []
     private var unusedTagBadges: [TagBadge] = []
     private var showsCatalog = true
+    private var catalogState = CatalogState.ready
     private var usesColumns = false
     private var portraitConstraints: [NSLayoutConstraint] = []
     private var columnConstraints: [NSLayoutConstraint] = []
@@ -341,6 +342,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
             snapshot.catalogState == .failed ? L10n.BookDetail.refreshChapters : L10n.BookDetail.viewToc,
             for: .normal)
         showsCatalog = snapshot.showsCatalog
+        catalogState = snapshot.catalogState
         updateCatalogAvailability()
         introTextView.render(snapshot.intro)
         renderTags(snapshot.kind, wordCount: snapshot.wordCount)
@@ -795,7 +797,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
     private func updateCatalogAvailability() {
         tocRow.isHidden = !showsCatalog
         tocRow.accessibilityElementsHidden = !showsCatalog
-        let isEnabled = showsCatalog && isTocEnabled
+        let isEnabled = showsCatalog && isTocEnabled && catalogState != .loading
         tocButton.isEnabled = isEnabled
         tocButton.alpha = isEnabled ? 1 : 0.45
     }
@@ -911,7 +913,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
     }
 
     @objc private func handleTocTap() {
-        guard showsCatalog, isTocEnabled else { return }
+        guard showsCatalog, isTocEnabled, catalogState != .loading else { return }
         onTocTap?()
     }
 
@@ -1049,10 +1051,11 @@ extension AndroidReplicaBookDetailContentView {
             setNeedsLayout()
         }
 
-        private final class ActionScrollView: UIScrollView {
-            override func touchesShouldCancel(in view: UIView) -> Bool {
-                view is UIControl || super.touchesShouldCancel(in: view)
-            }
+    }
+
+    fileprivate final class ActionScrollView: UIScrollView {
+        override func touchesShouldCancel(in view: UIView) -> Bool {
+            view is UIControl || super.touchesShouldCancel(in: view)
         }
     }
 
