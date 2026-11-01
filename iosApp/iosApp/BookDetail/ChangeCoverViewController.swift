@@ -7,8 +7,7 @@ protocol ChangeCoverDelegate: AnyObject {
     func changeCoverDidSelect(_ coverUrl: String)
 }
 
-final class ChangeCoverViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout
-{
+final class ChangeCoverViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     weak var delegate: ChangeCoverDelegate?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
@@ -102,6 +101,13 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        for case let cell as ChangeCoverGridCell in collectionView.visibleCells {
+            cell.resetPressedState()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -305,8 +311,9 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
                 }
                 await MainActor.run {
                     guard let self, let url, !Task.isCancelled, !self.isClosing,
-                          self.searchGeneration == generation,
-                          !self.coverItems.contains(where: { $0.coverUrl == url }) else { return }
+                        self.searchGeneration == generation,
+                        !self.coverItems.contains(where: { $0.coverUrl == url })
+                    else { return }
                     self.handleNewCover(CoverSearchResult(coverUrl: url, sourceName: "封面规则", sourceUrl: rule.searchUrl))
                     if !self.isSearching { self.handleSearchFinished() }
                 }
@@ -414,8 +421,7 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
         coverItems.count
     }
 
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell
-    {
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell =
             collectionView.dequeueReusableCell(withReuseIdentifier: ChangeCoverGridCell.reuseIdentifier, for: indexPath)
             as! ChangeCoverGridCell
@@ -448,8 +454,12 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
         _ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
         sizeForItemAt indexPath: IndexPath
     ) -> CGSize {
-        let itemWidth = gridWidth / 3
-        return CGSize(width: itemWidth, height: ChangeCoverGridCell.itemHeight(compatibleWith: traitCollection))
+        let scale = max(1, traitCollection.displayScale)
+        // Equal pixel-aligned columns leave at most two physical pixels unused.
+        let itemWidth = floor(gridWidth * scale / 3) / scale
+        return CGSize(
+            width: itemWidth,
+            height: ChangeCoverGridCell.itemHeight(width: itemWidth, compatibleWith: traitCollection))
     }
 
     func collectionView(
@@ -463,8 +473,39 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
             height: ChangeCoverStatusFooterView.height(for: text, width: gridWidth, traits: traitCollection))
     }
 
+    func collectionView(
+        _ collectionView: UICollectionView, didEndDisplaying cell: UICollectionViewCell,
+        forItemAt indexPath: IndexPath
+    ) {
+        (cell as? ChangeCoverGridCell)?.resetPressedState()
+    }
+
+    func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {
+        canInteract(with: indexPath, in: collectionView)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        canInteract(with: indexPath, in: collectionView)
+    }
+
+    private func canInteract(with indexPath: IndexPath, in collectionView: UICollectionView) -> Bool {
+        guard !isClosing, !isBeingDismissed, !isMovingFromParent,
+            navigationController?.isBeingDismissed != true,
+            indexPath.section == 0, coverItems.indices.contains(indexPath.item),
+            UIApplication.shared.applicationState == .active,
+            let cell = collectionView.cellForItem(at: indexPath), let window = cell.window
+        else { return false }
+        if let scene = window.windowScene, scene.activationState != .foregroundActive { return false }
+        var currentView: UIView? = cell
+        while let current = currentView {
+            if current.isHidden || !current.isUserInteractionEnabled || current.alpha <= 0.01 { return false }
+            currentView = current.superview
+        }
+        return true
+    }
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        guard !isClosing else { return }
+        guard canInteract(with: indexPath, in: collectionView) else { return }
         isClosing = true
         collectionView.deselectItem(at: indexPath, animated: true)
         let item = coverItems[indexPath.item]

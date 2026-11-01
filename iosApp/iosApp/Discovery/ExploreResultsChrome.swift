@@ -406,6 +406,8 @@ final class ExploreResultsBookCell: UITableViewCell {
     // Paused loads remain pending; completed failures wait for the next full bind to retry.
     private var needsCoverLoad = false
     private var isPresentationActive = false
+    private var isMetadataPressed = false
+    private var pressAvailabilityLink: CADisplayLink?
 
     var needsCoverRetry: Bool {
         guard let coverKey, !needsCoverLoad, coverTask == nil, coverImage.image == nil else { return false }
@@ -417,10 +419,7 @@ final class ExploreResultsBookCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         backgroundColor = AndroidReplicaTheme.background
         contentView.backgroundColor = AndroidReplicaTheme.background
-        selectionStyle = .default
-        let selected = UIView()
-        selected.backgroundColor = AndroidReplicaTheme.activeIndicator
-        selectedBackgroundView = selected
+        selectionStyle = .none
         isAccessibilityElement = true
         accessibilityIdentifier = UIIdentifiers.Discovery.resultCell
         accessibilityTraits = .button
@@ -453,10 +452,17 @@ final class ExploreResultsBookCell: UITableViewCell {
             child.isAccessibilityElement = false
             contentView.addSubview(child)
         }
-        titleLeading = titleLabel.leadingAnchor.constraint(equalTo: coverView.trailingAnchor, constant: 8)
+        // Match Search's bounded, readable column. Android's RTL Start/End anchors
+        // cross its physical cover/dot/badge anchors; this is a platform adaptation.
+        titleLeading = titleLabel.leftAnchor.constraint(equalTo: coverView.rightAnchor, constant: 8)
+        // BadgeView stays INVISIBLE at zero: retain its 16dp slot and both 8dp margins.
+        let titleRight = titleLabel.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -32)
+        let metadataRight = metadata.rightAnchor.constraint(equalTo: titleLabel.rightAnchor)
+        titleRight.priority = UILayoutPriority(999)
+        metadataRight.priority = UILayoutPriority(999)
         NSLayoutConstraint.activate([
             contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 128),
-            coverView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
+            coverView.leftAnchor.constraint(equalTo: contentView.leftAnchor, constant: 8),
             coverView.widthAnchor.constraint(equalToConstant: 80),
             // CoverImageView overrides the XML height in both setLayoutParams and onMeasure.
             coverView.heightAnchor.constraint(equalTo: coverView.widthAnchor, multiplier: 7.0 / 5.0),
@@ -465,33 +471,49 @@ final class ExploreResultsBookCell: UITableViewCell {
             coverView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8),
             titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             titleLeading,
-            // BadgeView stays INVISIBLE at zero: retain its 16dp slot and both 8dp margins.
-            titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
+            titleRight,
             titleLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
-            bookshelfDot.leadingAnchor.constraint(equalTo: coverView.trailingAnchor, constant: 8),
+            bookshelfDot.leftAnchor.constraint(equalTo: coverView.rightAnchor, constant: 8),
             bookshelfDot.topAnchor.constraint(equalTo: titleLabel.topAnchor, constant: 8),
             bookshelfDot.widthAnchor.constraint(equalToConstant: 8),
             bookshelfDot.heightAnchor.constraint(equalToConstant: 8),
             metadata.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 3),
-            metadata.leadingAnchor.constraint(equalTo: coverView.trailingAnchor, constant: 8),
-            metadata.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            // Metadata owns marginStart=8; its physical column starts at cover.right.
+            metadata.leftAnchor.constraint(equalTo: coverView.rightAnchor),
+            metadataRight,
+            metadata.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
             metadata.bottomAnchor.constraint(equalTo: coverView.bottomAnchor),
             metadata.heightAnchor.constraint(greaterThanOrEqualToConstant: 0),
         ])
         updateTypography()
         setInBookshelf(false)
+        applyPalette()
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(applyPalette), name: .androidReplicaThemeDidChange, object: nil)
+        for name in [
+            UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification,
+            UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification, UIScene.didDisconnectNotification,
+        ] {
+            center.addObserver(self, selector: #selector(interactionWillDeactivate(_:)), name: name, object: nil)
+        }
     }
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
 
-    deinit { coverTask?.cancel() }
+    deinit {
+        coverTask?.cancel()
+        pressAvailabilityLink?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
 
     func configure(book: SearchBook, isInBookshelf: Bool) {
+        setHighlighted(false, animated: false)
         // item_search uses singleLine, not just maxLines=1: line breaks become inline text.
         titleLabel.text = book.name.replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: "\u{FEFF}")
         metadata.configure(book)
+        applyPalette()
         accessibilityLabel = book.name
         setInBookshelf(isInBookshelf)
         configureCover(book)
@@ -506,17 +528,68 @@ final class ExploreResultsBookCell: UITableViewCell {
     func setPresentationActive(_ active: Bool) {
         isPresentationActive = active
         accessibilityElementsHidden = !active
+        if !active { setHighlighted(false, animated: false) }
         if active { loadCoverIfNeeded() } else { cancelCoverLoading() }
+    }
+
+    override func setHighlighted(_ highlighted: Bool, animated: Bool) {
+        let pressed = highlighted && isPresentationActive && ExploreAndroidGraphics.isAvailableForInteraction(self)
+        super.setHighlighted(pressed, animated: animated)
+        isMetadataPressed = pressed
+        // item_search has no row selector; only AccentBgTextView receives pressed.
+        metadata.setPressed(pressed)
+        applyPalette()
+        updatePressMonitoring()
+    }
+
+    override func setSelected(_ selected: Bool, animated: Bool) {
+        super.setSelected(selected, animated: animated)
+        // UITableView also highlights descendant UILabels when selecting a row.
+        applyPalette()
+    }
+
+    override var isHidden: Bool {
+        didSet { if isHidden { setHighlighted(false, animated: false) } }
+    }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet { if !isUserInteractionEnabled { setHighlighted(false, animated: false) } }
+    }
+
+    override var alpha: CGFloat {
+        didSet { if alpha <= 0.01 { setHighlighted(false, animated: false) } }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesCancelled(touches, with: event)
+        setHighlighted(false, animated: false)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        cancelPressIfUnavailable()
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        setHighlighted(false, animated: false)
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window == nil { cancelCoverLoading() } else { loadCoverIfNeeded() }
+        applyPalette()
+        if window == nil {
+            setHighlighted(false, animated: false)
+            cancelCoverLoading()
+        } else {
+            loadCoverIfNeeded()
+        }
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         setPresentationActive(false)
+        setSelected(false, animated: false)
         coverKey = nil
         coverBook = nil
         defaultCover.onLoadingPolicyChange = nil
@@ -541,7 +614,68 @@ final class ExploreResultsBookCell: UITableViewCell {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         updateTypography()
+        applyPalette()
         setNeedsLayout()
+    }
+
+    @objc private func applyPalette() {
+        let background = AndroidReplicaTheme.background.resolvedColor(with: traitCollection)
+        backgroundColor = background
+        contentView.backgroundColor = background
+        titleLabel.textColor = AndroidReplicaTheme.primaryText.resolvedColor(with: traitCollection)
+        metadata.applyPalette()
+        // Keep actual text colors stable even when UIKit propagates selected/highlighted.
+        restoreNormalLabelAppearance(in: titleLabel)
+        restoreNormalLabelAppearance(in: metadata)
+    }
+
+    private func restoreNormalLabelAppearance(in view: UIView) {
+        if let label = view as? UILabel {
+            label.isHighlighted = false
+            label.highlightedTextColor = label.textColor
+        }
+        for child in view.subviews { restoreNormalLabelAppearance(in: child) }
+    }
+
+    private func updatePressMonitoring() {
+        guard isMetadataPressed else {
+            pressAvailabilityLink?.invalidate()
+            pressAvailabilityLink = nil
+            return
+        }
+        guard pressAvailabilityLink == nil else { return }
+        // Only a held press needs polling: ancestor visibility, clipping or interaction
+        // changes need not lay out or send cancellation to this cell.
+        let target = PressAvailabilityTarget(cell: self)
+        let link = CADisplayLink(target: target, selector: #selector(PressAvailabilityTarget.refresh(_:)))
+        pressAvailabilityLink = link
+        link.add(to: .main, forMode: .common)
+    }
+
+    private func cancelPressIfUnavailable() {
+        guard isMetadataPressed,
+            !isPresentationActive || !ExploreAndroidGraphics.isAvailableForInteraction(self)
+        else { return }
+        setHighlighted(false, animated: false)
+    }
+
+    @objc private func interactionWillDeactivate(_ notification: Notification) {
+        if let scene = notification.object as? UIScene, scene !== window?.windowScene { return }
+        setHighlighted(false, animated: false)
+    }
+
+    private final class PressAvailabilityTarget: NSObject {
+        private weak var cell: ExploreResultsBookCell?
+
+        init(cell: ExploreResultsBookCell) { self.cell = cell }
+
+        @objc func refresh(_ link: CADisplayLink) {
+            guard let cell else {
+                link.invalidate()
+                return
+            }
+            cell.cancelPressIfUnavailable()
+        }
     }
 
     private func updateTypography() {
@@ -601,11 +735,15 @@ private final class ExploreResultsBookMetadataView: UIView {
     private let intro = ExploreResultsIntroLabel()
     private var kinds: [ExploreResultsKindLabel] = []
     private var kindValues: [String] = []
+    private var isPressed = false
     private(set) var accessibilitySummary = ""
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         clipsToBounds = true
+        // item_search keeps physical Left/Right anchors; only marginStart changes sides.
+        insetsLayoutMarginsFromSafeArea = false
+        directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 0)
         for label in [author, latest, intro] {
             label.textColor = AndroidReplicaTheme.primaryText
             label.numberOfLines = 1
@@ -614,6 +752,7 @@ private final class ExploreResultsBookMetadataView: UIView {
             addSubview(label)
         }
         updateTypography()
+        applyPalette()
     }
 
     convenience init() { self.init(frame: .zero) }
@@ -644,6 +783,7 @@ private final class ExploreResultsBookMetadataView: UIView {
         accessibilitySummary = [author.text, values.isEmpty ? nil : values.joined(separator: "，"), latest.text, intro.text]
             .compactMap { $0 }.joined(separator: "，")
         updateTypography()
+        applyPalette()
         setNeedsLayout()
     }
 
@@ -655,43 +795,68 @@ private final class ExploreResultsBookMetadataView: UIView {
         }
         kindValues = []
         accessibilitySummary = ""
+        setPressed(false)
+    }
+
+    /// The owning cell supplies the press state after applying its activation gate.
+    func setPressed(_ pressed: Bool) {
+        isPressed = pressed
+        applyPalette()
+    }
+
+    func applyPalette() {
+        let textColor = AndroidReplicaTheme.primaryText.resolvedColor(with: traitCollection)
+        for label in [author, latest, intro] { label.textColor = textColor }
+        for (index, label) in kinds.enumerated() {
+            label.applyPalette(pressed: isPressed && index < kindValues.count)
+        }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         updateTypography()
+        applyPalette()
         setNeedsLayout()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        let margins = layoutMargins
+        let contentX = bounds.minX + margins.left
+        let contentWidth = max(0, bounds.width - margins.left - margins.right)
         let authorHeight = ceil(author.intrinsicContentSize.height)
-        author.frame = CGRect(x: 0, y: 0, width: bounds.width, height: authorHeight)
-        var y = authorHeight
+        author.frame = CGRect(x: contentX, y: bounds.minY, width: contentWidth, height: authorHeight)
+        var y = bounds.minY + authorHeight
         if !kindValues.isEmpty {
             let kindHeight = kinds.prefix(kindValues.count).map { ceil($0.intrinsicContentSize.height) }.max() ?? 0
             let isRTL = effectiveUserInterfaceLayoutDirection == .rightToLeft
-            var x: CGFloat = 0
+            var offset: CGFloat = 0
             for label in kinds.prefix(kindValues.count) {
-                let available = max(0, bounds.width - x - 2)
-                let width = min(available, label.intrinsicContentSize.width)
+                let available = max(0, contentWidth - offset - 2)
                 label.isHidden = available <= 0
+                guard !label.isHidden else {
+                    label.frame = .zero
+                    continue
+                }
+                let width = min(available, label.intrinsicContentSize.width)
+                // LabelsBar's 2dp margin is physical Right, including in RTL.
+                let x = isRTL ? contentX + contentWidth - offset - 2 - width : contentX + offset
                 label.frame = CGRect(
-                    x: isRTL ? bounds.width - x - width : x, y: y, width: width, height: kindHeight)
-                x += width + 2
+                    x: x, y: y, width: width, height: kindHeight)
+                offset += width + 2
             }
             y += kindHeight
         }
         if !latest.isHidden {
             let latestHeight = ceil(latest.intrinsicContentSize.height)
-            latest.frame = CGRect(x: 0, y: y, width: bounds.width, height: latestHeight)
+            latest.frame = CGRect(x: contentX, y: y, width: contentWidth, height: latestHeight)
             y += latestHeight
         }
-        let height = max(0, bounds.height - y)
+        let height = max(0, bounds.maxY - y)
         let lines = max(0, Int(floor(height / max(1, ceil(intro.font.lineHeight)))))
         intro.isHidden = lines == 0
         intro.numberOfLines = max(1, lines)
-        intro.frame = CGRect(x: 0, y: y, width: bounds.width, height: height)
+        intro.frame = CGRect(x: contentX, y: y, width: contentWidth, height: height)
     }
 
     private func updateTypography() {
@@ -704,29 +869,34 @@ private final class ExploreResultsBookMetadataView: UIView {
 private final class ExploreResultsKindLabel: AndroidExploreTextLabel {
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = AndroidReplicaTheme.accent
-        textColor = UIColor { traits in
-            let color = AndroidReplicaTheme.accent.resolvedColor(with: traits)
-            var r: CGFloat = 0
-            var g: CGFloat = 0
-            var b: CGFloat = 0
-            var a: CGFloat = 0
-            guard color.getRed(&r, green: &g, blue: &b, alpha: &a) else { return .white }
-            func linear(_ value: CGFloat) -> CGFloat {
-                value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
-            }
-            return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b) >= 0.5 ? .black : .white
-        }
         layer.cornerRadius = 2
         clipsToBounds = true
         numberOfLines = 1
         lineBreakMode = .byClipping
+        applyPalette(pressed: false)
     }
 
     convenience init() { self.init(frame: .zero) }
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
+
+    func applyPalette(pressed: Bool) {
+        let accent = AndroidReplicaTheme.accent.resolvedColor(with: traitCollection)
+        var fill = accent
+        if pressed {
+            var hue: CGFloat = 0
+            var saturation: CGFloat = 0
+            var brightness: CGFloat = 0
+            var alpha: CGFloat = 0
+            if accent.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) {
+                // AccentBgTextView's pressed selector darkens the HSV value by 10%.
+                fill = UIColor(hue: hue, saturation: saturation, brightness: brightness * 0.9, alpha: alpha)
+            }
+        }
+        backgroundColor = fill
+        textColor = SearchScopeStyle.checkedTextColor(traits: traitCollection)
+    }
 
     override var intrinsicContentSize: CGSize {
         let size = super.intrinsicContentSize

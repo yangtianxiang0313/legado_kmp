@@ -17,6 +17,7 @@ final class BookInfoEditFormView: UIView {
 
     private let overflowScrollView = UIScrollView()
     private let header = UIView()
+    private let coverClipView = AndroidBookCoverClipView()
     private let body = UIView()
     private let typeRow = UIScrollView()
     private let typeLabel = AndroidExploreTextLabel()
@@ -59,7 +60,11 @@ final class BookInfoEditFormView: UIView {
             ]
             disabledControls = controls.map { ($0, $0.isEnabled) }
             lockedTextViews = [coverUrlTextView, introTextView].map { ($0, $0.isEditable) }
-            for (control, _) in disabledControls { control.isEnabled = false }
+            for (control, _) in disabledControls {
+                control.cancelTracking(with: nil)
+                control.isHighlighted = false
+                control.isEnabled = false
+            }
             for (textView, _) in lockedTextViews { textView.isEditable = false }
         } else {
             for (control, wasEnabled) in disabledControls { control.isEnabled = wasEnabled }
@@ -113,7 +118,7 @@ final class BookInfoEditFormView: UIView {
         let fieldWidth = max(1, viewport.width - 110)
         let nameHeight = fields[0].sizeThatFits(CGSize(width: fieldWidth, height: 0)).height
         let authorHeight = fields[1].sizeThatFits(CGSize(width: fieldWidth, height: 0)).height
-        let headerHeight = max(140, nameHeight + authorHeight + 20)
+        let headerHeight = max(136, nameHeight + authorHeight + 20)
         let bodyHeight = layoutBody(width: viewport.width)
         let minimumBodyViewport = max(typeRow.bounds.height, fields[2].minimumContentHeight)
         let overflow = viewport.height - headerHeight < minimumBodyViewport
@@ -230,8 +235,9 @@ final class BookInfoEditFormView: UIView {
         addSubview(overflowScrollView)
         overflowScrollView.addSubview(header)
         overflowScrollView.addSubview(scrollView)
-        header.addSubview(defaultCoverView)
-        header.addSubview(coverImageView)
+        header.addSubview(coverClipView)
+        coverClipView.addSubview(defaultCoverView)
+        coverClipView.addSubview(coverImageView)
         header.addSubview(coverSpinner)
         header.addSubview(fields[0])
         header.addSubview(fields[1])
@@ -255,10 +261,12 @@ final class BookInfoEditFormView: UIView {
     }
 
     private func layoutHeader(width: CGFloat, nameHeight: CGFloat, authorHeight: CGFloat) {
-        coverImageView.frame = directionalFrame(leading: 5, y: 5, width: 90, height: 130, in: width)
-        defaultCoverView.frame = coverImageView.frame
+        // CoverImageView.onMeasure replaces the XML's 130dp with width * 7 / 5.
+        coverClipView.frame = directionalFrame(leading: 5, y: 5, width: 90, height: 126, in: width)
+        coverImageView.frame = coverClipView.bounds
+        defaultCoverView.frame = coverClipView.bounds
         coverSpinner.sizeToFit()
-        coverSpinner.center = coverImageView.center
+        coverSpinner.center = coverClipView.center
         let fieldWidth = max(1, width - 110)
         fields[0].frame = directionalFrame(leading: 100, y: 10, width: fieldWidth, height: nameHeight, in: width)
         fields[1].frame = directionalFrame(
@@ -447,7 +455,26 @@ private final class BookInfoEditStrokeButton: UIButton {
     }
 
     override var isEnabled: Bool {
-        didSet { updateColors() }
+        didSet {
+            if !isEnabled { cancelPressedFeedback() }
+            updateColors()
+        }
+    }
+
+    override var isHidden: Bool {
+        didSet {
+            if isHidden { cancelPressedFeedback() }
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { cancelPressedFeedback() }
+    }
+
+    private func cancelPressedFeedback() {
+        cancelTracking(with: nil)
+        isHighlighted = false
     }
 
     override var intrinsicContentSize: CGSize {

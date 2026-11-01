@@ -3,7 +3,7 @@ import UIKit
 import shared
 
 /// BookInfoEditActivity.upCover / activity_book_info_edit.xml at Legado 5f5d314.
-/// The host owns the sibling views' hierarchy and 90 x 130 cover frame.
+/// The host owns the sibling views' hierarchy and measured 90 x 126 cover frame.
 @MainActor
 final class BookInfoEditCoverPreview {
     private struct RequestKey: Equatable {
