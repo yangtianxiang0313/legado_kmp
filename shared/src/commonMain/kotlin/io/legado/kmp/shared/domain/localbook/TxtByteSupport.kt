@@ -9,14 +9,16 @@ internal class TxtByteSupport(
     private val isDocumentStart: Boolean = true
 ) {
     private enum class Encoding {
-        UTF8, UTF16_LE, UTF16_BE, GB18030, BIG5, SHIFT_JIS, EUC_JP, SINGLE_BYTE
+        UTF8, UTF16_LE, UTF16_BE, GBK, GB18030, BIG5, SHIFT_JIS, EUC_JP, SINGLE_BYTE
     }
 
     private val encoding = when (charsetName.uppercase()) {
         "UTF-16", "UTF16" -> if (hasBom(0xfe, 0xff)) Encoding.UTF16_BE else Encoding.UTF16_LE
         "UTF-16LE", "UTF16LE" -> Encoding.UTF16_LE
         "UTF-16BE", "UTF16BE" -> Encoding.UTF16_BE
-        "GBK", "GB2312", "GB18030", "GB_18030" -> Encoding.GB18030
+        "GBK", "CP936", "WINDOWS-936", "GB2312", "EUC-CN", "EUC_CN", "EUCCN",
+        "X-EUC-CN", "GB2312-80", "GB2312-1980" -> Encoding.GBK
+        "GB18030", "GB_18030" -> Encoding.GB18030
         "BIG5", "BIG-5" -> Encoding.BIG5
         "SHIFT_JIS", "SHIFT-JIS", "SJIS" -> Encoding.SHIFT_JIS
         "EUC-JP", "EUCJP" -> Encoding.EUC_JP
@@ -27,6 +29,8 @@ internal class TxtByteSupport(
     private val decodingCharset = when (encoding) {
         Encoding.UTF16_LE -> "UTF-16LE"
         Encoding.UTF16_BE -> "UTF-16BE"
+        // Resolve TXT aliases locally without changing the platform codec's charset-name policy.
+        Encoding.GBK -> "GBK"
         else -> charsetName
     }
     private val utf16BomSize = when (encoding) {
@@ -173,6 +177,16 @@ internal class TxtByteSupport(
                     else -> 2
                 }
             }
+            Encoding.GBK -> if (first <= 0x80 || first == 0xff) {
+                1
+            } else {
+                require(first in 0x81..0xfe) { "Invalid GBK character at TXT byte $offset" }
+                requireBytes(2)
+                require(unsigned(offset + 1) in 0x40..0xfe && unsigned(offset + 1) != 0x7f) {
+                    "Invalid GBK character at TXT byte $offset"
+                }
+                2
+            }
             Encoding.GB18030 -> if (first <= 0x80) {
                 1
             } else {
@@ -195,7 +209,7 @@ internal class TxtByteSupport(
                     2
                 }
             }
-            Encoding.BIG5 -> if (first <= 0x7f) {
+            Encoding.BIG5 -> if (first <= 0x80 || first == 0xff) {
                 1
             } else {
                 require(first in 0x81..0xfe) { "Invalid Big5 character at TXT byte $offset" }

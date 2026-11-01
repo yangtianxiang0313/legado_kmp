@@ -44,7 +44,7 @@ internal val LEGACY_JS_JAVA_SHIM = """
       var numberExponential = Function.prototype.call.bind(Number.prototype.toExponential);
       var regexTest = Function.prototype.call.bind(RegExp.prototype.test);
       var nativeStrToBytes = __legacyStrToBytes;
-      var bytesToStr = __legacyBytesToStr;
+      var nativeBytesToStr = __legacyBytesToStr;
       var base64DecodeBytes = __legacyBase64DecodeToByteArray;
       var javaHmacBytes = __legacyJavaHmacBytes;
       var states = new WeakMap();
@@ -62,6 +62,9 @@ internal val LEGACY_JS_JAVA_SHIM = """
 
       function strToBytes(value, charset) {
         return nativeStrToBytes(stringify(value), charset);
+      }
+      function bytesToStr(value, charset) {
+        return parse(nativeBytesToStr(value, charset));
       }
       function metadata(value) {
         return value !== null && (typeof value === 'object' || typeof value === 'function') ? stateGet(value) : null;

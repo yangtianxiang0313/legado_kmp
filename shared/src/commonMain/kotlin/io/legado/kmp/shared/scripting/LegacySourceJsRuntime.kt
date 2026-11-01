@@ -793,16 +793,13 @@ class LegacySourceJsRuntime(
                     }
                     function("__legacyBase64Decode") { args ->
                         val encoded = args.firstOrNull()?.toString().orEmpty()
-                        try {
+                        val decodedText = try {
                             @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
                             val decoded = Base64.decode(encoded.normalizedLegacyBase64(args.getOrNull(1).legacyBase64Flags()))
                             val charset = args.getOrNull(1)?.toString()?.takeIf { it.toIntOrNull() == null }
-                            if (charset.isNullOrBlank()) {
-                                decoded.decodeToString()
-                            } else {
-                                TextCodec.decode(decoded, charset)
-                            }
+                            TextCodec.decode(decoded, charset?.takeUnless { it.isBlank() } ?: "UTF-8")
                         } catch (_: Exception) { "" }
+                        json.encodeToString(decodedText)
                     }
                     function("__legacyBase64DecodeToByteArray") { args ->
                         val encoded = args.firstOrNull()
@@ -831,11 +828,8 @@ class LegacySourceJsRuntime(
                         val bytesJson = args.firstOrNull()?.toString().orEmpty()
                         val charset = args.getOrNull(1)?.toString()?.takeUnless { it.isBlank() || it == "undefined" || it == "null" }
                         val bytes = bytesJson.toLegacyByteArray()
-                        if (charset == null) {
-                            bytes.decodeToString()
-                        } else {
-                            TextCodec.decode(bytes, charset)
-                        }
+                        // Escape the decoded text before crossing the NUL-terminated native string bridge.
+                        json.encodeToString(TextCodec.decode(bytes, charset ?: "UTF-8"))
                     }
                     function("__legacyJsoupDecodeBytes") { args ->
                         require(args.size == 2 && args[0] is String) { "Expected Jsoup bytes and charset" }
@@ -857,9 +851,10 @@ class LegacySourceJsRuntime(
                     }
                     function("__legacyHexDecodeToString") { args ->
                         val hexStr = args.firstOrNull()?.toString().orEmpty()
-                        try {
-                            hexStr.decodeLegacyHexBytes().decodeToString()
+                        val decodedText = try {
+                            TextCodec.decode(hexStr.decodeLegacyHexBytes(), "UTF-8")
                         } catch (_: Exception) { "" }
+                        json.encodeToString(decodedText)
                     }
                     function("__legacyHexDecodeToByteArray") { args ->
                         val hexStr = args.firstOrNull()?.toString().orEmpty()

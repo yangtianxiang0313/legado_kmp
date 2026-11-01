@@ -36,7 +36,7 @@ actual class EncodingDetector {
             usedLossyConversion = null
         )
 
-        val gbkEncoding = CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingGB_18030_2000.toUInt())
+        val gb18030Encoding = CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingGB_18030_2000.toUInt())
         val big5Encoding = CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingBig5.toUInt())
 
         val encodingName = when (encoding.toUInt()) {
@@ -49,12 +49,12 @@ actual class EncodingDetector {
             NSUTF32StringEncoding.toUInt() -> "UTF-32"
             NSUTF32BigEndianStringEncoding.toUInt() -> "UTF-32BE"
             NSUTF32LittleEndianStringEncoding.toUInt() -> "UTF-32LE"
-            gbkEncoding.toUInt() -> "GBK"
+            gb18030Encoding.toUInt() -> "GB18030"
             big5Encoding.toUInt() -> "BIG5"
             else -> {
-                // If NSString detection failed, try GBK as fallback for non-UTF8 CJK content
-                if (NSString.create(nsData, gbkEncoding) != null) {
-                    return "GBK" to 0.70f
+                // Report the actual converter: its four-byte repertoire must not be mislabeled as GBK.
+                if (NSString.create(nsData, gb18030Encoding) != null) {
+                    return "GB18030" to 0.70f
                 }
                 "UTF-8"
             }

@@ -204,9 +204,14 @@ internal val LEGACY_SHIM = """
             java.toURL = function(url, baseUrl) {
               return JSON.parse(__legacyToURL(url != null ? String(url) : '', baseUrl != null ? String(baseUrl) : null));
             };
-            java.base64Decode = function(str, flagsOrCharset) {
-              return __legacyBase64Decode(str != null ? String(str) : '', flagsOrCharset);
-            };
+            java.base64Decode = (function() {
+              var nativeBase64Decode = __legacyBase64Decode;
+              var parse = JSON.parse;
+              var string = String;
+              return function(str, flagsOrCharset) {
+                return parse(nativeBase64Decode(str != null ? string(str) : '', flagsOrCharset));
+              };
+            })();
             java.base64Encode = function(str, flags) {
               return __legacyBase64Encode(str != null ? String(str) : '', flags);
             };
@@ -488,7 +493,14 @@ internal val LEGACY_SHIM = """
             java.t2s = function(str) { return __legacyT2s(str != null ? String(str) : ''); };
             java.s2t = function(str) { return __legacyS2t(str != null ? String(str) : ''); };
             java.toNumChapter = function(str) { return __legacyToNumChapter(str != null ? String(str) : ''); };
-            java.hexDecodeToString = function(str) { return __legacyHexDecodeToString(str != null ? String(str) : ''); };
+            java.hexDecodeToString = (function() {
+              var nativeHexDecodeToString = __legacyHexDecodeToString;
+              var parse = JSON.parse;
+              var string = String;
+              return function(str) {
+                return parse(nativeHexDecodeToString(str != null ? string(str) : ''));
+              };
+            })();
             java.hexEncodeToString = function(str) { return __legacyHexEncodeToString(str != null ? String(str) : ''); };
             java.hexDecodeToByteArray = function(hex) {
               return __legacyHexDecodeToByteArray(hex != null ? String(hex) : '');
@@ -505,14 +517,20 @@ internal val LEGACY_SHIM = """
               var nativeBytesToStr = __legacyBytesToStr;
               var isArray = Array.isArray;
               var isView = ArrayBuffer.isView;
+              var typedArrayKind = Function.prototype.call.bind(Object.getOwnPropertyDescriptor(
+                Object.getPrototypeOf(Uint8Array.prototype), Symbol.toStringTag
+              ).get);
               var toArray = Array.from;
               var stringify = JSON.stringify;
+              var parse = JSON.parse;
               return function(bytes, charset) {
                 if (!isArray(bytes)) {
-                  if (!isView(bytes) || bytes.BYTES_PER_ELEMENT !== 1) return '';
+                  if (!isView(bytes)) return '';
+                  var kind = typedArrayKind(bytes);
+                  if (kind !== 'Int8Array' && kind !== 'Uint8Array' && kind !== 'Uint8ClampedArray') return '';
                   bytes = toArray(bytes);
                 }
-                return nativeBytesToStr(stringify(bytes), charset);
+                return parse(nativeBytesToStr(stringify(bytes), charset));
               };
             })();
             java.base64DecodeToByteArray = function(str, flags) {
