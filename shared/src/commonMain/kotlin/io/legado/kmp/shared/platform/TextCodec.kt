@@ -6,3 +6,6 @@ expect object TextCodec {
     fun detectCharset(sample: ByteArray): String
     fun hasUtf8Bom(bytes: ByteArray): Boolean
 }
+
+/** CharsetEncoder semantics used by Android's query writer, without String.getBytes fast paths. */
+internal expect fun encodeCharsetWriterText(text: String, charsetName: String): ByteArray

@@ -43,7 +43,7 @@ internal val LEGACY_JS_JAVA_SHIM = """
       var numberString = Function.prototype.call.bind(Number.prototype.toString);
       var numberExponential = Function.prototype.call.bind(Number.prototype.toExponential);
       var regexTest = Function.prototype.call.bind(RegExp.prototype.test);
-      var strToBytes = __legacyStrToBytes;
+      var nativeStrToBytes = __legacyStrToBytes;
       var bytesToStr = __legacyBytesToStr;
       var base64DecodeBytes = __legacyBase64DecodeToByteArray;
       var javaHmacBytes = __legacyJavaHmacBytes;
@@ -60,6 +60,9 @@ internal val LEGACY_JS_JAVA_SHIM = """
       var packageNameSet = Function.prototype.call.bind(WeakMap.prototype.set, packageNames);
       var error = Error;
 
+      function strToBytes(value, charset) {
+        return nativeStrToBytes(stringify(value), charset);
+      }
       function metadata(value) {
         return value !== null && (typeof value === 'object' || typeof value === 'function') ? stateGet(value) : null;
       }

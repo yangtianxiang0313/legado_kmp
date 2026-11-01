@@ -26,6 +26,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.TimeZone
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.ContinuationInterceptor
@@ -782,10 +783,10 @@ class LegacySourceJsRuntime(
                         formatTimestamp(ts + shiftMillis, TimeZone.UTC, pattern)
                     }
                     function("__legacyEncodeURI") { args ->
-                        val str = args.firstOrNull()?.toString().orEmpty()
+                        val textJson = args.firstOrNull()?.toString() ?: "\"\""
                         val charset = args.getOrNull(1)?.toString()?.takeUnless { it.isBlank() || it == "undefined" || it == "null" }
                         try {
-                            str.legacyUrlEncode(charset ?: "UTF-8")
+                            json.decodeFromString<String>(textJson).legacyUrlEncode(charset ?: "UTF-8")
                         } catch (_: Exception) {
                             ""
                         }
@@ -821,13 +822,10 @@ class LegacySourceJsRuntime(
                         Base64.encode(plain.encodeToByteArray()).withLegacyBase64Flags(args.getOrNull(1).legacyBase64Flags())
                     }
                     function("__legacyStrToBytes") { args ->
-                        val text = args.firstOrNull()?.toString().orEmpty()
+                        // Escaped JSON preserves NUL and lone UTF-16 surrogates across the native bridge.
+                        val text = json.decodeFromString<String>(args.firstOrNull()?.toString() ?: "\"\"")
                         val charset = args.getOrNull(1)?.toString()?.takeUnless { it.isBlank() || it == "undefined" || it == "null" }
-                        if (charset == null) {
-                            text.encodeToByteArray()
-                        } else {
-                            TextCodec.encode(text, charset)
-                        }
+                        TextCodec.encode(text, charset ?: "UTF-8")
                     }
                     function("__legacyBytesToStr") { args ->
                         val bytesJson = args.firstOrNull()?.toString().orEmpty()

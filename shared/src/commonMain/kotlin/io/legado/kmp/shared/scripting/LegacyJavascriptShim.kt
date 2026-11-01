@@ -187,9 +187,14 @@ internal val LEGACY_SHIM = """
             java.timeFormatUTC = function(time, format, sh) {
               return __legacyTimeFormatUTC(time != null ? time : 0, format != null ? String(format) : '', sh != null ? sh : 0);
             };
-            java.encodeURI = function(str, enc) {
-              return __legacyEncodeURI(str != null ? String(str) : '', enc);
-            };
+            java.encodeURI = (function() {
+              var nativeEncodeURI = __legacyEncodeURI;
+              var stringify = JSON.stringify;
+              var string = String;
+              return function(str, enc) {
+                return nativeEncodeURI(stringify(str != null ? string(str) : ''), enc);
+              };
+            })();
             java.androidId = function() {
               return __legacyAndroidId();
             };
@@ -488,13 +493,28 @@ internal val LEGACY_SHIM = """
             java.hexDecodeToByteArray = function(hex) {
               return __legacyHexDecodeToByteArray(hex != null ? String(hex) : '');
             };
-            java.strToBytes = function(str, charset) {
-              return __legacyStrToBytes(str != null ? String(str) : '', charset);
-            };
-            java.bytesToStr = function(bytes, charset) {
-              if (!Array.isArray(bytes)) return '';
-              return __legacyBytesToStr(JSON.stringify(bytes), charset);
-            };
+            java.strToBytes = (function() {
+              var nativeStrToBytes = __legacyStrToBytes;
+              var stringify = JSON.stringify;
+              var string = String;
+              return function(str, charset) {
+                return nativeStrToBytes(stringify(str != null ? string(str) : ''), charset);
+              };
+            })();
+            java.bytesToStr = (function() {
+              var nativeBytesToStr = __legacyBytesToStr;
+              var isArray = Array.isArray;
+              var isView = ArrayBuffer.isView;
+              var toArray = Array.from;
+              var stringify = JSON.stringify;
+              return function(bytes, charset) {
+                if (!isArray(bytes)) {
+                  if (!isView(bytes) || bytes.BYTES_PER_ELEMENT !== 1) return '';
+                  bytes = toArray(bytes);
+                }
+                return nativeBytesToStr(stringify(bytes), charset);
+              };
+            })();
             java.base64DecodeToByteArray = function(str, flags) {
               return __legacyBase64DecodeToByteArray(str, flags);
             };

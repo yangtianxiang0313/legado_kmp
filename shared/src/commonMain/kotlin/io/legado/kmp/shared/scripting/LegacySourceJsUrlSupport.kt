@@ -83,6 +83,8 @@ private fun String.legacyUrlQueryDecodeUtf8(): String {
 }
 
 internal fun String.legacyUrlEncode(charsetName: String): String {
+    // URLEncoder resolves the charset even when every character is already form-safe.
+    TextCodec.encode("", charsetName)
     val out = StringBuilder()
     var pending = StringBuilder()
     fun flushPending() {

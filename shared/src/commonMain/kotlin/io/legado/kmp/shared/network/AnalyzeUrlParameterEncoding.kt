@@ -2,10 +2,21 @@ package io.legado.kmp.shared.network
 
 import io.ktor.http.encodeURLQueryComponent
 import io.legado.kmp.shared.platform.TextCodec
+import io.legado.kmp.shared.platform.encodeCharsetWriterText
 
 internal fun encodeLegacyUrlParameters(params: String, charset: String?, isQuery: Boolean): String {
-    if (params.isBlank()) return params
     val escapeMode = charset.equals("escape", ignoreCase = true)
+    if (params.isBlank() && (escapeMode || charset.isNullOrBlank())) return params
+    if (!escapeMode && !charset.isNullOrBlank()) {
+        // Resolve explicit charsets even when the input does not need encoding.
+        TextCodec.encode("", charset)
+        if (isQuery) {
+            return if (params.isLegacyEncodedQuery()) params else params.percentEncodeWithCharset(
+                charsetName = charset,
+                spaceToPlus = false
+            )
+        }
+    }
     if (isQuery && !escapeMode && charset.isNullOrBlank()) {
         return splitLegacyParamSegments(params).joinToString("&") { segment ->
             if (segment.isBlank()) return@joinToString ""
@@ -16,7 +27,7 @@ internal fun encodeLegacyUrlParameters(params: String, charset: String?, isQuery
         }
     }
     return splitLegacyParamSegments(params).joinToString("&") { segment ->
-        if (segment.isBlank()) return@joinToString ""
+        if (segment.isBlank() && (escapeMode || charset.isNullOrBlank())) return@joinToString ""
         val (rawKey, rawValue) = splitLegacyParam(segment)
         val key = encodeValue(rawKey, charset, isQuery)
         val value = rawValue?.let { encodeValue(it, charset, isQuery) }
@@ -95,6 +106,19 @@ private fun String.percentEncodedCharAt(index: Int): Char? {
     return ((high shl 4) or low).toChar()
 }
 
+private fun String.isLegacyEncodedQuery(): Boolean {
+    var index = 0
+    while (index < length) {
+        val char = this[index]
+        when {
+            char.isAsciiLetterOrDigit() || char in legacyQuerySafeChars -> index++
+            char == '%' && percentEncodedCharAt(index) != null -> index += 3
+            else -> return false
+        }
+    }
+    return true
+}
+
 private fun encodeValue(value: String, charset: String?, isQuery: Boolean): String {
     return when {
         charset.equals("escape", ignoreCase = true) -> value.escapeLikeLegacy()
@@ -124,13 +148,17 @@ private fun String.percentEncodeUtf8ForLegacyQueryComponent(): String {
                 index += 3
             }
             else -> {
-                char.toString().encodeToByteArray().forEach { byte ->
+                // Keep valid UTF-16 pairs intact; retain the encoder fallback for unpaired surrogates.
+                val charLength = if (
+                    char.isHighSurrogate() && index + 1 < length && this[index + 1].isLowSurrogate()
+                ) 2 else 1
+                substring(index, index + charLength).encodeToByteArray().forEach { byte ->
                     val value = byte.toInt() and 0xFF
                     result.append('%')
                     result.append(hexDigits[value ushr 4])
                     result.append(hexDigits[value and 0x0F])
                 }
-                index++
+                index += charLength
             }
         }
     }
@@ -176,37 +204,64 @@ private fun String.percentEncodeWithCharset(
     charsetName: String,
     spaceToPlus: Boolean
 ): String {
-    val bytes = TextCodec.encode(this, charsetName)
-    val result = StringBuilder(bytes.size * 3)
-    for (byte in bytes) {
-        val value = byte.toInt() and 0xFF
+    val safeChars = if (spaceToPlus) legacyFormSafeChars else legacyQueryEncoderSafeChars
+    val queryBomLength = if (spaceToPlus) 0 else legacyQueryCharsetBomLength(charsetName)
+    val result = StringBuilder(length)
+    var index = 0
+    var encodedUnsafeRun = false
+    while (index < length) {
+        val char = this[index]
         when {
-            value.isUrlUnreserved() -> result.append(value.toChar())
-            value == 0x20 && spaceToPlus -> result.append('+')
+            char.isAsciiLetterOrDigit() || char in safeChars -> {
+                result.append(char)
+                index++
+            }
+            char == ' ' && spaceToPlus -> {
+                result.append('+')
+                index++
+            }
             else -> {
-                result.append('%')
-                result.append(hexDigits[value ushr 4])
-                result.append(hexDigits[value and 0x0F])
+                val start = index
+                // Surrogates are unsafe, so a legal pair stays within the same run.
+                do {
+                    index++
+                } while (
+                    index < length && !this[index].isAsciiLetterOrDigit() && this[index] !in safeChars &&
+                    !(spaceToPlus && this[index] == ' ')
+                )
+                val run = substring(start, index)
+                val bytes = if (spaceToPlus) TextCodec.encode(run, charsetName)
+                    else encodeCharsetWriterText(run, charsetName)
+                // URLEncoder restarts per run; PercentCodec keeps one writer for the whole query.
+                val byteStart = if (encodedUnsafeRun) queryBomLength else 0
+                for (byteIndex in byteStart until bytes.size) {
+                    val value = bytes[byteIndex].toInt() and 0xFF
+                    result.append('%')
+                    result.append(hexDigits[value ushr 4])
+                    result.append(hexDigits[value and 0x0F])
+                }
+                encodedUnsafeRun = true
             }
         }
     }
     return result.toString()
 }
 
-private fun Int.isUrlUnreserved(): Boolean {
-    return this in 'A'.code..'Z'.code ||
-        this in 'a'.code..'z'.code ||
-        this in '0'.code..'9'.code ||
-        this == '-'.code ||
-        this == '_'.code ||
-        this == '.'.code ||
-        this == '~'.code
+private fun legacyQueryCharsetBomLength(charsetName: String): Int {
+    return when (charsetName.uppercase()) {
+        "UTF-16", "UTF16", "UTF_16", "UNICODE", "UNICODEBIG", "X-UTF-16LE-BOM", "UNICODELITTLE" -> 2
+        "UTF-32", "UTF32", "UTF_32", "X-UTF-32BE-BOM", "UTF-32BE-BOM", "UTF_32BE_BOM",
+        "X-UTF-32LE-BOM", "UTF-32LE-BOM", "UTF_32LE_BOM" -> 4
+        else -> 0
+    }
 }
 
 private val legacyEscapeSafeChars = setOf('*', '@', '-', '_', '+', '.', '/')
+private val legacyFormSafeChars = setOf('*', '-', '.', '_')
 private val legacyQuerySafeChars = setOf(
     '!', '$', '&', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '=', '?', '@',
     '[', '\\', ']', '^', '_', '`', '{', '|', '}', '~',
 )
 private val legacyQueryComponentSafeChars = legacyQuerySafeChars - setOf('&', '=')
+private val legacyQueryEncoderSafeChars = legacyQuerySafeChars + '%'
 private val hexDigits = "0123456789ABCDEF".toCharArray()
