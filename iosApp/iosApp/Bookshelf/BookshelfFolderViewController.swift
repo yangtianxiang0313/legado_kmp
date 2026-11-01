@@ -27,6 +27,7 @@ final class BookshelfFolderViewController: UIViewController,
         let size: CGSize
         let insets: UIEdgeInsets
         let contentSizeCategory: UIContentSizeCategory
+        let layoutDirection: UIUserInterfaceLayoutDirection
     }
 
     private let collectionView: UICollectionView
@@ -202,7 +203,8 @@ final class BookshelfFolderViewController: UIViewController,
     private var currentGeometry: Geometry {
         Geometry(
             size: collectionView.bounds.size, insets: collectionView.adjustedContentInset,
-            contentSizeCategory: traitCollection.preferredContentSizeCategory)
+            contentSizeCategory: traitCollection.preferredContentSizeCategory,
+            layoutDirection: collectionView.effectiveUserInterfaceLayoutDirection)
     }
 
     private var savedAnchor: ScrollAnchor? { groupID.flatMap { anchors[$0] } }
@@ -239,6 +241,16 @@ final class BookshelfFolderViewController: UIViewController,
         }
         let identitiesChanged = items.map(\.identity) != snapshot.items.map(\.identity)
         let layoutChanged = layoutMode != snapshot.layoutMode
+        let showedUnread = preferences?.showUnread ?? true
+        let showsUnread = snapshot.preferences?.showUnread ?? true
+        let itemSizesChanged =
+            !identitiesChanged && !layoutChanged
+            && zip(items, snapshot.items).contains { old, new in
+                guard case .book(let oldBook) = old, case .book(let newBook) = new,
+                    oldBook.unreadChapterCount != newBook.unreadChapterCount || showedUnread != showsUnread
+                else { return false }
+                return preferredSize(for: old, showsUnread: showedUnread) != preferredSize(for: new, showsUnread: showsUnread)
+            }
         let previousStatus = visibleStatus
         isUpdatingContent = true
         defer {
@@ -260,7 +272,7 @@ final class BookshelfFolderViewController: UIViewController,
                 updateLayout(keeping: anchor, reload: true)
             } else {
                 reconfigureVisibleCells()
-                if needsLayout || layoutChanged || geometry != currentGeometry
+                if needsLayout || layoutChanged || itemSizesChanged || geometry != currentGeometry
                     || previousStatus != visibleStatus || pendingAnchor != nil || scrollToTop
                 {
                     updateLayout(keeping: anchor, reload: false)
@@ -489,17 +501,25 @@ final class BookshelfFolderViewController: UIViewController,
     func collectionView(
         _: UICollectionView, layout _: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath
     ) -> CGSize {
+        preferredSize(for: item(at: indexPath), showsUnread: preferences?.showUnread ?? true)
+    }
+
+    private func preferredSize(for item: Item?, showsUnread: Bool) -> CGSize {
         let isGrid = layoutMode != .list
         let columns = isGrid ? CGFloat(min(6, max(3, Int(layoutMode.columnCount)))) : 1
         let scale = max(1, traitCollection.displayScale)
         let width = max(1 / scale, floor(contentWidth / columns * scale) / scale)
         let category = traitCollection.preferredContentSizeCategory
-        if case .group? = item(at: indexPath) {
+        if case .group? = item {
             return BookshelfFolderGroupCell.preferredSize(
                 width: width, isGrid: isGrid, contentSizeCategory: category)
         }
+        let unread: Int
+        if case .book(let book)? = item { unread = Int(book.unreadChapterCount) } else { unread = 0 }
         return AndroidReplicaBookshelfCell.preferredSize(
-            width: width, isGrid: isGrid, contentSizeCategory: category)
+            width: width, isGrid: isGrid, contentSizeCategory: category,
+            displayScale: traitCollection.displayScale, unreadCount: unread, showsUnread: showsUnread,
+            layoutDirection: collectionView.effectiveUserInterfaceLayoutDirection)
     }
 
     func collectionView(

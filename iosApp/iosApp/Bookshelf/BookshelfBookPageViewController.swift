@@ -32,6 +32,7 @@ final class BookshelfBookPageViewController: UIViewController,
     private var layoutSize: CGSize = .zero
     private var layoutInsets: UIEdgeInsets = .zero
     private var layoutSafeAreaInsets: UIEdgeInsets = .zero
+    private var layoutDirection: UIUserInterfaceLayoutDirection = .leftToRight
     private var isPageVisible = false
     private var isSceneSuspended = false
     private var isApplicationSuspended = false
@@ -194,15 +195,20 @@ final class BookshelfBookPageViewController: UIViewController,
         let size = collectionView.bounds.size
         let insets = collectionView.adjustedContentInset
         let safeInsets = view.safeAreaInsets
-        guard size != layoutSize || insets != layoutInsets || safeInsets != layoutSafeAreaInsets else { return }
+        let direction = collectionView.effectiveUserInterfaceLayoutDirection
+        guard size != layoutSize || insets != layoutInsets || safeInsets != layoutSafeAreaInsets || direction != layoutDirection else {
+            return
+        }
         let anchor = readingAnchor()
         let widthChanged = size.width != layoutSize.width
+        let directionChanged = direction != layoutDirection
         presentation.suspend()
         fastScroller.cancelScrubbing()
         layoutSize = size
         layoutInsets = insets
         layoutSafeAreaInsets = safeInsets
-        if widthChanged { collectionView.collectionViewLayout.invalidateLayout() }
+        layoutDirection = direction
+        if widthChanged || directionChanged { collectionView.collectionViewLayout.invalidateLayout() }
         collectionView.layoutIfNeeded()
         restore(anchor)
         fastScroller.reload()
@@ -417,6 +423,8 @@ final class BookshelfBookPageViewController: UIViewController,
     private func deliverPresentation() {
         guard canPresentContent else { return }
         let anchor = readingAnchor()
+        let previousBooks = displayedBooks
+        let showedUnread = preferences?.showUnread ?? true
         var reload = needsTypographyRefresh
         needsTypographyRefresh = false
         var reconfigure = needsBookStatusRefresh
@@ -437,6 +445,13 @@ final class BookshelfBookPageViewController: UIViewController,
             reload = reload || displayedBooks.map(\.bookUrl) != pendingBooks.map(\.bookUrl)
             displayedBooks = pendingBooks
         }
+        let showsUnread = preferences?.showUnread ?? true
+        let itemSizesChanged =
+            !reload && reconfigure
+            && zip(previousBooks, displayedBooks).contains { old, new in
+                guard old.unreadChapterCount != new.unreadChapterCount || showedUnread != showsUnread else { return false }
+                return bookSize(old, showsUnread: showedUnread) != bookSize(new, showsUnread: showsUnread)
+            }
         UIView.performWithoutAnimation {
             if reload {
                 presentation.cancelSelection()
@@ -447,6 +462,12 @@ final class BookshelfBookPageViewController: UIViewController,
                 fastScroller.reload()
             } else if reconfigure {
                 reconfigureVisibleCells()
+                if itemSizesChanged {
+                    collectionView.collectionViewLayout.invalidateLayout()
+                    collectionView.layoutIfNeeded()
+                    restore(anchor)
+                    fastScroller.reload()
+                }
             } else if refreshLatestUpdateTime {
                 refreshVisibleLatestUpdateTimes()
             }
@@ -527,7 +548,8 @@ final class BookshelfBookPageViewController: UIViewController,
 
     private func restore(_ anchor: ScrollAnchor?) {
         guard let anchor, !displayedBooks.isEmpty else { return }
-        let index = displayedBooks.firstIndex(where: { $0.bookUrl == anchor.bookURL }) ?? min(anchor.fallbackIndex, displayedBooks.count - 1)
+        let index =
+            displayedBooks.firstIndex(where: { $0.bookUrl == anchor.bookURL }) ?? min(anchor.fallbackIndex, displayedBooks.count - 1)
         guard
             let frame = collectionView.layoutAttributesForItem(at: IndexPath(item: index, section: 0))?.frame
         else { return }
@@ -654,14 +676,21 @@ final class BookshelfBookPageViewController: UIViewController,
     }
 
     func collectionView(
-        _ collectionView: UICollectionView, layout _: UICollectionViewLayout, sizeForItemAt _: IndexPath
+        _: UICollectionView, layout _: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath
     ) -> CGSize {
+        let book = displayedBooks.indices.contains(indexPath.item) ? displayedBooks[indexPath.item] : nil
+        return bookSize(book, showsUnread: preferences?.showUnread ?? true)
+    }
+
+    private func bookSize(_ book: Book?, showsUnread: Bool) -> CGSize {
         let columns: CGFloat = layoutMode == .list ? 1 : CGFloat(max(Int(layoutMode.columnCount), 3))
         let insets = collectionView.adjustedContentInset
         return AndroidReplicaBookshelfCell.preferredSize(
             width: floor(max(1, collectionView.bounds.width - insets.left - insets.right) / columns), isGrid: layoutMode != .list,
             contentSizeCategory: traitCollection.preferredContentSizeCategory,
-            displayScale: collectionView.traitCollection.displayScale)
+            displayScale: collectionView.traitCollection.displayScale,
+            unreadCount: Int(book?.unreadChapterCount ?? 0), showsUnread: showsUnread,
+            layoutDirection: collectionView.effectiveUserInterfaceLayoutDirection)
     }
 
     @MainActor

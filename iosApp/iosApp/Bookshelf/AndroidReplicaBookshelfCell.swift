@@ -6,16 +6,21 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
 
     static func preferredSize(
         width: CGFloat, isGrid: Bool, contentSizeCategory: UIContentSizeCategory,
-        displayScale: CGFloat = UIScreen.main.scale
+        displayScale: CGFloat = UIScreen.main.scale, unreadCount: Int = 0, showsUnread: Bool = true,
+        layoutDirection: UIUserInterfaceLayoutDirection = .leftToRight
     ) -> CGSize {
         let metrics = LayoutMetrics(contentSizeCategory: contentSizeCategory, displayScale: displayScale)
+        let countText = showsUnread && unreadCount > 0 ? "\(unreadCount)" : nil
         let height: CGFloat
         if isGrid {
-            height = 16 + max(0, width - 32) * LayoutMetrics.coverAspectRatio + 14 + metrics.gridTitleHeight
+            height =
+                metrics.gridInfoTop(width: width, countText: countText, layoutDirection: layoutDirection)
+                + metrics.gridTitleHeight
         } else {
             let coverHeight = 16 + LayoutMetrics.listCoverHeight + 12
             let textHeight =
-                12 + metrics.listTitleHeight + metrics.metadataRowHeights.reduce(0, +)
+                12 + metrics.listTitleHeight(width: width, countText: countText, layoutDirection: layoutDirection)
+                + metrics.metadataRowHeights.reduce(0, +)
                 + metrics.minimumListSpacing * 5 + 8
             height = max(coverHeight, textHeight)
         }
@@ -34,14 +39,15 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
         }
     }
 
+    private let coverClipView = AndroidBookCoverClipView()
     private let defaultCoverView = AndroidDefaultBookCoverView()
     private let coverView = UIImageView()
     private let infoStack = UIStackView()
     private let titleRow = UIView()
     private let nameLabel = UILabel()
     private let authorIconView = UIImageView()
-    private let authorLabel = UILabel()
-    private let latestUpdateTimeLabel = UILabel()
+    private let authorLabel = BookshelfEndPaddedLabel()
+    private let latestUpdateTimeLabel = BookshelfEndPaddedLabel()
     private let progressIconView = UIImageView()
     private let progressLabel = UILabel()
     private let latestIconView = UIImageView()
@@ -56,8 +62,13 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
     private var minimumListSpacingConstraint: NSLayoutConstraint?
     private var metadataHeightConstraints: [NSLayoutConstraint] = []
     private var iconSizeConstraints: [NSLayoutConstraint] = []
+    private var authorMinimumWidthConstraint: NSLayoutConstraint?
     private var gridConstraints: [NSLayoutConstraint] = []
     private var listConstraints: [NSLayoutConstraint] = []
+    private lazy var listCoverLeftConstraint = coverClipView.leftAnchor.constraint(equalTo: contentView.leftAnchor)
+    private lazy var listInfoRightConstraint = infoStack.rightAnchor.constraint(equalTo: contentView.rightAnchor)
+    private lazy var listStatusRightConstraint = statusView.rightAnchor.constraint(equalTo: contentView.rightAnchor)
+    private lazy var gridInfoTopConstraint = infoStack.topAnchor.constraint(equalTo: coverClipView.bottomAnchor, constant: 14)
     private lazy var titleHeightConstraint = titleRow.heightAnchor.constraint(equalToConstant: 0)
     private lazy var statusWidthConstraint = statusView.widthAnchor.constraint(equalToConstant: 22)
     private lazy var statusHeightConstraint = statusView.heightAnchor.constraint(equalToConstant: 22)
@@ -74,6 +85,8 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
     private var imageTask: Task<Void, Never>?
     private var coverRequestID: UUID?
     private var coverRequest: CoverRequest?
+    private var feedbackObservations: [NSKeyValueObservation] = []
+    private var appliedLayoutDirection: UIUserInterfaceLayoutDirection?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -93,11 +106,41 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
     }
 
     override var isHighlighted: Bool {
-        didSet { feedbackView.isHidden = !isHighlighted }
+        didSet {
+            guard isHighlighted, canShowPressedFeedback else {
+                clearPressedFeedback()
+                return
+            }
+            feedbackView.isHidden = false
+            observePressedAvailability()
+        }
+    }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet {
+            if !isUserInteractionEnabled { clearPressedFeedback() }
+        }
+    }
+
+    override var isHidden: Bool {
+        didSet {
+            if isHidden { clearPressedFeedback() }
+        }
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        if newWindow !== window { clearPressedFeedback() }
+        super.willMove(toWindow: newWindow)
+    }
+
+    override func willMove(toSuperview newSuperview: UIView?) {
+        if newSuperview !== superview { clearPressedFeedback() }
+        super.willMove(toSuperview: newSuperview)
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        clearPressedFeedback()
         imageTask?.cancel()
         imageTask = nil
         coverRequestID = nil
@@ -130,12 +173,47 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
         {
             updateTypography()
         }
+        updateDirectionalMargins()
     }
 
     override func layoutSubviews() {
+        updateDirectionalMargins()
+        updateStatusSize()
         super.layoutSubviews()
         feedbackView.frame = contentView.bounds
         loadingIndicator.updateAnimationVisibility()
+    }
+
+    private var canShowPressedFeedback: Bool {
+        guard window != nil else { return false }
+        var ancestor: UIView? = self
+        while let view = ancestor {
+            guard view.isUserInteractionEnabled, !view.isHidden, view.alpha > 0.01 else { return false }
+            ancestor = view.superview
+        }
+        return true
+    }
+
+    private func clearPressedFeedback() {
+        feedbackObservations.removeAll()
+        // super.prepareForReuse already resets highlight; also cover detach/disable/rebind.
+        super.isHighlighted = false
+        feedbackView.isHidden = true
+    }
+
+    private func observePressedAvailability() {
+        guard feedbackObservations.isEmpty else { return }
+        var ancestor: UIView? = self
+        while let view = ancestor {
+            let changed: () -> Void = { [weak self] in
+                guard let self, !self.canShowPressedFeedback else { return }
+                self.clearPressedFeedback()
+            }
+            feedbackObservations.append(view.observe(\.isUserInteractionEnabled, options: [.new]) { _, _ in changed() })
+            feedbackObservations.append(view.observe(\.isHidden, options: [.new]) { _, _ in changed() })
+            feedbackObservations.append(view.observe(\.alpha, options: [.new]) { _, _ in changed() })
+            ancestor = view.superview
+        }
     }
 
     override func apply(_ layoutAttributes: UICollectionViewLayoutAttributes) {
@@ -153,7 +231,6 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
         coverView.backgroundColor = .clear
         coverView.contentMode = .scaleAspectFill
         coverView.clipsToBounds = true
-        coverView.layer.cornerRadius = 2
 
         nameLabel.textColor = AndroidReplicaTheme.primaryText
         nameLabel.lineBreakMode = .byTruncatingTail
@@ -174,6 +251,11 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
         badgeLabel.layer.cornerRadius = 8
         badgeLabel.layer.masksToBounds = true
         badgeLabel.textAlignment = .center
+        badgeLabel.numberOfLines = 0
+        badgeLabel.lineBreakMode = .byCharWrapping
+        badgeLabel.adjustsFontSizeToFitWidth = false
+        badgeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        badgeLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         badgeLabel.isHidden = true
         updateStatusAppearance()
 
@@ -185,10 +267,15 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
         infoStack.alignment = .fill
         infoStack.distribution = .fill
         infoStack.spacing = 0
-        for item in [defaultCoverView, coverView, infoStack, statusView] {
+        for item in [coverClipView, infoStack, statusView] {
             item.translatesAutoresizingMaskIntoConstraints = false
             item.isAccessibilityElement = false
             contentView.addSubview(item)
+        }
+        for item in [defaultCoverView, coverView] {
+            item.translatesAutoresizingMaskIntoConstraints = false
+            item.isAccessibilityElement = false
+            coverClipView.addSubview(item)
         }
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         nameLabel.isAccessibilityElement = false
@@ -223,6 +310,7 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
     }
 
     func configure(book: Book, isGrid: Bool, preferences: AppUiPreferences?, isRefreshing: Bool = false) {
+        if coverRequest?.bookURL != book.bookUrl { clearPressedFeedback() }
         applyLayout(isGrid: isGrid)
         accessibilityLabel = book.name
         nameLabel.text = isGrid ? book.name : singleLineText(book.name)
@@ -257,8 +345,8 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
     func setRefreshing(_ refreshing: Bool) {
         let isRefreshing = refreshing && canRefresh
         self.isRefreshing = isRefreshing
-        badgeLabel.text = showsUnread && unreadCount > 0 ? "\(unreadCount)" : nil
-        badgeLabel.isHidden = isRefreshing || badgeLabel.text == nil
+        badgeLabel.countText = showsUnread && unreadCount > 0 ? "\(unreadCount)" : nil
+        badgeLabel.isHidden = isRefreshing || badgeLabel.countText == nil
         updateStatusAppearance()
         loadingIndicator.setRefreshing(isRefreshing)
         updateStatusSize()
@@ -304,29 +392,33 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
         iconSizeConstraints.append(contentsOf: [iconWidth, iconHeight])
         var constraints = [
             height, iconWidth, iconHeight,
-            iconSlot.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            iconSlot.leftAnchor.constraint(equalTo: row.leftAnchor),
             iconSlot.centerYAnchor.constraint(equalTo: row.centerYAnchor),
             // item_bookshelf_list.xml: desc_icon_size = 18sp, horizontal padding = 2dp.
-            icon.leadingAnchor.constraint(equalTo: iconSlot.leadingAnchor, constant: 2),
-            icon.trailingAnchor.constraint(equalTo: iconSlot.trailingAnchor, constant: -2),
+            icon.leftAnchor.constraint(equalTo: iconSlot.leftAnchor, constant: 2),
+            icon.rightAnchor.constraint(equalTo: iconSlot.rightAnchor, constant: -2),
             icon.topAnchor.constraint(equalTo: iconSlot.topAnchor),
             icon.bottomAnchor.constraint(equalTo: iconSlot.bottomAnchor),
-            label.leadingAnchor.constraint(equalTo: iconSlot.trailingAnchor),
+            label.leftAnchor.constraint(equalTo: iconSlot.rightAnchor),
             label.centerYAnchor.constraint(equalTo: row.centerYAnchor),
             label.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
         ]
         if let trailingLabel {
+            let minimumAuthorWidth = label.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+            minimumAuthorWidth.priority = .init(999)
+            authorMinimumWidthConstraint = minimumAuthorWidth
             trailingLabel.translatesAutoresizingMaskIntoConstraints = false
             trailingLabel.isAccessibilityElement = false
             row.addSubview(trailingLabel)
             constraints.append(contentsOf: [
-                label.trailingAnchor.constraint(equalTo: trailingLabel.leadingAnchor, constant: -6),
-                trailingLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -6),
+                minimumAuthorWidth,
+                label.rightAnchor.constraint(equalTo: trailingLabel.leftAnchor),
+                trailingLabel.rightAnchor.constraint(equalTo: row.rightAnchor),
                 trailingLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
                 trailingLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
             ])
         } else {
-            constraints.append(label.trailingAnchor.constraint(equalTo: row.trailingAnchor))
+            constraints.append(label.rightAnchor.constraint(equalTo: row.rightAnchor))
         }
         NSLayoutConstraint.activate(constraints)
         return row
@@ -334,11 +426,14 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
 
     private func installConstraints() {
         NSLayoutConstraint.activate([
-            coverView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            defaultCoverView.leadingAnchor.constraint(equalTo: coverView.leadingAnchor),
-            defaultCoverView.trailingAnchor.constraint(equalTo: coverView.trailingAnchor),
-            defaultCoverView.topAnchor.constraint(equalTo: coverView.topAnchor),
-            defaultCoverView.bottomAnchor.constraint(equalTo: coverView.bottomAnchor),
+            coverView.leftAnchor.constraint(equalTo: coverClipView.leftAnchor),
+            coverView.rightAnchor.constraint(equalTo: coverClipView.rightAnchor),
+            coverView.topAnchor.constraint(equalTo: coverClipView.topAnchor),
+            coverView.bottomAnchor.constraint(equalTo: coverClipView.bottomAnchor),
+            defaultCoverView.leftAnchor.constraint(equalTo: coverClipView.leftAnchor),
+            defaultCoverView.rightAnchor.constraint(equalTo: coverClipView.rightAnchor),
+            defaultCoverView.topAnchor.constraint(equalTo: coverClipView.topAnchor),
+            defaultCoverView.bottomAnchor.constraint(equalTo: coverClipView.bottomAnchor),
             nameLabel.topAnchor.constraint(equalTo: titleRow.topAnchor),
             nameLabel.bottomAnchor.constraint(lessThanOrEqualTo: titleRow.bottomAnchor),
             nameLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
@@ -346,43 +441,45 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
             spinnerWidthConstraint, spinnerHeightConstraint,
             // Both XMLs align loading to top/right, independently of the invisible badge's size.
             loadingIndicator.topAnchor.constraint(equalTo: statusView.topAnchor),
-            loadingIndicator.trailingAnchor.constraint(equalTo: statusView.trailingAnchor),
+            loadingIndicator.rightAnchor.constraint(equalTo: statusView.rightAnchor),
         ])
         gridConstraints = [
-            coverView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            coverView.heightAnchor.constraint(
-                equalTo: coverView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
-            coverView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            infoStack.topAnchor.constraint(equalTo: coverView.bottomAnchor, constant: 14),
-            infoStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
-            infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            coverClipView.leftAnchor.constraint(equalTo: contentView.leftAnchor, constant: 16),
+            coverClipView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            coverClipView.heightAnchor.constraint(
+                equalTo: coverClipView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
+            coverClipView.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -16),
+            gridInfoTopConstraint,
+            infoStack.leftAnchor.constraint(equalTo: contentView.leftAnchor, constant: 8),
+            infoStack.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -8),
             infoStack.heightAnchor.constraint(equalTo: titleRow.heightAnchor),
             infoStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor),
-            nameLabel.leadingAnchor.constraint(equalTo: titleRow.leadingAnchor),
-            nameLabel.trailingAnchor.constraint(equalTo: titleRow.trailingAnchor),
+            nameLabel.leftAnchor.constraint(equalTo: titleRow.leftAnchor),
+            nameLabel.rightAnchor.constraint(equalTo: titleRow.rightAnchor),
             statusView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            statusView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            statusView.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -8),
             badgeLabel.topAnchor.constraint(equalTo: statusView.topAnchor),
-            badgeLabel.trailingAnchor.constraint(equalTo: statusView.trailingAnchor),
+            badgeLabel.rightAnchor.constraint(equalTo: statusView.rightAnchor),
         ]
         listConstraints = [
-            coverView.widthAnchor.constraint(equalToConstant: LayoutMetrics.listCoverWidth),
-            coverView.heightAnchor.constraint(
-                equalTo: coverView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
-            coverView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 16),
-            coverView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
-            coverView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: 2),
+            listCoverLeftConstraint,
+            coverClipView.widthAnchor.constraint(equalToConstant: LayoutMetrics.listCoverWidth),
+            coverClipView.heightAnchor.constraint(
+                equalTo: coverClipView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
+            coverClipView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 16),
+            coverClipView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
+            coverClipView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: 2),
             infoStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            infoStack.leadingAnchor.constraint(equalTo: coverView.trailingAnchor, constant: 10),
-            infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            infoStack.leftAnchor.constraint(equalTo: coverClipView.rightAnchor, constant: 10),
+            listInfoRightConstraint,
             infoStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-            nameLabel.leadingAnchor.constraint(equalTo: titleRow.leadingAnchor, constant: 2),
-            nameLabel.trailingAnchor.constraint(equalTo: statusView.leadingAnchor),
+            nameLabel.leftAnchor.constraint(equalTo: titleRow.leftAnchor, constant: 2),
+            nameLabel.rightAnchor.constraint(equalTo: statusView.leftAnchor),
             nameLabel.bottomAnchor.constraint(lessThanOrEqualTo: titleRow.bottomAnchor, constant: -4),
             statusView.centerYAnchor.constraint(equalTo: titleRow.centerYAnchor),
-            statusView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            listStatusRightConstraint,
             badgeLabel.topAnchor.constraint(equalTo: statusView.topAnchor, constant: 5),
-            badgeLabel.trailingAnchor.constraint(equalTo: statusView.trailingAnchor, constant: -5),
+            badgeLabel.rightAnchor.constraint(equalTo: statusView.rightAnchor, constant: -5),
         ]
     }
 
@@ -410,20 +507,51 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
             label.font = metrics.metadataFont
         }
         badgeLabel.font = metrics.badgeFont
-        badgeLabel.invalidateIntrinsicContentSize()
-        titleHeightConstraint.constant = isGrid ? metrics.gridTitleHeight : metrics.listTitleHeight
+        badgeLabel.updateTextLayout()
         for (constraint, height) in zip(metadataHeightConstraints, metrics.metadataRowHeights) {
             constraint.constant = height
         }
         minimumListSpacingConstraint?.constant = isGrid ? 0 : metrics.minimumListSpacing
         for constraint in iconSizeConstraints { constraint.constant = metrics.metadataIconSize }
+        authorMinimumWidthConstraint?.constant = ceil(metrics.metadataFont.pointSize) + 6
         spinnerWidthConstraint.constant = isGrid ? 22 : 26
         spinnerHeightConstraint.constant = isGrid ? 22 : 26
         updateStatusSize()
     }
 
+    private func updateDirectionalMargins() {
+        // Physical Left/Right constraints do not mirror. Only the XML's relative
+        // margins resolve: cover marginStart and status marginEnd move off their anchors in RTL.
+        let direction = effectiveUserInterfaceLayoutDirection
+        let inset: CGFloat = direction == .rightToLeft ? 0 : 16
+        listCoverLeftConstraint.constant = inset
+        listInfoRightConstraint.constant = -inset
+        listStatusRightConstraint.constant = -inset
+        if appliedLayoutDirection != direction {
+            appliedLayoutDirection = direction
+            authorLabel.setNeedsDisplay()
+            latestUpdateTimeLabel.setNeedsDisplay()
+        }
+    }
+
     private func updateStatusSize() {
+        guard bounds.width > 0 else { return }
         let isGrid = isGridLayout ?? true
+        let metrics = LayoutMetrics(
+            contentSizeCategory: traitCollection.preferredContentSizeCategory,
+            displayScale: traitCollection.displayScale)
+        let direction = effectiveUserInterfaceLayoutDirection
+        let countText = showsUnread && unreadCount > 0 ? "\(unreadCount)" : nil
+        titleHeightConstraint.constant =
+            isGrid
+            ? metrics.gridTitleHeight
+            : metrics.listTitleHeight(
+                width: bounds.width, countText: countText, layoutDirection: direction)
+        let coverBottom = 16 + max(0, bounds.width - 32) * LayoutMetrics.coverAspectRatio
+        gridInfoTopConstraint.constant =
+            metrics.gridInfoTop(
+                width: bounds.width, countText: countText, layoutDirection: direction) - coverBottom
+        badgeLabel.maximumWidth = metrics.badgeWidthLimit(width: bounds.width, isGrid: isGrid, layoutDirection: direction)
         let badgeSize = badgeLabel.intrinsicContentSize
         let margin: CGFloat = isGrid ? 0 : 10
         // BadgeView is INVISIBLE, never GONE, even with empty text. Only list loading is
@@ -442,6 +570,14 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
     }
 
     @objc private func refreshPalette() {
+        contentView.backgroundColor = AndroidReplicaTheme.background
+        nameLabel.textColor = AndroidReplicaTheme.primaryText
+        for label in [authorLabel, latestUpdateTimeLabel, progressLabel, latestLabel] {
+            label.textColor = AndroidReplicaTheme.summaryText
+        }
+        for icon in [authorIconView, progressIconView, latestIconView] {
+            icon.tintColor = AndroidReplicaTheme.summaryText
+        }
         updateStatusAppearance()
         loadingIndicator.setNeedsDisplay()
     }
@@ -483,13 +619,16 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
     }
 
     private func loadCover(_ book: Book) {
-        defaultCoverView.onLoadingPolicyChange = { [weak self] in self?.loadCover(book) }
         let request = CoverRequest(book: book)
         guard coverRequest != request else { return }
         imageTask?.cancel()
         let requestID = UUID()
         coverRequestID = requestID
         coverRequest = request
+        defaultCoverView.onLoadingPolicyChange = { [weak self] in
+            guard let self, self.coverRequestID == requestID else { return }
+            self.loadCover(book)
+        }
         coverView.image = nil
         defaultCoverView.configure(name: book.name, author: book.author)
         defaultCoverView.isHidden = false
@@ -558,6 +697,46 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
         }
         var listTitleHeight: CGFloat { ceil(listTitleFont.lineHeight) + 4 }
 
+        func badgeWidthLimit(
+            width: CGFloat, isGrid: Bool, layoutDirection: UIUserInterfaceLayoutDirection
+        ) -> CGFloat {
+            if isGrid { return max(16, width - 16) }
+            // Reserve one full-size title glyph, its 2dp padding and the badge's 5dp margins.
+            let inset: CGFloat = layoutDirection == .rightToLeft ? 0 : 16
+            let textWidth = width - inset - Self.listCoverWidth - 10 - inset - 2
+            return max(16, textWidth - ceil(listTitleFont.pointSize) - 10)
+        }
+
+        private func badgeSize(
+            width: CGFloat, isGrid: Bool, countText: String?, layoutDirection: UIUserInterfaceLayoutDirection
+        ) -> CGSize {
+            return BookshelfUnreadBadgeLabel.measurement(
+                text: countText, font: badgeFont,
+                maximumWidth: badgeWidthLimit(width: width, isGrid: isGrid, layoutDirection: layoutDirection))
+        }
+
+        func listTitleHeight(
+            width: CGFloat, countText: String?, layoutDirection: UIUserInterfaceLayoutDirection
+        ) -> CGFloat {
+            let badgeHeight = badgeSize(
+                width: width, isGrid: false, countText: countText, layoutDirection: layoutDirection
+            ).height
+            let singleLineHeight = max(16, ceil(badgeFont.lineHeight) + 2)
+            return badgeHeight > singleLineHeight ? max(listTitleHeight, badgeHeight + 10) : listTitleHeight
+        }
+
+        func gridInfoTop(
+            width: CGFloat, countText: String?, layoutDirection: UIUserInterfaceLayoutDirection
+        ) -> CGFloat {
+            let coverBottom = 16 + max(0, width - 32) * Self.coverAspectRatio
+            let statusBottom =
+                8
+                + badgeSize(
+                    width: width, isGrid: true, countText: countText, layoutDirection: layoutDirection
+                ).height
+            return max(coverBottom, statusBottom) + 14
+        }
+
         var minimumListSpacing: CGFloat {
             // Keep the XML spread chain; at large sizes its gaps must also contain
             // the centered 18sp icons and the badge's two 5dp margins.
@@ -584,12 +763,77 @@ final class AndroidReplicaBookshelfCell: UICollectionViewCell {
 }
 
 private final class BookshelfUnreadBadgeLabel: UILabel {
+    var countText: String? {
+        didSet { updateTextLayout() }
+    }
+
+    var maximumWidth: CGFloat = .greatestFiniteMagnitude {
+        didSet {
+            if maximumWidth != oldValue { updateTextLayout() }
+        }
+    }
+
     override var intrinsicContentSize: CGSize {
-        let size = super.intrinsicContentSize
-        return CGSize(width: max(16, ceil(size.width) + 10), height: max(16, ceil(font.lineHeight) + 2))
+        Self.measurement(text: countText, font: font, maximumWidth: maximumWidth)
+    }
+
+    func updateTextLayout() {
+        // Keep UILabel.text as the real number; wrapping belongs to measurement/drawing.
+        text = countText
+        invalidateIntrinsicContentSize()
+        setNeedsDisplay()
+    }
+
+    static func measurement(text: String?, font: UIFont, maximumWidth: CGFloat) -> CGSize {
+        let naturalWidth = ceil(((text ?? "") as NSString).size(withAttributes: [.font: font]).width) + 10
+        let lineHeight = ceil(font.lineHeight)
+        let limit = max(16, maximumWidth)
+        guard let text, naturalWidth > limit else {
+            return CGSize(width: max(16, naturalWidth), height: max(16, lineHeight + 2))
+        }
+
+        // BadgeView is wrap_content without singleLine. Keep the actual digits and sp
+        // size, wrapping only at the narrow/large-type boundary instead of overflowing
+        // into another cell or consuming the list title's entire width.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byCharWrapping
+        let bounds = (text as NSString).boundingRect(
+            with: CGSize(width: max(1, limit - 10), height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font, .paragraphStyle: paragraph], context: nil)
+        // Retain the measured width so UILabel wraps at precisely the same boundary.
+        return CGSize(width: limit, height: max(16, ceil(max(lineHeight, bounds.height)) + 2))
     }
 
     override func drawText(in rect: CGRect) {
         super.drawText(in: rect.insetBy(dx: 5, dy: 1))
+    }
+}
+
+private final class BookshelfEndPaddedLabel: UILabel {
+    private var endPadding: UIEdgeInsets {
+        effectiveUserInterfaceLayoutDirection == .rightToLeft
+            ? UIEdgeInsets(top: 0, left: 6, bottom: 0, right: 0)
+            : UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let size = super.intrinsicContentSize
+        return CGSize(width: max(0, size.width) + 6, height: size.height)
+    }
+
+    override func drawText(in rect: CGRect) {
+        let padding = endPadding
+        super.drawText(
+            in: CGRect(
+                x: rect.minX + min(padding.left, rect.width), y: rect.minY,
+                width: max(0, rect.width - 6), height: rect.height))
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.layoutDirection != traitCollection.layoutDirection {
+            setNeedsDisplay()
+        }
     }
 }

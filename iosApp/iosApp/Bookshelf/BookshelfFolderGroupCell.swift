@@ -14,7 +14,7 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
             height =
                 16 + max(0, width - 32) * LayoutMetrics.coverAspectRatio + 14 + metrics.gridTitleHeight
         } else {
-            height = max(16 + LayoutMetrics.listCoverHeight + 12, 12 + metrics.listTitleHeight + 8)
+            height = max(16 + LayoutMetrics.listCoverHeight + 12, 12 + metrics.listTitleHeight)
         }
         return CGSize(width: width, height: ceil(height))
     }
@@ -34,18 +34,22 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
     private static let defaultCover = UIImage(named: "BookshelfAndroidCoverDefault")?
         .withRenderingMode(.alwaysOriginal)
 
+    private let coverClipView = AndroidBookCoverClipView()
     private let coverView = UIImageView()
-    private let nameLabel = UILabel()
+    private let nameLabel = BookshelfFolderGroupNameLabel()
     private let feedbackView = BookshelfItemFeedbackView()
     private var gridConstraints: [NSLayoutConstraint] = []
     private var listConstraints: [NSLayoutConstraint] = []
     private var isGridLayout: Bool?
+    private lazy var coverLeftConstraint = coverClipView.leftAnchor.constraint(
+        equalTo: contentView.leftAnchor, constant: 16)
     private lazy var titleHeightConstraint = nameLabel.heightAnchor.constraint(
-        lessThanOrEqualToConstant: 0)
+        equalToConstant: 0)
     private var coverTask: DownloadTask?
     private var coverGeneration = UUID()
     private var representedGroupId: Int64?
     private var representedCover: String?
+    private var feedbackObservations: [NSKeyValueObservation] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -57,55 +61,110 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
 
         coverView.contentMode = .scaleAspectFill
         coverView.clipsToBounds = true
-        coverView.layer.cornerRadius = 2
         coverView.image = Self.defaultCover
         nameLabel.textColor = AndroidReplicaTheme.primaryText
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.adjustsFontSizeToFitWidth = false
-        for view in [coverView, nameLabel] {
+        nameLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        coverView.translatesAutoresizingMaskIntoConstraints = false
+        coverView.isAccessibilityElement = false
+        coverClipView.addSubview(coverView)
+        for view in [coverClipView, nameLabel] {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.isAccessibilityElement = false
+            view.accessibilityElementsHidden = true
             contentView.addSubview(view)
         }
 
         NSLayoutConstraint.activate([
-            coverView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            coverLeftConstraint,
+            coverView.leftAnchor.constraint(equalTo: coverClipView.leftAnchor),
+            coverView.rightAnchor.constraint(equalTo: coverClipView.rightAnchor),
+            coverView.topAnchor.constraint(equalTo: coverClipView.topAnchor),
+            coverView.bottomAnchor.constraint(equalTo: coverClipView.bottomAnchor),
+            nameLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
             titleHeightConstraint,
         ])
         gridConstraints = [
-            coverView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            coverView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            coverView.heightAnchor.constraint(
-                equalTo: coverView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
-            nameLabel.topAnchor.constraint(equalTo: coverView.bottomAnchor, constant: 14),
-            nameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
-            nameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            coverClipView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            coverClipView.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -16),
+            coverClipView.heightAnchor.constraint(
+                equalTo: coverClipView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
+            nameLabel.topAnchor.constraint(equalTo: coverClipView.bottomAnchor, constant: 14),
+            nameLabel.leftAnchor.constraint(equalTo: contentView.leftAnchor, constant: 8),
+            nameLabel.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -8),
             nameLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor),
         ]
         listConstraints = [
-            coverView.widthAnchor.constraint(equalToConstant: LayoutMetrics.listCoverWidth),
-            coverView.heightAnchor.constraint(
-                equalTo: coverView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
-            coverView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 16),
-            coverView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
-            coverView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: 2),
-            nameLabel.leadingAnchor.constraint(equalTo: coverView.trailingAnchor, constant: 12),
-            nameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            nameLabel.centerYAnchor.constraint(equalTo: coverView.centerYAnchor),
+            coverClipView.widthAnchor.constraint(equalToConstant: LayoutMetrics.listCoverWidth),
+            coverClipView.heightAnchor.constraint(
+                equalTo: coverClipView.widthAnchor, multiplier: LayoutMetrics.coverAspectRatio),
+            coverClipView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 16),
+            coverClipView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
+            coverClipView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: 2),
+            // tv_name has physical marginLeft=10 + paddingLeft=2. fl_has_new is GONE,
+            // so its End=16 margin is zero and its left/right anchors coincide at parent.right.
+            nameLabel.leftAnchor.constraint(equalTo: coverClipView.rightAnchor, constant: 12),
+            nameLabel.rightAnchor.constraint(equalTo: contentView.rightAnchor),
+            // Only tv_name remains visible in the spread chain. tv_last's Bottom=8
+            // belongs to a GONE node, so the surviving chain has Top=12 / Bottom=0.
+            nameLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: 6),
             nameLabel.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 12),
-            nameLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8),
+            nameLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor),
         ]
         applyLayout(isGrid: true)
         contentView.addSubview(feedbackView)
     }
 
     override var isHighlighted: Bool {
-        didSet { feedbackView.isHidden = !isHighlighted }
+        didSet {
+            guard isHighlighted, canShowPressedFeedback else {
+                clearHighlight()
+                return
+            }
+            feedbackView.isHidden = false
+            observePressedAvailability()
+        }
+    }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet {
+            if !isUserInteractionEnabled { clearHighlight() }
+        }
+    }
+
+    override var isHidden: Bool {
+        didSet {
+            if isHidden { clearHighlight() }
+        }
+    }
+
+    override var alpha: CGFloat {
+        didSet {
+            if alpha <= 0.01 { clearHighlight() }
+        }
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        if newWindow !== window { clearHighlight() }
+        super.willMove(toWindow: newWindow)
+    }
+
+    override func willMove(toSuperview newSuperview: UIView?) {
+        if newSuperview !== superview { clearHighlight() }
+        super.willMove(toSuperview: newSuperview)
     }
 
     override func layoutSubviews() {
+        updateCoverInset()
         super.layoutSubviews()
         feedbackView.frame = contentView.bounds
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { clearHighlight() }
+        setNeedsLayout()
     }
 
     @available(*, unavailable)
@@ -119,25 +178,41 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        clearHighlight()
         cancelCover()
         representedGroupId = nil
         representedCover = nil
         nameLabel.text = nil
         accessibilityLabel = nil
+        accessibilityValue = nil
+        accessibilityHint = nil
         accessibilityIdentifier = nil
         onEdit = nil
     }
 
     func configure(group: BookGroup, isGrid: Bool) {
-        let coverChanged = representedGroupId != group.groupId || representedCover != group.cover
+        let path = group.cover?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let coverChanged = representedCover != path
         if coverChanged { cancelCover() }
+        if representedGroupId != group.groupId { clearHighlight() }
         representedGroupId = group.groupId
-        representedCover = group.cover
-        nameLabel.text = group.groupName
+        representedCover = path
         accessibilityLabel = group.groupName
+        accessibilityValue = "分组"
+        accessibilityHint = "打开分组"
         accessibilityIdentifier = "bookshelf.folderGroup.\(group.groupId)"
         applyLayout(isGrid: isGrid)
-        if coverChanged { loadCover(group) }
+        let title =
+            isGrid
+            ? group.groupName
+            : group.groupName.replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\r", with: "\u{FEFF}")
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = isGrid ? .center : .natural
+        paragraph.baseWritingDirection = .natural
+        paragraph.lineBreakMode = .byTruncatingTail
+        nameLabel.attributedText = NSAttributedString(string: title, attributes: [.paragraphStyle: paragraph])
+        if coverChanged { loadCover(path) }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -146,6 +221,9 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
             != traitCollection.preferredContentSizeCategory
         {
             updateTypography()
+        }
+        if previousTraitCollection?.layoutDirection != traitCollection.layoutDirection {
+            setNeedsLayout()
         }
     }
 
@@ -158,7 +236,48 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
         nameLabel.numberOfLines = isGrid ? 2 : 1
         nameLabel.textAlignment = isGrid ? .center : .natural
         NSLayoutConstraint.activate(isGrid ? gridConstraints : listConstraints)
+        updateCoverInset()
         updateTypography()
+    }
+
+    private func updateCoverInset() {
+        // marginStart resolves onto the physical right in RTL, but the XML constrains
+        // the cover only to physical Left. Grid's symmetric margin=8 is not directional.
+        let inset: CGFloat =
+            isGridLayout == false && effectiveUserInterfaceLayoutDirection == .rightToLeft ? 0 : 16
+        if coverLeftConstraint.constant != inset { coverLeftConstraint.constant = inset }
+    }
+
+    private var canShowPressedFeedback: Bool {
+        guard window != nil else { return false }
+        var ancestor: UIView? = self
+        while let view = ancestor {
+            guard view.isUserInteractionEnabled, !view.isHidden, view.alpha > 0.01 else { return false }
+            ancestor = view.superview
+        }
+        return true
+    }
+
+    private func clearHighlight() {
+        feedbackObservations.removeAll()
+        super.isHighlighted = false
+        feedbackView.isHidden = true
+    }
+
+    private func observePressedAvailability() {
+        guard feedbackObservations.isEmpty else { return }
+        // Observe only for the active press; ordinary layout/reconfiguration installs no KVO.
+        var ancestor: UIView? = self
+        while let view = ancestor {
+            let changed: () -> Void = { [weak self] in
+                guard let self, !self.canShowPressedFeedback else { return }
+                self.clearHighlight()
+            }
+            feedbackObservations.append(view.observe(\.isUserInteractionEnabled, options: [.new]) { _, _ in changed() })
+            feedbackObservations.append(view.observe(\.isHidden, options: [.new]) { _, _ in changed() })
+            feedbackObservations.append(view.observe(\.alpha, options: [.new]) { _, _ in changed() })
+            ancestor = view.superview
+        }
     }
 
     private func updateTypography() {
@@ -168,8 +287,7 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
         titleHeightConstraint.constant = isGrid ? metrics.gridTitleHeight : metrics.listTitleHeight
     }
 
-    private func loadCover(_ group: BookGroup) {
-        let path = group.cover?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    private func loadCover(_ path: String) {
         guard !path.isEmpty, path != "use_default_cover" else { return }
 
         let source: Source
@@ -184,7 +302,6 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
         }
 
         let generation = coverGeneration
-        let groupId = group.groupId
         coverTask = coverView.kf.setImage(
             with: source, placeholder: Self.defaultCover,
             options: [
@@ -194,7 +311,7 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
                 .onFailureImage(Self.defaultCover),
             ]
         ) { [weak self] _ in
-            guard let self, self.coverGeneration == generation, self.representedGroupId == groupId else {
+            guard let self, self.coverGeneration == generation, self.representedCover == path else {
                 return
             }
             self.coverTask = nil
@@ -230,10 +347,24 @@ final class BookshelfFolderGroupCell: UICollectionViewCell {
 
         init(contentSizeCategory: UIContentSizeCategory) {
             let traits = UITraitCollection(preferredContentSizeCategory: contentSizeCategory)
-            gridTitleFont = UIFontMetrics(forTextStyle: .caption1).scaledFont(
-                for: .systemFont(ofSize: 12), compatibleWith: traits)
-            listTitleFont = UIFontMetrics(forTextStyle: .body).scaledFont(
-                for: .systemFont(ofSize: 16), compatibleWith: traits)
+            gridTitleFont = ReaderAndroidDefaultFont.scaledFont(
+                size: 12, textStyle: .caption1, compatibleWith: traits)
+            listTitleFont = ReaderAndroidDefaultFont.scaledFont(
+                size: 16, textStyle: .body, compatibleWith: traits)
         }
+    }
+}
+
+private final class BookshelfFolderGroupNameLabel: UILabel {
+    override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
+        var rect = super.textRect(forBounds: bounds, limitedToNumberOfLines: numberOfLines)
+        rect.origin.y = bounds.minY
+        return rect
+    }
+
+    override func drawText(in rect: CGRect) {
+        // Grid is gravity=top|center_horizontal; list leaves its 4dp padding below
+        // the single text line, rather than centering the glyphs in the padded height.
+        super.drawText(in: textRect(forBounds: rect, limitedToNumberOfLines: numberOfLines))
     }
 }
