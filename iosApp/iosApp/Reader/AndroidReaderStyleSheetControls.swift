@@ -1,7 +1,7 @@
 import UIKit
 import shared
 
-final class AndroidReaderStyleQuickButton: UIButton {
+final class AndroidReaderStyleQuickButton: ReaderMenuPressButton {
     private let baseTitle: String
     private let imageName: String
     private var legacySizeConstraints: [NSLayoutConstraint] = []
@@ -19,6 +19,7 @@ final class AndroidReaderStyleQuickButton: UIButton {
         baseTitle = title
         imageName = image
         super.init(frame: .zero)
+        showsBorderlessFeedback = false
         translatesAutoresizingMaskIntoConstraints = false
         legacySizeConstraints = [
             widthAnchor.constraint(equalToConstant: 78),
@@ -90,8 +91,18 @@ final class AndroidReaderStyleQuickButton: UIButton {
         guard let androidTitle else { return super.intrinsicContentSize }
         let font = androidFont
         let padding = AndroidExploreTextMetrics.padding(font: font, scale: traitCollection.displayScale)
-        let width = (androidTitle as NSString).size(withAttributes: [.font: font]).width
+        let width = (androidTitle as NSString).size(withAttributes: [.font: font, .kern: CGFloat(0)]).width
         return CGSize(width: ceil(width) + 12, height: ceil(font.lineHeight + padding.top + padding.bottom + 8))
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard androidTitle != nil else { return }
+        let padding = AndroidExploreTextMetrics.padding(font: androidFont, scale: traitCollection.displayScale)
+        // UIButton's configuration layout may retain a wrapped title box after a command disables it.
+        // Keep StrokeTextView's measured text and its XML insets in the same coordinate space.
+        titleLabel?.frame = bounds.inset(
+            by: UIEdgeInsets(top: 4 + padding.top, left: 6, bottom: 4 + padding.bottom, right: 6))
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -136,6 +147,7 @@ final class AndroidReaderStyleQuickButton: UIButton {
         // dialog_read_book_style.xml: text-only 14sp, 6dp/4dp insets and a 3dp stroke radius.
         var configuration = UIButton.Configuration.plain()
         configuration.attributedTitle = AttributedString(text)
+        configuration.titleLineBreakMode = .byClipping
         configuration.baseForegroundColor = foreground
         let pressedColor: UIColor = ReaderPaletteColor.isNightResource(traits: traitCollection) ? .white : .black
         configuration.background.backgroundColor =
@@ -156,11 +168,12 @@ final class AndroidReaderStyleQuickButton: UIButton {
 }
 
 /// DetailSeekBar's ImageViews use a borderless selector without dimming their icons.
-final class AndroidReaderStyleStepButton: UIButton {
+final class AndroidReaderStyleStepButton: ReaderMenuPressButton {
     private let pressedView = UIView()
 
     override init(frame: CGRect = .zero) {
         super.init(frame: frame)
+        showsBorderlessFeedback = false
         adjustsImageWhenHighlighted = false
         adjustsImageWhenDisabled = false
         pressedView.isUserInteractionEnabled = false
@@ -385,7 +398,8 @@ final class AndroidReaderStyleBackgroundButton: UIButton {
         configuration.imagePlacement = .leading
         configuration.imagePadding = 6
         configuration.titleAlignment = .center
-        configuration.baseForegroundColor = selected ? AndroidReplicaTheme.accent : (UIColor(hex: textHex) ?? AndroidReplicaTheme.primaryText)
+        configuration.baseForegroundColor =
+            selected ? AndroidReplicaTheme.accent : (UIColor(hex: textHex) ?? AndroidReplicaTheme.primaryText)
         configuration.baseBackgroundColor = UIColor(hex: backgroundHex) ?? AndroidReplicaTheme.menuBackground
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
         self.configuration = configuration
@@ -404,7 +418,8 @@ final class AndroidReaderStyleValueRow: UIControl {
 
     override var isHighlighted: Bool {
         didSet {
-            backgroundColor = isHighlighted ? AndroidReplicaTheme.activeIndicator.withAlphaComponent(0.35) : AndroidReplicaTheme.menuBackground
+            backgroundColor =
+                isHighlighted ? AndroidReplicaTheme.activeIndicator.withAlphaComponent(0.35) : AndroidReplicaTheme.menuBackground
         }
     }
 

@@ -346,8 +346,11 @@ final class AndroidReaderStyleSliderRow: UIStackView {
             button.imageView?.contentMode = .scaleAspectFit
             button.accessibilityIdentifier = "\(slider.accessibilityIdentifier ?? "").\(symbol)"
             // legado 5f5d314 view_detail_seek_bar.xml: reduce/plus content descriptions.
-            let actionName = symbol == "minus" ? "\u{51CF}" : "\u{52A0}"
-            button.accessibilityLabel = "\(actionName)\(rawTitle)"
+            let action =
+                symbol == "minus"
+                ? NSLocalizedString("reader_appearance.sheet_decrease_action", value: "减%@", comment: "Decrease a reading style value")
+                : NSLocalizedString("reader_appearance.sheet_increase_action", value: "加%@", comment: "Increase a reading style value")
+            button.accessibilityLabel = String.localizedStringWithFormat(action, rawTitle)
         }
         minusButton.addAction(UIAction { [weak self] _ in self?.adjustValue(by: -1) }, for: .touchUpInside)
         plusButton.addAction(UIAction { [weak self] _ in self?.adjustValue(by: 1) }, for: .touchUpInside)

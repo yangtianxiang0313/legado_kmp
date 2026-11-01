@@ -98,7 +98,7 @@ final class ReaderStylePresetChip: UIButton {
         presetName = preset.name
         let title =
             preset.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "文字" : preset.name
+            ? L10n.ReaderAppearance.presetFallbackName : preset.name
         accessibilityLabel = title
 
         let style = preset.styleForVariant(variant: variant)

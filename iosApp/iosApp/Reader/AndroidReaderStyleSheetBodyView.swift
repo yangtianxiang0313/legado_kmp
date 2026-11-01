@@ -5,17 +5,37 @@ import shared
 final class AndroidReaderStyleSheetBodyView: UIView {
     static let contentHeight: CGFloat = 334
 
-    let fontSizeRow = AndroidReaderStyleSliderRow(title: "字号", identifier: UIIdentifiers.ReaderAppearance.fontSizeSlider)
-    let letterSpacingRow = AndroidReaderStyleSliderRow(title: "字距", identifier: UIIdentifiers.ReaderAppearance.letterSpacingSlider)
-    let lineSpacingRow = AndroidReaderStyleSliderRow(title: "行距", identifier: UIIdentifiers.ReaderAppearance.lineSpacingSlider)
-    let paragraphSpacingRow = AndroidReaderStyleSliderRow(title: "段距", identifier: UIIdentifiers.ReaderAppearance.paragraphSpacingSlider)
-    let fontWeightButton = AndroidReaderStyleQuickButton(title: "中/粗/细", image: "bold")
-    let fontButton = AndroidReaderStyleQuickButton(title: "字体", image: "textformat")
-    let indentButton = AndroidReaderStyleQuickButton(title: "缩进", image: "increase.indent")
-    let chineseButton = AndroidReaderStyleQuickButton(title: "简/繁", image: "character.book.closed")
-    let paddingButton = AndroidReaderStyleQuickButton(title: "边距", image: "arrow.left.and.right")
-    let tipButton = AndroidReaderStyleQuickButton(title: "信息", image: "info.circle")
+    let fontSizeRow = AndroidReaderStyleSliderRow(
+        title: NSLocalizedString("reader_appearance.sheet_font_size_title", value: "字号", comment: "Android text_size"),
+        identifier: UIIdentifiers.ReaderAppearance.fontSizeSlider)
+    let letterSpacingRow = AndroidReaderStyleSliderRow(
+        title: NSLocalizedString("reader_appearance.sheet_letter_spacing_title", value: "字距", comment: "Android text_letter_spacing"),
+        identifier: UIIdentifiers.ReaderAppearance.letterSpacingSlider)
+    let lineSpacingRow = AndroidReaderStyleSliderRow(
+        title: NSLocalizedString("reader_appearance.sheet_line_spacing_title", value: "行距", comment: "Android line_size"),
+        identifier: UIIdentifiers.ReaderAppearance.lineSpacingSlider)
+    let paragraphSpacingRow = AndroidReaderStyleSliderRow(
+        title: NSLocalizedString("reader_appearance.sheet_paragraph_spacing_title", value: "段距", comment: "Android paragraph_size"),
+        identifier: UIIdentifiers.ReaderAppearance.paragraphSpacingSlider)
+    let fontWeightButton = AndroidReaderStyleQuickButton(title: SheetText.fontWeight, image: "bold")
+    let fontButton = AndroidReaderStyleQuickButton(title: L10n.ReaderAppearance.fontQuickTitle, image: "textformat")
+    let indentButton = AndroidReaderStyleQuickButton(title: SheetText.indent, image: "increase.indent")
+    let chineseButton = AndroidReaderStyleQuickButton(title: SheetText.chinese, image: "character.book.closed")
+    let paddingButton = AndroidReaderStyleQuickButton(title: L10n.ReaderAppearance.paddingQuickTitle, image: "arrow.left.and.right")
+    let tipButton = AndroidReaderStyleQuickButton(title: SheetText.information, image: "info.circle")
     let shareLayoutButton = UIButton(type: .custom)
+
+    private enum SheetText {
+        static let fontWeight = NSLocalizedString(
+            "reader_appearance.sheet_font_weight_text", value: "中/粗/细",
+            comment: "Android font_weight_text: N/B/L in English; single characters at UTF-16 offsets 0, 2, 4")
+        static let indent = NSLocalizedString(
+            "reader_appearance.sheet_indent_title", value: "缩进", comment: "Android text_indent")
+        static let information = NSLocalizedString(
+            "reader_appearance.sheet_information_title", value: "信息", comment: "Android information")
+        // Android ChineseConverter keeps these characters in every locale.
+        static let chinese = "简/繁"
+    }
 
     var onPageAnimationSelected: ((ReaderPageAnimationOption) -> Void)?
     var onPresetSelected: ((Int) -> Void)?
@@ -46,6 +66,7 @@ final class AndroidReaderStyleSheetBodyView: UIView {
     private var animationWidthConstraints: [NSLayoutConstraint] = []
     private var quickHeightConstraint: NSLayoutConstraint?
     private var animationHeightConstraint: NSLayoutConstraint?
+    private var accessibleBackgroundTitleWidthConstraint: NSLayoutConstraint?
     private var shareWidthConstraint: NSLayoutConstraint?
     private var shareHeightConstraint: NSLayoutConstraint?
     private var sliderRowsView: AndroidReaderStyleCompactRowsView?
@@ -76,7 +97,13 @@ final class AndroidReaderStyleSheetBodyView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        for (button, title) in zip(quickButtons, ["中/粗/细", "字体", "缩进", "简/繁", "边距", "信息"]) {
+        for (button, title) in zip(
+            quickButtons,
+            [
+                SheetText.fontWeight, L10n.ReaderAppearance.fontQuickTitle, SheetText.indent,
+                SheetText.chinese, L10n.ReaderAppearance.paddingQuickTitle, SheetText.information,
+            ])
+        {
             button.setAndroidTitle(title)
         }
         configureSliders()
@@ -265,11 +292,13 @@ final class AndroidReaderStyleSheetBodyView: UIView {
     }
 
     private func makeBackgroundHeader() -> UIView {
-        backgroundTitleLabel.text = "文字颜色和背景（长按自定义）"
+        backgroundTitleLabel.text = NSLocalizedString(
+            "reader_appearance.sheet_text_background_title", value: "文字颜色和背景（长按自定义）", comment: "Android text_bg_style")
         configureSectionLabel(backgroundTitleLabel)
         backgroundTitleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         backgroundTitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        shareLayoutTitleLabel.text = "共用布局"
+        shareLayoutTitleLabel.text = NSLocalizedString(
+            "reader_appearance.sheet_share_layout_title", value: "共用布局", comment: "Android share_layout")
         shareLayoutTitleLabel.numberOfLines = 0
         shareLayoutTitleLabel.lineBreakMode = .byCharWrapping
         shareLayoutTitleLabel.adjustsFontSizeToFitWidth = false
@@ -285,7 +314,7 @@ final class AndroidReaderStyleSheetBodyView: UIView {
         shareLayoutButton.addSubview(content)
         shareLayoutButton.isAccessibilityElement = true
         shareLayoutButton.accessibilityIdentifier = UIIdentifiers.ReaderAppearance.shareLayoutSwitch
-        shareLayoutButton.accessibilityLabel = "共用布局"
+        shareLayoutButton.accessibilityLabel = shareLayoutTitleLabel.text
         shareLayoutButton.accessibilityHint = L10n.ReaderAppearance.shareLayoutDetail
         shareLayoutButton.translatesAutoresizingMaskIntoConstraints = false
         shareWidthConstraint = shareLayoutButton.widthAnchor.constraint(equalToConstant: 82)
@@ -306,6 +335,7 @@ final class AndroidReaderStyleSheetBodyView: UIView {
         backgroundHeader.axis = .horizontal
         backgroundHeader.alignment = .center
         backgroundHeader.spacing = 0
+        accessibleBackgroundTitleWidthConstraint = backgroundTitleLabel.widthAnchor.constraint(equalTo: backgroundHeader.widthAnchor)
         return backgroundHeader
     }
 
@@ -341,6 +371,14 @@ final class AndroidReaderStyleSheetBodyView: UIView {
     }
 
     private func updateBackgroundHeaderLayout() {
+        let accessibleLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        // Keep Android's horizontal row outside iOS accessibility text sizes.
+        backgroundHeader.axis = accessibleLayout ? .vertical : .horizontal
+        backgroundHeader.alignment = accessibleLayout ? .leading : .center
+        backgroundHeader.spacing = accessibleLayout ? 8 : 0
+        accessibleBackgroundTitleWidthConstraint?.isActive = accessibleLayout
+        backgroundTitleLabel.lineBreakMode = accessibleLayout ? .byWordWrapping : .byCharWrapping
+        shareLayoutTitleLabel.lineBreakMode = accessibleLayout ? .byWordWrapping : .byCharWrapping
         let width = max(0, bounds.width - safeAreaInsets.left - safeAreaInsets.right - 32)
         guard width > 0 else { return }
         let shareFont = shareLayoutTitleLabel.font ?? .systemFont(ofSize: 14)
@@ -348,13 +386,13 @@ final class AndroidReaderStyleSheetBodyView: UIView {
             ((shareLayoutTitleLabel.text ?? "") as NSString).size(withAttributes: [.font: shareFont]).width)
         let buttonWidth = min(width, titleWidth + 26)
         shareWidthConstraint?.constant = buttonWidth
+        shareLayoutTitleLabel.preferredMaxLayoutWidth = accessibleLayout ? max(1, buttonWidth - 26) : 0
         let titleHeight = shareLayoutTitleLabel.sizeThatFits(
             CGSize(width: max(1, buttonWidth - 26), height: .greatestFiniteMagnitude)
         ).height
         // dialog_read_book_style: wrap_content text beside a fixed 20dp checkbox.
         shareHeightConstraint?.constant = max(20, ceil(titleHeight))
-        // Android keeps this row horizontal: only the weighted background title wraps.
-        backgroundTitleLabel.preferredMaxLayoutWidth = max(0, width - buttonWidth)
+        backgroundTitleLabel.preferredMaxLayoutWidth = accessibleLayout ? width : max(0, width - buttonWidth)
     }
 
     private func invalidateContentLayout() {
@@ -425,16 +463,16 @@ final class AndroidReaderStyleSheetBodyView: UIView {
         let weightRange: NSRange? =
             (0...2).contains(style.textBold)
             ? NSRange(location: Int(style.textBold) * 2, length: 1) : nil
-        fontWeightButton.setAndroidTitle("中/粗/细", selectedRange: weightRange)
-        fontButton.setAndroidTitle("字体")
-        indentButton.setAndroidTitle("缩进")
+        fontWeightButton.setAndroidTitle(SheetText.fontWeight, selectedRange: weightRange)
+        fontButton.setAndroidTitle(L10n.ReaderAppearance.fontQuickTitle)
+        indentButton.setAndroidTitle(SheetText.indent)
         let chineseRange: NSRange? =
             runtime.chineseMode == 1
             ? NSRange(location: 0, length: 1)
             : (runtime.chineseMode == 2 ? NSRange(location: 2, length: 1) : nil)
-        chineseButton.setAndroidTitle("简/繁", selectedRange: chineseRange)
-        paddingButton.setAndroidTitle("边距")
-        tipButton.setAndroidTitle("信息")
+        chineseButton.setAndroidTitle(SheetText.chinese, selectedRange: chineseRange)
+        paddingButton.setAndroidTitle(L10n.ReaderAppearance.paddingQuickTitle)
+        tipButton.setAndroidTitle(SheetText.information)
         selectedAnimation = ReaderPageAnimationOption(rawValue: effectivePageAnimation ?? Int(runtime.pageAnimation)) ?? .cover
         shareLayoutButton.isSelected = runtime.shareLayout
         shareLayoutButton.accessibilityValue = runtime.shareLayout ? L10n.Settings.enabled : L10n.Settings.disabled

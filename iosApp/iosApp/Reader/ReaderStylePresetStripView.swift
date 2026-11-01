@@ -121,7 +121,8 @@ final class ReaderStylePresetStripView: UIView {
         addButton.translatesAutoresizingMaskIntoConstraints = false
         addButton.isAccessibilityElement = true
         addButton.accessibilityIdentifier = "\(UIIdentifiers.ReaderAppearance.presetButton).add"
-        addButton.accessibilityLabel = "添加配色"
+        addButton.accessibilityLabel = NSLocalizedString(
+            "reader_appearance.sheet_add_preset_accessibility_label", value: "添加配色", comment: "Add a reader color scheme")
         addButton.accessibilityTraits = .button
         addButton.addAction(UIAction { [weak self] _ in self?.onAdd?() }, for: .touchUpInside)
 
