@@ -8,6 +8,11 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
 
     var canEdit: (() -> Bool)?
 
+    var hasCurrentEditingPresentation: Bool {
+        guard let scene = presentationScene else { return false }
+        return hasCurrentPresentation(in: scene)
+    }
+
     private var chapterTitleText: String
     private var rawChapterTitle: String
     private let initialContent: String
@@ -133,7 +138,7 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
         toolbar.saveButton.accessibilityLabel = L10n.Reader.saveContent
         toolbar.saveButton.accessibilityIdentifier = "reader.contentEdit.save"
         toolbar.saveButton.addTarget(self, action: #selector(handleSave), for: .touchUpInside)
-        toolbar.moreButton.accessibilityLabel = "更多"
+        toolbar.moreButton.accessibilityLabel = L10n.Reader.menuMore
         toolbar.moreButton.accessibilityIdentifier = "reader.contentEdit.more"
         toolbar.moreButton.addTarget(self, action: #selector(showMoreMenu), for: .touchUpInside)
         toolbar.titleButton.accessibilityIdentifier = "reader.contentEdit.title"
@@ -162,7 +167,7 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
         textView.smartQuotesType = .no
         textView.smartDashesType = .no
         textView.smartInsertDeleteType = .no
-        textView.accessibilityLabel = "正文"
+        textView.accessibilityLabel = NSLocalizedString("reader.content_edit.body", value: "正文", comment: "")
         textView.accessibilityIdentifier = "reader.contentEdit.text"
         textView.text = initialContent
         textView.delegate = self
@@ -314,7 +319,10 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
     private func contextChangedError() -> NSError {
         NSError(
             domain: "io.legado.kmp.ios", code: -1,
-            userInfo: [NSLocalizedDescriptionKey: "当前书籍、章节或页面状态已变化，请重新打开编辑页面。"])
+            userInfo: [
+                NSLocalizedDescriptionKey: NSLocalizedString(
+                    "reader.content_edit.context_changed", value: "当前书籍、章节或页面状态已变化，请重新打开编辑页面。", comment: "")
+            ])
     }
 
     private func commitInput() {
@@ -362,12 +370,20 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
         var items: [ReaderOverflowMenuView.Item] = []
         if onReset != nil {
             items.append(
-                .init(identifier: "reader.contentEdit.reset", title: "重置") { [weak self] in
+                .init(
+                    identifier: "reader.contentEdit.reset",
+                    title: NSLocalizedString(
+                        "reader.content_edit.reset", value: "重置", comment: "")
+                ) { [weak self] in
                     self?.resetContent()
                 })
         }
         items.append(
-            .init(identifier: "reader.contentEdit.copy", title: "复制全部") { [weak self] in
+            .init(
+                identifier: "reader.contentEdit.copy",
+                title: NSLocalizedString(
+                    "reader.content_edit.copy_all", value: "复制全部", comment: "")
+            ) { [weak self] in
                 guard let self, self.canPerformCommand else { return }
                 self.commitInput()
                 guard self.canPerformCommand else { return }
@@ -544,30 +560,41 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
     }
 
     @objc private func handleBack() {
-        guard canPerformCommand else { return }
+        performBack()
+    }
+
+    @discardableResult
+    private func performBack() -> Bool {
+        guard canPerformCommand else { return false }
         if let overflowMenu {
             overflowMenu.dismiss()
-            return
+            return true
         }
         commitInput()
-        guard canPerformCommand else { return }
+        guard canPerformCommand else { return false }
         guard hasChanges else {
             closeEditor()
-            return
+            return true
         }
         handleSave()
+        return true
     }
 
     @objc private func handleEscape() {
-        guard canPerformCommand else { return }
+        performEscape()
+    }
+
+    @discardableResult
+    private func performEscape() -> Bool {
+        guard canPerformCommand else { return false }
         // Android's IME consumes Back before ContentEditDialog.onCancel autosaves the draft.
         if textView.isFirstResponder,
             view.keyboardLayoutGuide.layoutFrame.minY < view.safeAreaLayoutGuide.layoutFrame.maxY
         {
             commitInput()
-            return
+            return true
         }
-        handleBack()
+        return performBack()
     }
 
     private func closeEditor() {
@@ -594,8 +621,10 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
     private func presentError(_ error: Error, operation: Operation) {
         guard canPerformCommand else { return }
         let alert = UIAlertController(
-            title: operation == .save ? "保存失败" : "重置失败",
-            message: error.localizedDescription, preferredStyle: .alert)
+            title: operation == .save
+                ? NSLocalizedString("reader.content_edit.save_failed", value: "保存失败", comment: "")
+                : NSLocalizedString("reader.content_edit.reset_failed", value: "重置失败", comment: ""),
+            message: error.userFacingMessage, preferredStyle: .alert)
         alert.view.accessibilityIdentifier = "reader.contentEdit.error"
         alert.addAction(
             dialogAction(in: alert, title: L10n.Common.retry, identifier: "retry") {
@@ -664,8 +693,7 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
     }
 
     override func accessibilityPerformEscape() -> Bool {
-        handleBack()
-        return true
+        performEscape()
     }
 
     override var keyCommands: [UIKeyCommand]? {

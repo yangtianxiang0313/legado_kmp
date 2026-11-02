@@ -2,6 +2,13 @@ import UIKit
 import WebKit
 
 final class ReplaceRuleEditorHelpViewController: UIViewController {
+    private var isVisible = false
+    private var isClosing = false
+    private var isAppSuspended = false
+    private var isSceneSuspended = false
+    private var shouldRestoreKeyboardFocus = false
+    private var appearanceID = UUID()
+    private weak var presentationScene: UIWindowScene?
     private let topBar = UIView()
     private let backButton = UIButton(type: .custom)
     private let titleLabel = UILabel()
@@ -12,17 +19,44 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
         return WKWebView(frame: .zero, configuration: configuration)
     }()
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override var canBecomeFirstResponder: Bool { canReturn }
+
+    override var keyCommands: [UIKeyCommand]? {
+        guard canReturn else { return nil }
+        return [
+            UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(handleBack)),
+            UIKeyCommand(input: ".", modifierFlags: .command, action: #selector(handleBack)),
+        ].map { command in
+            command.discoverabilityTitle = L10n.Reader.backAction
+            // Leave WebKit's own selection/menu Escape handling ahead of this fallback.
+            return command
+        }
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(handleBack) || action == #selector(cancelOperation(_:)) {
+            return canReturn
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.accessibilityViewIsModal = true
         view.backgroundColor = AndroidReplicaTheme.background
         topBar.backgroundColor = AndroidReplicaTheme.toolbarBackground
         backButton.setImage(ReaderMenuAndroidIcon.back.image(), for: .normal)
         backButton.tintColor = AndroidReplicaTheme.toolbarText
         backButton.accessibilityLabel = L10n.Reader.backAction
+        backButton.accessibilityIdentifier = "replaceRule.editor.regexHelp.back"
         backButton.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.Reader.backAction))
         backButton.addAction(
             UIAction { [weak self] _ in
-                self?.dismiss(animated: true)
+                self?.returnToEditor()
             }, for: .touchUpInside)
         title = NSLocalizedString("replace_rule.editor.regex_help_title", value: "正则教程", comment: "Regular expression tutorial title")
         titleLabel.text = title
@@ -65,11 +99,159 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
             webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
         ])
         webView.loadHTMLString(Self.html, baseURL: nil)
+        observeForegroundChanges()
+        updateReturnControl()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Both a dismissed cover and a cancelled sheet dismissal return to this instance.
+        isVisible = true
+        isClosing = false
+        if let scene = view.window?.windowScene, scene !== presentationScene {
+            presentationScene = scene
+            isSceneSuspended = scene.activationState != .foregroundActive
+        }
+        let id = UUID()
+        appearanceID = id
+        updateReturnControl()
+        // UIKit may finish clearing presentation/transition flags after viewDidAppear.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.appearanceID == id, self.canReturn else { return }
+            self.shouldRestoreKeyboardFocus = false
+            self.becomeFirstResponder()
+            UIAccessibility.post(notification: .screenChanged, argument: self.titleLabel)
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isVisible = false
+        appearanceID = UUID()
+        shouldRestoreKeyboardFocus = false
+        updateReturnControl()
+        resignFirstResponder()
     }
 
     override func accessibilityPerformEscape() -> Bool {
+        returnToEditor()
+    }
+
+    private var isForegroundSuspended: Bool { isAppSuspended || isSceneSuspended }
+
+    private var canReturn: Bool {
+        guard isVisible, !isClosing, !isForegroundSuspended,
+            let host = viewIfLoaded, !host.isHidden, host.alpha > 0,
+            let window = host.window, !window.isHidden, window.alpha > 0, window.isKeyWindow,
+            UIApplication.shared.applicationState == .active,
+            window.windowScene?.activationState == .foregroundActive,
+            AppLockManager.shared.isUnlocked(in: window),
+            let presenter = presentingViewController, presenter.presentedViewController === self,
+            presentedViewController == nil
+        else { return false }
+
+        // Full-screen adaptation may detach the presenter's view. Validate the root chain,
+        // not its window, while rejecting offscreen owners and unrelated covering modals.
+        var chain: [UIViewController] = []
+        var candidate: UIViewController? = self
+        while let current = candidate, chain.count < 64 {
+            guard !chain.contains(where: { $0 === current }) else { return false }
+            chain.append(current)
+            candidate = current.parent ?? current.presentingViewController
+        }
+        guard candidate == nil, chain.last === window.rootViewController else { return false }
+        for current in chain {
+            guard !current.isBeingPresented, !current.isBeingDismissed,
+                !current.isMovingFromParent, !current.isMovingToParent,
+                current.transitionCoordinator == nil
+            else { return false }
+            if let navigation = current.parent as? UINavigationController,
+                navigation.topViewController !== current
+            {
+                return false
+            }
+            if let tabs = current.parent as? UITabBarController, tabs.selectedViewController !== current {
+                return false
+            }
+            if let presented = current.presentedViewController, !chain.contains(where: { $0 === presented }) {
+                return false
+            }
+        }
+        return true
+    }
+
+    @objc private func handleBack() {
+        returnToEditor()
+    }
+
+    @objc private func cancelOperation(_ sender: Any?) {
+        returnToEditor()
+    }
+
+    @discardableResult
+    private func returnToEditor() -> Bool {
+        guard canReturn else { return false }
+        isClosing = true
+        appearanceID = UUID()
+        shouldRestoreKeyboardFocus = false
+        updateReturnControl()
+        resignFirstResponder()
         dismiss(animated: true)
         return true
+    }
+
+    private func updateReturnControl() {
+        // Covers are checked at activation; an over-fullscreen cover need not send appearance callbacks.
+        backButton.isEnabled = isVisible && !isClosing && !isForegroundSuspended
+        if !backButton.isEnabled {
+            backButton.cancelTracking(with: nil)
+            backButton.isHighlighted = false
+        }
+    }
+
+    private func observeForegroundChanges() {
+        for name in [
+            UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification,
+            UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification,
+        ] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(suspendReturn(_:)), name: name, object: nil)
+        }
+        for name in [UIApplication.didBecomeActiveNotification, UIScene.didActivateNotification] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(resumeReturn(_:)), name: name, object: nil)
+        }
+    }
+
+    private func belongsToPresentation(_ notification: Notification) -> Bool {
+        guard let scene = notification.object as? UIScene else { return true }
+        return scene === (viewIfLoaded?.window?.windowScene ?? presentationScene)
+    }
+
+    @objc private func suspendReturn(_ notification: Notification) {
+        guard belongsToPresentation(notification) else { return }
+        if notification.object is UIScene {
+            isSceneSuspended = true
+        } else {
+            isAppSuspended = true
+        }
+        shouldRestoreKeyboardFocus = shouldRestoreKeyboardFocus || isFirstResponder
+        updateReturnControl()
+        resignFirstResponder()
+    }
+
+    @objc private func resumeReturn(_ notification: Notification) {
+        guard belongsToPresentation(notification) else { return }
+        if notification.object is UIScene {
+            isSceneSuspended = false
+        } else {
+            isAppSuspended = false
+        }
+        updateReturnControl()
+        if shouldRestoreKeyboardFocus, canReturn {
+            shouldRestoreKeyboardFocus = false
+            becomeFirstResponder()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -112,9 +294,9 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
             <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
             <style>
             :root { color-scheme: light dark; }
-            body { margin: 16px; font: -apple-system-body; line-height: 1.6; overflow-wrap: anywhere; }
+            body { margin: 16px; font: -apple-system-body; font-family: Helvetica, Arial, sans-serif; line-height: 1.6; overflow-wrap: anywhere; }
             h1 { font-size: 1.5em; } h2 { font-size: 1.25em; } h3 { font-size: 1.125em; }
-            code, pre { font-family: ui-monospace, monospace; }
+            code, pre { font-family: Menlo, monospace; }
             pre { white-space: pre-wrap; }
             table { border-collapse: collapse; width: 100%; table-layout: fixed; }
             th, td { border: 1px solid #888; padding: 6px; text-align: start; vertical-align: top; }
