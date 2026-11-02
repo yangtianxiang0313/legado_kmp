@@ -74,6 +74,7 @@ internal class IosWebViewNavigationDelegate(
         navigation = if (directGet) {
             val request = NSMutableURLRequest.requestWithURL(url)
             context.requestConfig.headers.withoutNullUserAgent()
+                .withoutSourceCookieJarHeader()
                 .filterKeys { !it.equals("Cookie", true) }.forEach { (name, value) ->
                     request.setValue(value, forHTTPHeaderField = name)
                 }

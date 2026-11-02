@@ -284,7 +284,7 @@ internal class SourceRequestTransport(
 
         normalizeExplicitUrlHeaders(headers)
 
-        return config.copy(headers = headers)
+        return config.copy(headers = headers.withoutSourceCookieJarHeader())
     }
 
     private suspend fun executeExternalWithRetry(

@@ -397,7 +397,7 @@ class LegadoHttpClient(
         return LinkedHashMap<String, String>().apply {
             putAllUserAgentAware(headers)
             putDefaultUserAgent { configuredUserAgent(preferencesStore) }
-        }
+        }.withoutSourceCookieJarHeader()
     }
 }
 

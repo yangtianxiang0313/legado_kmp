@@ -22,7 +22,7 @@ class IosUploadRequestExecutor : UploadRequestExecutor {
         } ?: if (context.requestConfig.followRedirects) client else noRedirectClient
         try {
             val response = requestClient.post(upload.url) {
-                context.requestConfig.headers.forEach { (key, value) ->
+                context.requestConfig.headers.withoutSourceCookieJarHeader().forEach { (key, value) ->
                     if (!key.equals(HttpHeaders.ContentType, ignoreCase = true)) {
                         header(key, value)
                     }

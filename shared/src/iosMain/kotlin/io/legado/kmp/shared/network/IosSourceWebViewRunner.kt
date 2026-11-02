@@ -163,9 +163,10 @@ internal class InteractiveWebViewRunner(
         } else {
             val nativeRequest = NSMutableURLRequest.requestWithURL(checkNotNull(url))
             // Cookie headers have been scoped into WKHTTPCookieStore, not broadcast to redirects.
-            headers.filterKeys { !it.equals("Cookie", ignoreCase = true) }.forEach { (name, value) ->
-                nativeRequest.setValue(value, forHTTPHeaderField = name)
-            }
+            headers.withoutSourceCookieJarHeader()
+                .filterKeys { !it.equals("Cookie", ignoreCase = true) }.forEach { (name, value) ->
+                    nativeRequest.setValue(value, forHTTPHeaderField = name)
+                }
             navigation = view.loadRequest(nativeRequest)
         }
         trace(if (navigation != null) "load accepted" else "load returned no navigation")

@@ -4,6 +4,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+/** CookieJar controls source cookie handling and must never reach the wire. */
+internal fun Map<String, String>.withoutSourceCookieJarHeader(): Map<String, String> =
+    filterKeys { !it.equals("CookieJar", ignoreCase = true) }
+
 fun extractCookieDomain(url: String): String {
     val parsed = httpCookieUrl(url) ?: return cookieScopeHost(url) ?: url
     val host = cookieHost(parsed.host)
