@@ -1,6 +1,6 @@
 package io.legado.kmp.shared.source
 
-import okio.ByteString.Companion.toByteString
+import io.legado.kmp.shared.platform.platformHmac
 import platform.Foundation.NSBundle
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.encoding.Base64
@@ -53,7 +53,7 @@ class IosSourceStateCipher : SourceStateCipher {
     override fun needsMigration(cipherText: String): Boolean = !cipherText.startsWith(PREFIX)
 
     private fun authenticate(payload: ByteArray, key: ByteArray): ByteArray =
-        (PREFIX.encodeToByteArray() + payload).toByteString().hmacSha256(key.toByteString()).toByteArray()
+        platformHmac(PREFIX.encodeToByteArray() + payload, "SHA256", key)
 
     private fun decryptLegacy(cipherText: String): String {
         // Unknown versioned envelopes fail Base64 decoding and never reach the legacy XOR.
