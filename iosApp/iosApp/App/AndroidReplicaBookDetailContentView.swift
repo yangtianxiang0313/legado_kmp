@@ -5,7 +5,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         case ready, loading, failed
     }
 
-    struct Snapshot {
+    struct Snapshot: Equatable {
         var name: String
         var author: String? = nil
         var kind: String? = nil
@@ -33,14 +33,30 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         }
     }
 
-    var onTitleTap: (() -> Void)?
-    var onAuthorTap: (() -> Void)?
-    var onTocTap: (() -> Void)?
-    var onSourceTap: (() -> Void)?
-    var onSourceChangeTap: (() -> Void)?
-    var onGroupTap: (() -> Void)?
-    var onCoverTap: (() -> Void)?
-    var onCoverLongPress: (() -> Void)?
+    var onTitleTap: (() -> Void)? {
+        didSet { titleButton.cancelTracking(with: nil) }
+    }
+    var onAuthorTap: (() -> Void)? {
+        didSet { authorButton.cancelTracking(with: nil) }
+    }
+    var onTocTap: (() -> Void)? {
+        didSet { tocButton.cancelTracking(with: nil) }
+    }
+    var onSourceTap: (() -> Void)? {
+        didSet { sourceButton.cancelTracking(with: nil) }
+    }
+    var onSourceChangeTap: (() -> Void)? {
+        didSet { sourceChangeButton.cancelTracking(with: nil) }
+    }
+    var onGroupTap: (() -> Void)? {
+        didSet { groupButton.cancelTracking(with: nil) }
+    }
+    var onCoverTap: (() -> Void)? {
+        didSet { cancelCoverGestures() }
+    }
+    var onCoverLongPress: (() -> Void)? {
+        didSet { cancelCoverGestures() }
+    }
     var onRefresh: (() -> Void)? {
         didSet { updateRefreshAvailability() }
     }
@@ -53,6 +69,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         didSet {
             coverImageView.isUserInteractionEnabled = isCoverEnabled
             coverImageView.accessibilityTraits = isCoverEnabled ? [.image, .button] : [.image, .notEnabled]
+            if !isCoverEnabled { cancelCoverGestures() }
         }
     }
 
@@ -79,8 +96,8 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         didSet { updateCatalogAvailability() }
     }
 
-    private let primaryScrollView = ActionScrollView()
-    private let detailsScrollView = ActionScrollView()
+    private let primaryScrollView = BookDetailActionScrollView()
+    private let detailsScrollView = BookDetailActionScrollView()
     private let refreshControl = UIRefreshControl()
     private var isRefreshInFlight = false
     private var didRefreshDuringDrag = false
@@ -98,7 +115,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
     private let authorButton = AndroidReplicaBookDetailTextButton(
         fontSize: 13, textColor: AndroidReplicaBookDetailTypography.summaryText, includesFontPadding: false)
     private lazy var authorRow = AndroidReplicaBookDetailInfoRow(icon: .author, content: authorButton)
-    private let tagStack = UIStackView()
+    private let tagsRow = BookDetailTagsView()
     private let sourceButton = AndroidReplicaBookDetailTextButton(
         fontSize: 13, textColor: AndroidReplicaBookDetailTypography.summaryText, includesFontPadding: false)
     private let sourceContentView = UIView()
@@ -115,9 +132,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
     private let tocButton = AndroidReplicaBookDetailTextButton(
         fontSize: 13, textColor: .white, accentBackground: true)
     private let introTextView = BookDetailIntroTextView()
-    private var displayedTags: [String] = []
-    private var tagBadges: [TagBadge] = []
-    private var unusedTagBadges: [TagBadge] = []
+    private var renderedSnapshot: Snapshot?
     private var showsCatalog = true
     private var catalogState = CatalogState.ready
     private var usesColumns = false
@@ -146,18 +161,9 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         var anchorOffset: CGFloat = 0
     }
 
-    private struct TagBadge {
-        let view: UIView
-        let label: UILabel
-    }
-
-    private lazy var titleRow = HorizontalScrollRow(
+    private lazy var titleRow = BookDetailHorizontalScrollRow(
         content: titleButton,
         height: ceil(AndroidReplicaBookDetailTypography.font(size: 18, compatibleWith: traitCollection).lineHeight)
-    )
-    private lazy var tagsRow = HorizontalScrollRow(
-        content: tagStack,
-        height: tagLineHeight
     )
     private lazy var latestRow = AndroidReplicaBookDetailInfoRow(
         icon: .last, content: latestLabel
@@ -184,6 +190,8 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         updateTypography()
         NotificationCenter.default.addObserver(
             self, selector: #selector(refreshPalette), name: .androidReplicaThemeDidChange, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(sceneWillDeactivate(_:)), name: UIScene.willDeactivateNotification, object: nil)
     }
 
     @available(*, unavailable)
@@ -195,6 +203,12 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if window == nil {
+            if !needsScrollRestoration { saveScrollPositions() }
+            needsScrollRestoration = true
+            didRefreshDuringDrag = false
+            cancelPresentationInteractions()
+        }
         updateRefreshAvailability()
         setNeedsLayout()
     }
@@ -253,7 +267,8 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        guard previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory
+        guard
+            previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory
                 || previousTraitCollection?.displayScale != traitCollection.displayScale
         else { return }
         if !needsScrollRestoration {
@@ -288,6 +303,10 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
     }
 
     func render(_ snapshot: Snapshot) {
+        if let renderedSnapshot, renderedSnapshot != snapshot {
+            cancelPresentationInteractions()
+        }
+        renderedSnapshot = snapshot
         let name = singleLine(snapshot.name) ?? L10n.BookDetail.title
         if titleButton.title(for: .normal) != name {
             titleButton.setTitle(name, for: .normal)
@@ -296,9 +315,10 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         titleButton.accessibilityLabel = snapshot.name.nilIfEmpty ?? L10n.BookDetail.title
 
         let author = singleLine(snapshot.author) ?? L10n.BookDetail.unknownAuthor
-        authorButton.setTitle("\(L10n.BookDetail.editBookAuthor)\u{FF1A}\(author)", for: .normal)
-        authorButton.accessibilityLabel =
-            "\(L10n.BookDetail.editBookAuthor)\u{FF1A}\(snapshot.author?.nilIfEmpty ?? L10n.BookDetail.unknownAuthor)"
+        authorButton.setTitle(String(format: BookDetailPresentationText.authorFormat, author), for: .normal)
+        authorButton.accessibilityLabel = String(
+            format: BookDetailPresentationText.authorFormat,
+            snapshot.author?.nilIfEmpty ?? L10n.BookDetail.unknownAuthor)
 
         sourceButton.setTitle(
             String(
@@ -329,7 +349,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
                 singleLine(snapshot.currentChapterTitle)
                 ?? String(format: L10n.BookDetail.totalChapters, max(0, snapshot.chapterCount))
         case .loading:
-            catalogText = L10n.Common.loadingTitle
+            catalogText = BookDetailPresentationText.loading
         case .failed:
             catalogText = Bundle.main.localizedString(
                 forKey: "book_detail.android_catalog_failed", value: "加载目录失败", table: nil)
@@ -341,11 +361,13 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         tocButton.setTitle(
             snapshot.catalogState == .failed ? L10n.BookDetail.refreshChapters : L10n.BookDetail.viewToc,
             for: .normal)
+        tocButton.accessibilityValue = tocLabel.accessibilityLabel
         showsCatalog = snapshot.showsCatalog
         catalogState = snapshot.catalogState
         updateCatalogAvailability()
         introTextView.render(snapshot.intro)
-        renderTags(snapshot.kind, wordCount: snapshot.wordCount)
+        tagsRow.render(kind: snapshot.kind, wordCount: snapshot.wordCount)
+        updateHeadingMargins()
         setNeedsLayout()
     }
 
@@ -364,7 +386,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         coverImageView.backgroundColor = AndroidReplicaTheme.coverBackground
         coverImageView.isUserInteractionEnabled = isCoverEnabled
         coverImageView.isAccessibilityElement = true
-        coverImageView.accessibilityLabel = "封面"
+        coverImageView.accessibilityLabel = BookDetailPresentationText.coverLabel
         coverImageView.accessibilityIdentifier = "bookDetail.cover"
         coverImageView.accessibilityTraits = [.image, .notEnabled]
         coverImageView.accessibilityCustomActions = [
@@ -372,7 +394,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
                 name: L10n.BookDetail.changeCoverSource, target: self,
                 selector: #selector(accessibilityChangeCover)),
             UIAccessibilityCustomAction(
-                name: "预览封面", target: self,
+                name: BookDetailPresentationText.previewCover, target: self,
                 selector: #selector(accessibilityPreviewCover)),
         ]
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleCoverLongPress(_:)))
@@ -383,24 +405,28 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
     }
 
     @objc private func handleCoverTap() {
-        guard isCoverEnabled else { return }
+        guard isCoverEnabled, ExploreAndroidGraphics.isAvailableForInteraction(coverImageView) else { return }
         onCoverTap?()
     }
 
     @objc private func handleCoverLongPress(_ gesture: UILongPressGestureRecognizer) {
-        guard isCoverEnabled, gesture.state == .began else { return }
+        guard isCoverEnabled, gesture.state == .began,
+            ExploreAndroidGraphics.isAvailableForInteraction(coverImageView)
+        else { return }
         onCoverLongPress?()
     }
 
     @objc private func accessibilityChangeCover() -> Bool {
-        guard isCoverEnabled else { return false }
-        onCoverTap?()
+        guard isCoverEnabled, ExploreAndroidGraphics.isAvailableForInteraction(coverImageView), let onCoverTap
+        else { return false }
+        onCoverTap()
         return true
     }
 
     @objc private func accessibilityPreviewCover() -> Bool {
-        guard isCoverEnabled else { return false }
-        onCoverLongPress?()
+        guard isCoverEnabled, ExploreAndroidGraphics.isAvailableForInteraction(coverImageView), let onCoverLongPress
+        else { return false }
+        onCoverLongPress()
         return true
     }
 
@@ -410,13 +436,6 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         titleButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         titleButton.accessibilityIdentifier = UIIdentifiers.BookDetail.headerTitleAction
         titleButton.addTarget(self, action: #selector(handleTitleTap), for: .touchUpInside)
-
-        tagStack.axis = .horizontal
-        tagStack.alignment = .fill
-        tagStack.spacing = 2
-        tagStack.isLayoutMarginsRelativeArrangement = true
-        tagStack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 2)
-        tagsRow.isHidden = true
 
         headingStack.axis = .vertical
         headingStack.spacing = 6
@@ -722,7 +741,7 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
             usesColumns
             ? NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 6, trailing: 0)
             : NSDirectionalEdgeInsets(
-                top: 8, leading: 10, bottom: displayedTags.isEmpty ? 15 : 9, trailing: 10)
+                top: 8, leading: 10, bottom: tagsRow.hasTags ? 9 : 15, trailing: 10)
     }
 
     private func updateActionBarReservation() {
@@ -802,9 +821,29 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         tocButton.alpha = isEnabled ? 1 : 0.45
     }
 
+    private func cancelCoverGestures() {
+        for gesture in coverImageView.gestureRecognizers ?? [] {
+            let wasEnabled = gesture.isEnabled
+            gesture.isEnabled = false
+            gesture.isEnabled = wasEnabled
+        }
+    }
+
+    private func cancelPresentationInteractions() {
+        for button in [titleButton, authorButton, sourceButton, sourceChangeButton, groupButton, tocButton] {
+            button.cancelTracking(with: nil)
+        }
+        cancelCoverGestures()
+    }
+
+    @objc private func sceneWillDeactivate(_ notification: Notification) {
+        guard let scene = notification.object as? UIScene, scene === window?.windowScene else { return }
+        cancelPresentationInteractions()
+        refreshControl.endRefreshing()
+    }
+
     private func updateTypography() {
         let titleFont = AndroidReplicaBookDetailTypography.font(size: 18, compatibleWith: traitCollection)
-        let tagFont = AndroidReplicaBookDetailTypography.font(size: 12, compatibleWith: traitCollection)
         let infoFont = AndroidReplicaBookDetailTypography.font(size: 13, compatibleWith: traitCollection)
         for button in [titleButton, authorButton, sourceButton, sourceChangeButton, groupButton, tocButton] {
             button.refreshTypography(compatibleWith: traitCollection)
@@ -812,87 +851,22 @@ final class AndroidReplicaBookDetailContentView: UIView, UIScrollViewDelegate {
         for label in [latestLabel, groupLabel, tocLabel] {
             label.font = infoFont
         }
-        for badge in tagBadges + unusedTagBadges {
-            badge.label.font = tagFont
-        }
+        tagsRow.refreshTypography(compatibleWith: traitCollection)
         // The source XML adds no lineSpacingExtra or multiplier; keep the font's natural line height.
         introTextView.refreshTypography(compatibleWith: traitCollection)
         titleRow.setHeight(ceil(titleFont.lineHeight))
-        tagsRow.setHeight(tagLineHeight)
         for row in [authorRow, sourceRow, latestRow, groupRow, tocRow] {
             row.refreshMetrics(compatibleWith: traitCollection)
         }
-    }
-
-    private var tagLineHeight: CGFloat {
-        let font = AndroidReplicaBookDetailTypography.font(size: 12, compatibleWith: traitCollection)
-        let padding = AndroidExploreTextMetrics.padding(font: font, scale: traitCollection.displayScale)
-        return ceil(font.lineHeight + padding.top + padding.bottom)
     }
 
     @objc private func refreshPalette() {
         if !needsScrollRestoration { saveScrollPositions() }
         needsScrollRestoration = true
         for button in [sourceChangeButton, groupButton, tocButton] { button.refreshPalette() }
-        for badge in tagBadges + unusedTagBadges {
-            badge.view.backgroundColor = AndroidReplicaTheme.accent
-            badge.label.textColor = BookDetailActionPalette.accentText
-        }
+        tagsRow.refreshPalette()
         arcView.setNeedsDisplay()
         setNeedsLayout()
-    }
-
-    private func renderTags(_ kind: String?, wordCount: String?) {
-        var tags: [String] = []
-        // BaseBook.getKindList keeps wordCount as one verbatim label before splitting kind.
-        if let wordCount, !wordCount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            tags.append(wordCount)
-        }
-        tags += (kind ?? "")
-            .components(separatedBy: CharacterSet(charactersIn: ",\n"))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard tags != displayedTags else { return }
-        displayedTags = tags
-        while tagBadges.count > tags.count {
-            let badge = tagBadges.removeLast()
-            tagStack.removeArrangedSubview(badge.view)
-            badge.view.removeFromSuperview()
-            unusedTagBadges.append(badge)
-        }
-        while tagBadges.count < tags.count {
-            let badge = unusedTagBadges.popLast() ?? makeTagBadge()
-            tagStack.addArrangedSubview(badge.view)
-            tagBadges.append(badge)
-        }
-        for (badge, tag) in zip(tagBadges, tags) where badge.label.text != tag {
-            badge.label.text = tag
-        }
-        tagsRow.isHidden = tags.isEmpty
-        updateHeadingMargins()
-        tagsRow.resetOffset()
-    }
-
-    private func makeTagBadge() -> TagBadge {
-        let badge = UIView()
-        badge.backgroundColor = AndroidReplicaTheme.accent
-        badge.layer.cornerRadius = 2
-        let label = AndroidExploreTextLabel()
-        label.font = AndroidReplicaBookDetailTypography.font(size: 12, compatibleWith: traitCollection)
-        label.adjustsFontForContentSizeCategory = false
-        label.textColor = BookDetailActionPalette.accentText
-        label.numberOfLines = 1
-        label.isAccessibilityElement = true
-        label.setContentCompressionResistancePriority(.required, for: .horizontal)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        badge.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: badge.topAnchor),
-            label.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: 3),
-            label.trailingAnchor.constraint(equalTo: badge.trailingAnchor, constant: -3),
-            label.bottomAnchor.constraint(equalTo: badge.bottomAnchor),
-        ])
-        return TagBadge(view: badge, label: label)
     }
 
     private func singleLine(_ text: String?) -> String? {
@@ -985,80 +959,6 @@ private final class BookDetailCoverImageView: UIImageView {
 }
 
 extension AndroidReplicaBookDetailContentView {
-    fileprivate final class HorizontalScrollRow: UIView {
-        private let scrollView = ActionScrollView()
-        private var viewportSize = CGSize.zero
-        private var contentSize = CGSize.zero
-        private var rowHeightConstraint: NSLayoutConstraint!
-
-        init(content: UIView, height: CGFloat) {
-            super.init(frame: .zero)
-            scrollView.translatesAutoresizingMaskIntoConstraints = false
-            scrollView.showsHorizontalScrollIndicator = false
-            scrollView.showsVerticalScrollIndicator = false
-            scrollView.contentInsetAdjustmentBehavior = .never
-            scrollView.isDirectionalLockEnabled = true
-            scrollView.delaysContentTouches = false
-            addSubview(scrollView)
-            content.translatesAutoresizingMaskIntoConstraints = false
-            scrollView.addSubview(content)
-
-            // Center short content; only the viewport narrows when the title or labels overflow.
-            let fittingWidth = scrollView.widthAnchor.constraint(equalTo: content.widthAnchor)
-            fittingWidth.priority = .defaultHigh
-            rowHeightConstraint = heightAnchor.constraint(equalToConstant: height)
-            rowHeightConstraint.priority = UILayoutPriority(999)
-            NSLayoutConstraint.activate([
-                rowHeightConstraint,
-                scrollView.centerXAnchor.constraint(equalTo: centerXAnchor),
-                scrollView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
-                scrollView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-                scrollView.topAnchor.constraint(equalTo: topAnchor),
-                scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-                fittingWidth,
-                content.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-                content.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-                content.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-                content.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-                content.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
-            ])
-        }
-
-        @available(*, unavailable)
-        required init?(coder _: NSCoder) {
-            preconditionFailure("init(coder:) is unavailable")
-        }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            scrollView.layoutIfNeeded()
-            guard viewportSize != scrollView.bounds.size || contentSize != scrollView.contentSize else { return }
-            viewportSize = scrollView.bounds.size
-            contentSize = scrollView.contentSize
-            let maximumOffset = max(0, contentSize.width - viewportSize.width)
-            let offset = min(max(0, scrollView.contentOffset.x), maximumOffset)
-            if scrollView.contentOffset.x != offset {
-                scrollView.setContentOffset(CGPoint(x: offset, y: 0), animated: false)
-            }
-        }
-
-        func resetOffset() {
-            scrollView.setContentOffset(.zero, animated: false)
-        }
-
-        func setHeight(_ height: CGFloat) {
-            rowHeightConstraint.constant = height
-            setNeedsLayout()
-        }
-
-    }
-
-    fileprivate final class ActionScrollView: UIScrollView {
-        override func touchesShouldCancel(in view: UIView) -> Bool {
-            view is UIControl || super.touchesShouldCancel(in: view)
-        }
-    }
-
     fileprivate final class ArcBackgroundView: UIView {
         override init(frame: CGRect) {
             super.init(frame: frame)

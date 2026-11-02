@@ -1,5 +1,23 @@
 import UIKit
 
+enum BookDetailPresentationText {
+    static var authorFormat: String {
+        Bundle.main.localizedString(forKey: "book_detail.author_format", value: "作者：%@", table: nil)
+    }
+
+    static var coverLabel: String {
+        Bundle.main.localizedString(forKey: "book_detail.cover_accessibility_label", value: "封面", table: nil)
+    }
+
+    static var previewCover: String {
+        Bundle.main.localizedString(forKey: "book_detail.preview_cover", value: "预览封面", table: nil)
+    }
+
+    static var loading: String {
+        Bundle.main.localizedString(forKey: "book_detail.android_loading", value: "加载中…", table: nil)
+    }
+}
+
 enum BookDetailActionPalette {
     static let shelfText = UIColor { traits in
         ReaderPaletteColor.primaryText(on: AndroidReplicaTheme.bottomBackground.resolvedColor(with: traits))
@@ -61,7 +79,7 @@ final class AndroidReplicaBookDetailMetadataLabel: AndroidExploreTextLabel {
 }
 
 // AccentBgTextView is text with a 2dp background, without platform button chrome or minimum height.
-final class AndroidReplicaBookDetailTextButton: UIButton {
+final class AndroidReplicaBookDetailTextButton: ReaderMenuPressButton {
     private let fontSize: CGFloat
     private let hasAccentBackground: Bool
     private let includesFontPadding: Bool
@@ -83,6 +101,7 @@ final class AndroidReplicaBookDetailTextButton: UIButton {
         hasAccentBackground = accentBackground
         self.includesFontPadding = includesFontPadding
         super.init(frame: .zero)
+        showsBorderlessFeedback = false
         configuration = nil
         automaticallyUpdatesConfiguration = false
         contentEdgeInsets = UIEdgeInsets(
@@ -94,6 +113,7 @@ final class AndroidReplicaBookDetailTextButton: UIButton {
         titleLabel?.lineBreakMode = accentBackground ? .byWordWrapping : .byTruncatingTail
         titleLabel?.textAlignment = accentBackground ? .center : .natural
         titleLabel?.adjustsFontForContentSizeCategory = false
+        titleLabel?.adjustsFontSizeToFitWidth = false
         setContentCompressionResistancePriority(.required, for: .vertical)
         layer.cornerRadius = accentBackground ? 2 : 0
         refreshTypography()
@@ -111,20 +131,35 @@ final class AndroidReplicaBookDetailTextButton: UIButton {
 
     override var isEnabled: Bool {
         didSet {
-            if !isEnabled { isHighlighted = false }
             updateBackground()
         }
     }
 
+    override func setTitle(_ title: String?, for state: UIControl.State) {
+        if title != self.title(for: state) { cancelTracking(with: nil) }
+        super.setTitle(title, for: state)
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+    }
+
     override var intrinsicContentSize: CGSize {
+        measuredSize(constrainedTo: hasAccentBackground && bounds.width > 0 ? bounds.width : .greatestFiniteMagnitude)
+    }
+
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        let measured = measuredSize(constrainedTo: max(1, size.width))
+        return CGSize(width: min(max(0, size.width), measured.width), height: measured.height)
+    }
+
+    private func measuredSize(constrainedTo width: CGFloat) -> CGSize {
         let font = textFont
         let title = currentTitle ?? ""
         let titleSize = title.size(withAttributes: [.font: font])
         var titleHeight = max(font.lineHeight, titleSize.height)
-        if hasAccentBackground, bounds.width > 0 {
+        if hasAccentBackground, width.isFinite {
             let paragraph = NSMutableParagraphStyle()
             paragraph.lineBreakMode = .byWordWrapping
-            let textWidth = max(1, bounds.width - contentEdgeInsets.left - contentEdgeInsets.right)
+            let textWidth = max(1, width - contentEdgeInsets.left - contentEdgeInsets.right)
             let wrappedSize = (title as NSString).boundingRect(
                 with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
@@ -263,5 +298,185 @@ final class AndroidReplicaBookDetailInfoRow: UIView {
         iconHeightConstraint.constant = side
         preferredHeightConstraint.constant = ceil(side + 6)
         setNeedsLayout()
+    }
+}
+
+final class BookDetailActionScrollView: UIScrollView {
+    override func touchesShouldCancel(in view: UIView) -> Bool {
+        view is UIControl || super.touchesShouldCancel(in: view)
+    }
+}
+
+final class BookDetailHorizontalScrollRow: UIView {
+    private let scrollView = BookDetailActionScrollView()
+    private var viewportSize = CGSize.zero
+    private var contentSize = CGSize.zero
+    private var rowHeightConstraint: NSLayoutConstraint!
+
+    init(content: UIView, height: CGFloat) {
+        super.init(frame: .zero)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.scrollsToTop = false
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.isDirectionalLockEnabled = true
+        scrollView.delaysContentTouches = false
+        addSubview(scrollView)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(content)
+
+        // Center short content; only the viewport narrows when the title or labels overflow.
+        let fittingWidth = scrollView.widthAnchor.constraint(equalTo: content.widthAnchor)
+        fittingWidth.priority = .defaultHigh
+        rowHeightConstraint = heightAnchor.constraint(equalToConstant: height)
+        rowHeightConstraint.priority = UILayoutPriority(999)
+        NSLayoutConstraint.activate([
+            rowHeightConstraint,
+            scrollView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            scrollView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            scrollView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            fittingWidth,
+            content.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            content.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            content.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            content.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        preconditionFailure("init(coder:) is unavailable")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        scrollView.layoutIfNeeded()
+        guard viewportSize != scrollView.bounds.size || contentSize != scrollView.contentSize else { return }
+        viewportSize = scrollView.bounds.size
+        contentSize = scrollView.contentSize
+        let maximumOffset = max(0, contentSize.width - viewportSize.width)
+        let offset = min(max(0, scrollView.contentOffset.x), maximumOffset)
+        if scrollView.contentOffset.x != offset {
+            scrollView.setContentOffset(CGPoint(x: offset, y: 0), animated: false)
+        }
+    }
+
+    func resetOffset() {
+        scrollView.setContentOffset(.zero, animated: false)
+    }
+
+    func setHeight(_ height: CGFloat) {
+        rowHeightConstraint.constant = height
+        setNeedsLayout()
+    }
+}
+
+// LabelsBar owns its badges, reuse pool and scroll geometry independently of the detail page.
+final class BookDetailTagsView: UIView {
+    private struct Badge {
+        let view: UIView
+        let label: UILabel
+    }
+
+    private let stack = UIStackView()
+    private lazy var row = BookDetailHorizontalScrollRow(content: stack, height: 0)
+    private var displayedTags: [String] = []
+    private var badges: [Badge] = []
+    private var unusedBadges: [Badge] = []
+
+    var hasTags: Bool { !displayedTags.isEmpty }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        stack.axis = .horizontal
+        stack.alignment = .fill
+        stack.spacing = 2
+        stack.isLayoutMarginsRelativeArrangement = true
+        stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 2)
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: topAnchor),
+            row.leadingAnchor.constraint(equalTo: leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: trailingAnchor),
+            row.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        isHidden = true
+        refreshTypography(compatibleWith: traitCollection)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        preconditionFailure("init(coder:) is unavailable")
+    }
+
+    func render(kind: String?, wordCount: String?) {
+        var tags: [String] = []
+        // BaseBook.getKindList keeps wordCount verbatim before splitting kind.
+        if let wordCount, !wordCount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            tags.append(wordCount)
+        }
+        tags += (kind ?? "")
+            .components(separatedBy: CharacterSet(charactersIn: ",\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard tags != displayedTags else { return }
+        displayedTags = tags
+        while badges.count > tags.count {
+            let badge = badges.removeLast()
+            stack.removeArrangedSubview(badge.view)
+            badge.view.removeFromSuperview()
+            unusedBadges.append(badge)
+        }
+        while badges.count < tags.count {
+            let badge = unusedBadges.popLast() ?? makeBadge()
+            stack.addArrangedSubview(badge.view)
+            badges.append(badge)
+        }
+        for (badge, tag) in zip(badges, tags) where badge.label.text != tag {
+            badge.label.text = tag
+        }
+        isHidden = tags.isEmpty
+        row.resetOffset()
+    }
+
+    func refreshTypography(compatibleWith traits: UITraitCollection) {
+        let font = AndroidReplicaBookDetailTypography.font(size: 12, compatibleWith: traits)
+        let padding = AndroidExploreTextMetrics.padding(font: font, scale: traits.displayScale)
+        row.setHeight(ceil(font.lineHeight + padding.top + padding.bottom))
+        for badge in badges + unusedBadges { badge.label.font = font }
+    }
+
+    func refreshPalette() {
+        for badge in badges + unusedBadges {
+            badge.view.backgroundColor = AndroidReplicaTheme.accent
+            badge.label.textColor = BookDetailActionPalette.accentText
+        }
+    }
+
+    private func makeBadge() -> Badge {
+        let badge = UIView()
+        badge.backgroundColor = AndroidReplicaTheme.accent
+        badge.layer.cornerRadius = 2
+        let label = AndroidExploreTextLabel()
+        label.font = AndroidReplicaBookDetailTypography.font(size: 12, compatibleWith: traitCollection)
+        label.adjustsFontForContentSizeCategory = false
+        label.textColor = BookDetailActionPalette.accentText
+        label.numberOfLines = 1
+        label.isAccessibilityElement = true
+        label.setContentCompressionResistancePriority(.required, for: .horizontal)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        badge.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: badge.topAnchor),
+            label.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: 3),
+            label.trailingAnchor.constraint(equalTo: badge.trailingAnchor, constant: -3),
+            label.bottomAnchor.constraint(equalTo: badge.bottomAnchor),
+        ])
+        return Badge(view: badge, label: label)
     }
 }

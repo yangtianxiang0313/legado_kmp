@@ -230,15 +230,15 @@ final class AndroidReaderTipConfigSheetViewController: UIViewController {
         }
         switch selection {
         case .headerMode:
-            presentChoices(items: ["状态栏显示时隐藏", "显示", "隐藏"]) { [weak self] index in
+            presentChoices(items: ReaderTipText.headerModes) { [weak self] index in
                 self?.commit(.headerMode(Int32(index)))
             }
         case .footerMode:
-            presentChoices(items: ["显示", "隐藏"]) { [weak self] index in
+            presentChoices(items: ReaderTipText.footerModes) { [weak self] index in
                 self?.commit(.footerMode(Int32(index)))
             }
         case .tipColor:
-            presentChoices(items: ["跟随内容", "自定义"]) { [weak self] index in
+            presentChoices(items: ReaderTipText.tipColors) { [weak self] index in
                 if index == 0 {
                     self?.commit(.tipColor(nil))
                 } else {
@@ -246,7 +246,7 @@ final class AndroidReaderTipConfigSheetViewController: UIViewController {
                 }
             }
         case .dividerColor:
-            presentChoices(items: ["默认", "跟随内容", "自定义"]) { [weak self] index in
+            presentChoices(items: ReaderTipText.dividerColors) { [weak self] index in
                 switch index {
                 case 0: self?.commit(.dividerColor(nil))
                 case 1: self?.commit(.dividerColor(ReaderTipValues.followTextColor))

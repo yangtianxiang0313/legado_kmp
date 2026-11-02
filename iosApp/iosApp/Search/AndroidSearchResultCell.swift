@@ -4,6 +4,9 @@ import shared
 final class AndroidSearchResultCell: UITableViewCell {
     static let reuseIdentifier = "AndroidSearchResultCell"
 
+    private static let metadataSeparator = NSLocalizedString(
+        "search.result.metadata_separator", value: "，", comment: "Search result accessibility metadata separator")
+
     var onActivate: (() -> Void)?
 
     private let coverClipView = AndroidBookCoverClipView(frame: .zero)
@@ -101,7 +104,7 @@ final class AndroidSearchResultCell: UITableViewCell {
     }
 
     override func accessibilityActivate() -> Bool {
-        guard isPresentationActive else { return false }
+        guard isPresentationActive, ExploreAndroidGraphics.isAvailableForInteraction(self) else { return false }
         guard let onActivate else { return super.accessibilityActivate() }
         onActivate()
         return true
@@ -148,16 +151,34 @@ final class AndroidSearchResultCell: UITableViewCell {
         titleLabel.text = book.name.replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: "\u{FEFF}")
         // tv_author / tv_lasted use lines=1, not singleLine; retain their source text.
-        authorLabel.text = "作者：\(book.author)"
+        authorLabel.text = String(
+            format: NSLocalizedString(
+                "search.result.author_format", value: "作者：%@", comment: "Android author_show"),
+            book.author)
 
         let kinds = kindLabels(for: book)
         kindBar.setLabels(kinds)
         // SearchAdapter.upLasted checks isNullOrEmpty; whitespace remains a visible row.
         let latest = book.latestChapterTitle
-        latestLabel.text = latest.flatMap { $0.isEmpty ? nil : "最新：\($0)" }
+        latestLabel.text = latest.flatMap {
+            $0.isEmpty
+                ? nil
+                : String(
+                    format: NSLocalizedString(
+                        "book_detail.android_latest_format", value: "最新：%@", comment: "Android lasted_show"),
+                    $0)
+        }
         latestLabel.isHidden = latestLabel.text == nil
         let intro = book.intro?.trimmingCharacters(in: .whitespacesAndNewlines)
-        introLabel.text = "简介：\(intro.flatMap { $0.isEmpty ? nil : $0 } ?? "暂无简介")"
+        if let intro, !intro.isEmpty {
+            introLabel.text = String(
+                format: NSLocalizedString(
+                    "search.result.intro_format", value: "简介：%@", comment: "Android intro_show"),
+                intro)
+        } else {
+            introLabel.text = NSLocalizedString(
+                "search.result.intro_empty", value: "简介：暂无简介", comment: "Android intro_show_null")
+        }
 
         // Android BadgeView 隐藏零计数，但仍保留最小占位尺寸。
         let originCount = book.origins.count
@@ -166,12 +187,16 @@ final class AndroidSearchResultCell: UITableViewCell {
 
         accessibilityLabel = book.name
         metadataAccessibilityValue = [
-            "作者：\(book.author)",
-            kinds.isEmpty ? nil : kinds.joined(separator: "，"),
-            latestLabel.isHidden ? nil : "最新：\(book.latestChapterTitle ?? "")",
+            authorLabel.text,
+            kinds.isEmpty ? nil : kinds.joined(separator: Self.metadataSeparator),
+            latestLabel.isHidden ? nil : latestLabel.text,
             introLabel.text,
-            "书源数量：\(originCount)",
-        ].compactMap { $0 }.joined(separator: "，")
+            String(
+                format: NSLocalizedString(
+                    "search.result.origin_count_format", value: "书源数量：%@",
+                    comment: "Search result accessibility source count"),
+                String(originCount)),
+        ].compactMap { $0 }.joined(separator: Self.metadataSeparator)
         setInBookshelf(isInBookshelf)
         configureCover(book: book)
         metadataView.setNeedsLayout()
@@ -228,7 +253,12 @@ final class AndroidSearchResultCell: UITableViewCell {
         // SearchAdapter uses isVisible (GONE), unlike the badge's INVISIBLE zero state.
         bookshelfDotView.isHidden = !isInBookshelf
         titleLeftConstraint?.constant = isInBookshelf ? 24 : 8
-        accessibilityValue = metadataAccessibilityValue + (isInBookshelf ? "，已在书架" : "，未在书架")
+        let shelfStatus =
+            isInBookshelf
+            ? L10n.BookDetail.shelfStatusIn
+            : NSLocalizedString(
+                "search.result.shelf_status_out", value: "未在书架", comment: "Search result accessibility bookshelf status")
+        accessibilityValue = [metadataAccessibilityValue, shelfStatus].joined(separator: Self.metadataSeparator)
         setNeedsLayout()
     }
 

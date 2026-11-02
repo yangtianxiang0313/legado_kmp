@@ -43,6 +43,7 @@ final class BookDetailIntroTextView: UITextView {
         textAlignment = .natural
         adjustsFontForContentSizeCategory = false
         accessibilityIdentifier = "bookDetail.intro"
+        accessibilityLabel = L10n.BookDetail.editBookIntro
         setContentHuggingPriority(.required, for: .vertical)
         setContentCompressionResistancePriority(.required, for: .vertical)
         refreshTypography()
@@ -61,9 +62,17 @@ final class BookDetailIntroTextView: UITextView {
         // BookInfoActivity assigns getDisplayIntro() directly. Do not perform a second
         // HTML decode or collapse paragraphs in this display-text layer.
         let displayText = displayIntro?.nilIfEmpty ?? L10n.BookDetail.emptyIntro
+        accessibilityValue = displayText
         guard text != displayText else { return }
+        resignFirstResponder()
         text = displayText
+        selectedRange = NSRange(location: 0, length: 0)
         invalidateIntrinsicContentSize()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { resignFirstResponder() }
     }
 
     func refreshTypography(compatibleWith traits: UITraitCollection? = nil) {

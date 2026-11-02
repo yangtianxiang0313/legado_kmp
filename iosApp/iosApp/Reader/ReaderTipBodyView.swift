@@ -16,10 +16,10 @@ final class ReaderTipBodyView: UIView {
     private var values: ReaderTipValues
     private let titleLabel = UILabel()
     private let titleModeControl = ReaderTipTitleModeControl()
-    private let titleSizeRow = AndroidReaderStyleSliderRow(title: "字号", identifier: "readerAppearance.tip.title.size")
-    private let titleTopRow = AndroidReaderStyleSliderRow(title: "上边距", identifier: "readerAppearance.tip.title.top")
+    private let titleSizeRow = AndroidReaderStyleSliderRow(title: ReaderTipText.textSize, identifier: "readerAppearance.tip.title.size")
+    private let titleTopRow = AndroidReaderStyleSliderRow(title: ReaderTipText.topMargin, identifier: "readerAppearance.tip.title.top")
     private let titleBottomRow = AndroidReaderStyleSliderRow(
-        title: "下边距", identifier: "readerAppearance.tip.title.bottom")
+        title: ReaderTipText.bottomMargin, identifier: "readerAppearance.tip.title.bottom")
     private var sections: [(title: UILabel, rows: [ReaderTipValueControl])] = []
     private var selectionRows: [ReaderTipSelection: ReaderTipValueControl] = [:]
     private weak var lastSelectionRow: ReaderTipValueControl?
@@ -31,14 +31,14 @@ final class ReaderTipBodyView: UIView {
         self.values = values
         super.init(frame: .zero)
         backgroundColor = .clear
-        configureHeading(titleLabel, title: "正文标题")
+        configureHeading(titleLabel, title: ReaderTipText.bodyTitle)
         addSubview(titleLabel)
         addSubview(titleModeControl)
         configureSliders()
         sliderRows.forEach(addSubview)
-        addSection(title: "页眉", selections: [.headerMode, .headerLeft, .headerMiddle, .headerRight])
-        addSection(title: "页脚", selections: [.footerMode, .footerLeft, .footerMiddle, .footerRight])
-        addSection(title: "页眉&页脚", selections: [.tipColor, .dividerColor])
+        addSection(title: ReaderTipText.header, selections: [.headerMode, .headerLeft, .headerMiddle, .headerRight])
+        addSection(title: ReaderTipText.footer, selections: [.footerMode, .footerLeft, .footerMiddle, .footerRight])
+        addSection(title: ReaderTipText.headerFooter, selections: [.tipColor, .dividerColor])
         titleModeControl.onChange = { [weak self] mode in self?.commit(.titleMode(mode)) }
         var orderedElements: [UIView] = [titleLabel, titleModeControl]
         orderedElements.append(contentsOf: sliderRows)
@@ -101,7 +101,7 @@ final class ReaderTipBodyView: UIView {
     private func configureHeading(_ label: UILabel, title: String) {
         label.text = title
         label.numberOfLines = 0
-        label.lineBreakMode = .byCharWrapping
+        label.lineBreakMode = .byWordWrapping
         label.adjustsFontForContentSizeCategory = false
         label.isAccessibilityElement = true
         label.accessibilityTraits = .header

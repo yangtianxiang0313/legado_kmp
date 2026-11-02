@@ -8,7 +8,7 @@ final class ReaderTipTitleModeControl: UIView {
 
     init() {
         super.init(frame: .zero)
-        for (index, title) in ["靠左", "居中", "隐藏"].enumerated() {
+        for (index, title) in ReaderTipText.titleModes.enumerated() {
             let button = ReaderTipRadioButton(title: title, mode: Int32(index))
             button.addAction(
                 UIAction { [weak self] _ in
@@ -64,8 +64,8 @@ final class ReaderTipTitleModeControl: UIView {
     }
 }
 
-private final class ReaderTipRadioButton: UIControl {
-    private let titleLabel = UILabel()
+private final class ReaderTipRadioButton: ReaderMenuPressButton {
+    private let optionLabel = UILabel()
     private let radioImageView = UIImageView()
     private let pressedView = UIView()
     private var palette: ReaderMenuPalette?
@@ -74,7 +74,7 @@ private final class ReaderTipRadioButton: UIControl {
 
     var naturalWidth: CGFloat {
         ceil(
-            titleLabel.sizeThatFits(
+            optionLabel.sizeThatFits(
                 CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
             ).width) + symbolWidth + 6
     }
@@ -93,21 +93,22 @@ private final class ReaderTipRadioButton: UIControl {
 
     init(title: String, mode: Int32) {
         super.init(frame: .zero)
-        titleLabel.text = title
-        titleLabel.numberOfLines = 0
-        titleLabel.lineBreakMode = .byCharWrapping
-        titleLabel.adjustsFontForContentSizeCategory = false
-        titleLabel.isAccessibilityElement = false
+        showsBorderlessFeedback = false
+        optionLabel.text = title
+        optionLabel.numberOfLines = 0
+        optionLabel.lineBreakMode = .byWordWrapping
+        optionLabel.adjustsFontForContentSizeCategory = false
+        optionLabel.isAccessibilityElement = false
         radioImageView.contentMode = .center
         radioImageView.isAccessibilityElement = false
         pressedView.isUserInteractionEnabled = false
         pressedView.isAccessibilityElement = false
         addSubview(pressedView)
         addSubview(radioImageView)
-        addSubview(titleLabel)
+        addSubview(optionLabel)
         isAccessibilityElement = true
         accessibilityIdentifier = "readerAppearance.tip.title.mode.\(mode)"
-        accessibilityLabel = "正文标题，\(title)"
+        accessibilityLabel = String(format: ReaderTipText.accessibilityPairFormat, ReaderTipText.bodyTitle, title)
         updateFonts()
         updateSelection()
     }
@@ -122,14 +123,8 @@ private final class ReaderTipRadioButton: UIControl {
         updateSelection()
     }
 
-    override func accessibilityActivate() -> Bool {
-        guard isEnabled else { return false }
-        sendActions(for: .touchUpInside)
-        return true
-    }
-
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let titleHeight = titleLabel.sizeThatFits(
+        let titleHeight = optionLabel.sizeThatFits(
             CGSize(width: max(1, size.width - symbolWidth - 6), height: .greatestFiniteMagnitude)
         ).height
         return CGSize(width: size.width, height: ceil(max(symbolWidth, titleHeight)) + 6)
@@ -139,7 +134,7 @@ private final class ReaderTipRadioButton: UIControl {
         super.layoutSubviews()
         let titleWidth = max(1, bounds.width - symbolWidth - 6)
         let titleHeight = ceil(
-            titleLabel.sizeThatFits(
+            optionLabel.sizeThatFits(
                 CGSize(width: titleWidth, height: .greatestFiniteMagnitude)
             ).height)
         radioImageView.frame = CGRect(
@@ -147,7 +142,7 @@ private final class ReaderTipRadioButton: UIControl {
         // Widget.Material.CompoundButton.RadioButton uses a 20dp-radius borderless ripple.
         pressedView.frame = CGRect(x: radioImageView.frame.midX - 20, y: bounds.midY - 20, width: 40, height: 40)
         pressedView.layer.cornerRadius = 20
-        titleLabel.frame = CGRect(
+        optionLabel.frame = CGRect(
             x: symbolWidth + 3, y: (bounds.height - titleHeight) / 2, width: titleWidth, height: titleHeight)
     }
 
@@ -159,7 +154,7 @@ private final class ReaderTipRadioButton: UIControl {
     }
 
     private func updateFonts() {
-        titleLabel.font = ReaderAndroidDefaultFont.scaledFont(
+        optionLabel.font = ReaderAndroidDefaultFont.scaledFont(
             size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
         setNeedsLayout()
     }
@@ -184,14 +179,14 @@ private final class ReaderTipRadioButton: UIControl {
         let isNight = ReaderPaletteColor.isNightResource(traits: traitCollection)
         let normal = ReaderPaletteColor.argb(isNight ? 0xB3FF_FFFF : 0x8A00_0000)
         let accent = palette?.accent ?? AndroidReplicaTheme.accent.resolvedColor(with: traitCollection)
-        titleLabel.textColor = ReaderPaletteColor.argb(
+        optionLabel.textColor = ReaderPaletteColor.argb(
             isEnabled ? (isNight ? 0xFFFF_FFFF : 0xDE00_0000) : (isNight ? 0x4DFF_FFFF : 0x3900_0000))
         radioImageView.image = isSelected ? Self.checkedImage : Self.uncheckedImage
         radioImageView.tintColor = isEnabled && isSelected ? accent : normal
         radioImageView.alpha = isEnabled ? 1 : (isNight ? 0.30 : 0.26)
         accessibilityTraits = isSelected ? [.button, .selected] : .button
         if !isEnabled { accessibilityTraits.insert(.notEnabled) }
-        accessibilityValue = isSelected ? "已选择" : "未选择"
+        accessibilityValue = isSelected ? ReaderTipText.selected : ReaderTipText.notSelected
         updatePressedAppearance()
     }
 
@@ -207,8 +202,8 @@ private final class ReaderTipRadioButton: UIControl {
     }
 }
 
-final class ReaderTipValueControl: UIControl {
-    private let titleLabel = UILabel()
+final class ReaderTipValueControl: ReaderMenuPressButton {
+    private let optionLabel = UILabel()
     private let valueLabel = UILabel()
 
     override var isEnabled: Bool {
@@ -217,12 +212,13 @@ final class ReaderTipValueControl: UIControl {
 
     init(selection: ReaderTipSelection, sectionTitle: String) {
         super.init(frame: .zero)
-        titleLabel.text = selection.title
+        showsBorderlessFeedback = false
+        optionLabel.text = selection.title
         // XML places the wrap_content value at the trailing edge without changing text gravity.
         valueLabel.textAlignment = .left
-        for label in [titleLabel, valueLabel] {
+        for label in [optionLabel, valueLabel] {
             label.numberOfLines = 0
-            label.lineBreakMode = .byCharWrapping
+            label.lineBreakMode = .byWordWrapping
             label.adjustsFontForContentSizeCategory = false
             label.isAccessibilityElement = false
             addSubview(label)
@@ -230,7 +226,7 @@ final class ReaderTipValueControl: UIControl {
         isAccessibilityElement = true
         accessibilityTraits = .button
         accessibilityIdentifier = "readerAppearance.tip.\(selection.rawValue)"
-        accessibilityLabel = "\(sectionTitle)，\(selection.title)"
+        accessibilityLabel = String(format: ReaderTipText.accessibilityPairFormat, sectionTitle, selection.title)
         updateFonts()
     }
 
@@ -250,14 +246,8 @@ final class ReaderTipValueControl: UIControl {
         // These TextViews explicitly use values[-night]/colors.xml, independent of menu contrast.
         let textColor = ReaderPaletteColor.argb(
             ReaderPaletteColor.isNightResource(traits: traitCollection) ? 0xFFFF_FFFF : 0xDE00_0000)
-        titleLabel.textColor = textColor
+        optionLabel.textColor = textColor
         valueLabel.textColor = textColor
-    }
-
-    override func accessibilityActivate() -> Bool {
-        guard isEnabled else { return false }
-        sendActions(for: .touchUpInside)
-        return true
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -268,7 +258,7 @@ final class ReaderTipValueControl: UIControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         let metrics = measure(width: bounds.width)
-        titleLabel.frame = CGRect(
+        optionLabel.frame = CGRect(
             x: 6, y: (bounds.height - metrics.titleHeight) / 2,
             width: metrics.titleWidth, height: metrics.titleHeight)
         valueLabel.frame = CGRect(
@@ -285,7 +275,7 @@ final class ReaderTipValueControl: UIControl {
     private func updateFonts() {
         let font = ReaderAndroidDefaultFont.scaledFont(
             size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
-        titleLabel.font = font
+        optionLabel.font = font
         valueLabel.font = font
         setNeedsLayout()
     }
@@ -296,13 +286,13 @@ final class ReaderTipValueControl: UIControl {
         // Each XML TextView has its own 6dp padding; leave both text columns room to wrap.
         let textWidth = max(2, width - 24)
         let unconstrained = CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        let naturalTitleWidth = ceil(titleLabel.sizeThatFits(unconstrained).width)
+        let naturalTitleWidth = ceil(optionLabel.sizeThatFits(unconstrained).width)
         let naturalValueWidth = ceil(valueLabel.sizeThatFits(unconstrained).width)
         let reservedTitleWidth = min(naturalTitleWidth, textWidth * 0.4)
         let valueWidth = min(naturalValueWidth, textWidth - reservedTitleWidth)
         let titleWidth = textWidth - valueWidth
         let titleHeight = ceil(
-            titleLabel.sizeThatFits(
+            optionLabel.sizeThatFits(
                 CGSize(width: max(1, titleWidth), height: .greatestFiniteMagnitude)
             ).height)
         let valueHeight = ceil(

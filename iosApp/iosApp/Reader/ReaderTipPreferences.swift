@@ -1,6 +1,56 @@
 import Foundation
 import shared
 
+enum ReaderTipText {
+    static let visibility = NSLocalizedString("reader.tip.visibility", value: "显示/隐藏", comment: "Android show_hide")
+    static let left = NSLocalizedString("reader_appearance.padding_left", value: "左", comment: "Android left")
+    static let middle = NSLocalizedString("reader.tip.middle", value: "中", comment: "Android middle")
+    static let right = NSLocalizedString("reader_appearance.padding_right", value: "右", comment: "Android right")
+    static let textColor = NSLocalizedString("reader_appearance.text_color_title", value: "文字颜色", comment: "Android text_color")
+    static let dividerColor = NSLocalizedString("reader.tip.divider_color", value: "分隔线颜色", comment: "Android tip_divider_color")
+    static let none = NSLocalizedString("reader.tip.none", value: "无", comment: "Android read_tip value 0")
+    static let bookName = NSLocalizedString("reader_appearance.tip_slot_book_name", value: "书名", comment: "Android read_tip value 7")
+    static let chapterTitle = NSLocalizedString("reader.tip.chapter_title", value: "标题", comment: "Android read_tip value 1")
+    static let time = NSLocalizedString("reader_appearance.tip_slot_time", value: "时间", comment: "Android read_tip value 2")
+    static let battery = NSLocalizedString("reader_appearance.tip_slot_battery", value: "电量", comment: "Android read_tip value 3")
+    static let batteryPercent = NSLocalizedString("reader.tip.battery_percent", value: "电量%", comment: "Android read_tip value 10")
+    static let pages = NSLocalizedString("reader.tip.pages", value: "页数", comment: "Android read_tip value 4")
+    static let progressPercent = NSLocalizedString("reader.tip.progress_percent", value: "进度(%)", comment: "Android read_tip value 5")
+    static let progressFraction = NSLocalizedString(
+        "reader.tip.progress_fraction", value: "进度(xx/yyy)", comment: "Android read_tip value 11")
+    static let pagesProgress = NSLocalizedString("reader.tip.pages_progress", value: "页数及进度", comment: "Android read_tip value 6")
+    static let timeBattery = NSLocalizedString("reader.tip.time_battery", value: "时间及电量", comment: "Android read_tip value 8")
+    static let timeBatteryPercent = NSLocalizedString(
+        "reader.tip.time_battery_percent", value: "时间及电量%", comment: "Android read_tip value 9")
+    static let headerAuto = NSLocalizedString(
+        "reader_appearance.header_mode_auto", value: "状态栏显示时隐藏", comment: "Android hide_when_status_bar_show")
+    static let show = NSLocalizedString("reader_appearance.tip_mode_show", value: "显示", comment: "Android show")
+    static let hide = NSLocalizedString("reader_appearance.tip_mode_hidden", value: "隐藏", comment: "Android hide")
+    static let followContent = NSLocalizedString("reader.tip.follow_content", value: "跟随内容", comment: "Android tip_color")
+    static let defaultColor = NSLocalizedString(
+        "reader_appearance.tip_divider_color_default", value: "默认", comment: "Android tip_divider_color")
+    static let customize = NSLocalizedString("reader_appearance.custom_color_button", value: "自定义", comment: "Android tip_color")
+    static let titleLeft = NSLocalizedString("reader.tip.title_left", value: "靠左", comment: "Android title_left")
+    static let titleCenter = NSLocalizedString("reader_appearance.title_mode_center", value: "居中", comment: "Android title_center")
+    static let bodyTitle = NSLocalizedString("reader_appearance.advanced_text_section", value: "正文标题", comment: "Android body_title")
+    static let textSize = NSLocalizedString("reader_appearance.sheet_font_size_title", value: "字号", comment: "Android title_font_size")
+    static let topMargin = NSLocalizedString("reader.tip.top_margin", value: "上边距", comment: "Android title_margin_top")
+    static let bottomMargin = NSLocalizedString("reader.tip.bottom_margin", value: "下边距", comment: "Android title_margin_bottom")
+    static let header = NSLocalizedString("reader.tip.header", value: "页眉", comment: "Android top_text")
+    static let footer = NSLocalizedString("reader.tip.footer", value: "页脚", comment: "Android bottom_text")
+    static let headerFooter = NSLocalizedString("reader.tip.header_footer", value: "页眉&页脚", comment: "Android header_footer")
+    static let selected = NSLocalizedString("replace_rule.checked", value: "已选择", comment: "Selected accessibility state")
+    static let notSelected = NSLocalizedString("replace_rule.unchecked", value: "未选择", comment: "Unselected accessibility state")
+    static let accessibilityPairFormat = NSLocalizedString(
+        "reader.tip.accessibility_pair_format", value: "%@，%@", comment: "Section and option accessibility label")
+
+    static var titleModes: [String] { [titleLeft, titleCenter, hide] }
+    static var headerModes: [String] { [headerAuto, show, hide] }
+    static var footerModes: [String] { [show, hide] }
+    static var tipColors: [String] { [followContent, customize] }
+    static var dividerColors: [String] { [defaultColor, followContent, customize] }
+}
+
 enum ReaderTipSelection: String, CaseIterable {
     case headerMode, headerLeft, headerMiddle, headerRight
     case footerMode, footerLeft, footerMiddle, footerRight
@@ -8,12 +58,12 @@ enum ReaderTipSelection: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .headerMode, .footerMode: return "显示/隐藏"
-        case .headerLeft, .footerLeft: return "左"
-        case .headerMiddle, .footerMiddle: return "中"
-        case .headerRight, .footerRight: return "右"
-        case .tipColor: return "文字颜色"
-        case .dividerColor: return "分隔线颜色"
+        case .headerMode, .footerMode: return ReaderTipText.visibility
+        case .headerLeft, .footerLeft: return ReaderTipText.left
+        case .headerMiddle, .footerMiddle: return ReaderTipText.middle
+        case .headerRight, .footerRight: return ReaderTipText.right
+        case .tipColor: return ReaderTipText.textColor
+        case .dividerColor: return ReaderTipText.dividerColor
         }
     }
 
@@ -76,9 +126,10 @@ struct ReaderTipValues: Equatable {
     // An explicit policy, not a captured color; existing nil and custom hex values keep their meaning.
     static let followTextColor = "@text"
     static let slotOptions: [(value: Int32, title: String)] = [
-        (0, "无"), (7, "书名"), (1, "标题"), (2, "时间"), (3, "电量"), (10, "电量%"),
-        (4, "页数"), (5, "进度(%)"), (11, "进度(xx/yyy)"), (6, "页数及进度"),
-        (8, "时间及电量"), (9, "时间及电量%"),
+        (0, ReaderTipText.none), (7, ReaderTipText.bookName), (1, ReaderTipText.chapterTitle),
+        (2, ReaderTipText.time), (3, ReaderTipText.battery), (10, ReaderTipText.batteryPercent),
+        (4, ReaderTipText.pages), (5, ReaderTipText.progressPercent), (11, ReaderTipText.progressFraction),
+        (6, ReaderTipText.pagesProgress), (8, ReaderTipText.timeBattery), (9, ReaderTipText.timeBatteryPercent),
     ]
 
     var titleMode: Int32
@@ -183,15 +234,16 @@ struct ReaderTipValues: Equatable {
 
     func text(for selection: ReaderTipSelection) -> String {
         if let slot = selection.slot {
-            return Self.slotOptions.first { $0.value == slotValue(slot) }?.title ?? "无"
+            return Self.slotOptions.first { $0.value == slotValue(slot) }?.title ?? ReaderTipText.none
         }
         switch selection {
-        case .headerMode: return ["状态栏显示时隐藏", "显示", "隐藏"][Int(min(max(headerMode, 0), 2))]
-        case .footerMode: return footerMode == 1 ? "隐藏" : "显示"
-        case .tipColor: return tipColorHex ?? "跟随内容"
+        case .headerMode: return ReaderTipText.headerModes[Int(min(max(headerMode, 0), 2))]
+        case .footerMode: return footerMode == 1 ? ReaderTipText.hide : ReaderTipText.show
+        case .tipColor: return tipColorHex ?? ReaderTipText.followContent
         case .dividerColor:
-            return tipDividerColorHex == Self.followTextColor ? "跟随内容" : (tipDividerColorHex ?? "默认")
-        default: return "无"
+            return tipDividerColorHex == Self.followTextColor
+                ? ReaderTipText.followContent : (tipDividerColorHex ?? ReaderTipText.defaultColor)
+        default: return ReaderTipText.none
         }
     }
 }

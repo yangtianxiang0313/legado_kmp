@@ -184,13 +184,16 @@ final class AndroidReplicaBookDetailPageView: UIView {
         bottomBar.backgroundColor = AndroidReplicaTheme.bottomBackground
         actionBarDivider.backgroundColor = AndroidReplicaTheme.divider
         actionBarDivider.isUserInteractionEnabled = false
+        spinner.hidesWhenStopped = true
+        spinner.isAccessibilityElement = true
+        spinner.accessibilityLabel = BookDetailPresentationText.loading
 
         var shelfConfig = UIButton.Configuration.plain()
         shelfConfig.baseForegroundColor = BookDetailActionPalette.shelfText
         // Both original 50dp TextViews explicitly disable includeFontPadding.
         shelfConfig.contentInsets = .zero
         shelfConfig.titleAlignment = .center
-        shelfConfig.titleLineBreakMode = .byCharWrapping
+        shelfConfig.titleLineBreakMode = .byWordWrapping
         shelfConfig.cornerStyle = .fixed
         shelfConfig.background.cornerRadius = 0
         shelfButton.configuration = shelfConfig
@@ -204,7 +207,7 @@ final class AndroidReplicaBookDetailPageView: UIView {
         readConfig.background.cornerRadius = 0
         readConfig.contentInsets = shelfConfig.contentInsets
         readConfig.titleAlignment = .center
-        readConfig.titleLineBreakMode = .byCharWrapping
+        readConfig.titleLineBreakMode = .byWordWrapping
         readButton.configuration = readConfig
         readButton.configurationUpdateHandler = { button in
             var configuration = button.configuration
@@ -216,7 +219,7 @@ final class AndroidReplicaBookDetailPageView: UIView {
         }
         for button in [shelfButton, readButton] {
             button.titleLabel?.numberOfLines = 0
-            button.titleLabel?.lineBreakMode = .byCharWrapping
+            button.titleLabel?.lineBreakMode = .byWordWrapping
             button.titleLabel?.textAlignment = .center
             button.titleLabel?.adjustsFontSizeToFitWidth = false
             button.titleLabel?.adjustsFontForContentSizeCategory = false
@@ -271,7 +274,7 @@ final class AndroidReplicaBookDetailPageView: UIView {
         let font = AndroidReplicaBookDetailTypography.font(size: 15, compatibleWith: traitCollection)
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
-        paragraph.lineBreakMode = .byCharWrapping
+        paragraph.lineBreakMode = .byWordWrapping
         var height = Self.minimumActionBarHeight
         for button in [shelfButton, readButton] {
             let configuration = button.configuration
@@ -363,36 +366,49 @@ final class AndroidReplicaBookDetailPageView: UIView {
     }
 }
 
-private final class BookDetailActionButton: UIButton {
+private final class BookDetailActionButton: ReaderMenuPressButton {
     var onLayoutChange: (() -> Void)?
+    private var displayedTitle: String?
+    private var displayedAttributedTitle: AttributedString?
 
-    override var isEnabled: Bool {
-        didSet {
-            if !isEnabled { cancelTracking(with: nil) }
-        }
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        showsBorderlessFeedback = false
     }
 
-    override func cancelTracking(with event: UIEvent?) {
-        super.cancelTracking(with: event)
-        isHighlighted = false
-    }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        if window == nil { cancelTracking(with: nil) }
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        preconditionFailure("init(coder:) is unavailable")
     }
 
     override func updateConfiguration() {
         super.updateConfiguration()
+        cancelIfTitleChanged()
         onLayoutChange?()
     }
 
+    override func layoutSubviews() {
+        cancelIfTitleChanged()
+        super.layoutSubviews()
+    }
+
+    private func cancelIfTitleChanged() {
+        let title = configuration?.title
+        let attributedTitle = configuration?.attributedTitle
+        let changed = displayedTitle != title || displayedAttributedTitle != attributedTitle
+        displayedTitle = title
+        displayedAttributedTitle = attributedTitle
+        if changed { cancelPendingActivation() }
+    }
+
     override func setTitle(_ title: String?, for state: UIControl.State) {
+        if title != self.title(for: state) { cancelTracking(with: nil) }
         super.setTitle(title, for: state)
         onLayoutChange?()
     }
 
     override func setAttributedTitle(_ title: NSAttributedString?, for state: UIControl.State) {
+        if title != attributedTitle(for: state) { cancelTracking(with: nil) }
         super.setAttributedTitle(title, for: state)
         onLayoutChange?()
     }
