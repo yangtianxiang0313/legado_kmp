@@ -8,6 +8,14 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
 
     private let format: CacheExportFormat
     private let onExport: (CacheExportOptions) -> Void
+    private let isRequestCurrent: () -> Bool
+    private let onClose: () -> Void
+    private var ownerContext: CacheExportOwnerContext?
+    private weak var ownedPresentation: UIViewController?
+    private var hasClosed = false
+    private var isExportDismissal = false
+    private var retirementTask: Task<Void, Never>?
+    private var charsetMenuID = UUID()
     private var draft: CacheExportOptions
     private var selectsChapters: Bool
     private var splitsEPUB: Bool
@@ -50,6 +58,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     init(
         options: CacheExportOptions, format: CacheExportFormat,
         templateStore: CacheExportTemplateStore = CacheExportTemplateStore(),
+        isRequestCurrent: @escaping () -> Bool = { true }, onClose: @escaping () -> Void = {},
         onExport: @escaping (CacheExportOptions) -> Void
     ) {
         draft = options
@@ -57,6 +66,8 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         self.format = format
         self.templateStore = templateStore
         self.onExport = onExport
+        self.isRequestCurrent = isRequestCurrent
+        self.onClose = onClose
         selectsChapters = !options.chapterScope.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         splitsEPUB = format == .epub && options.chaptersPerFile > 0
         super.init(style: .insetGrouped)
@@ -117,6 +128,13 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         super.viewDidAppear(animated)
         isVisible = true
         isLeavingSettings = false
+        if ownerContext == nil, !hasFinished {
+            ownerContext = CacheExportOwnerContext(owner: self)
+            ownerContext?.startMonitoring(
+                allowing: { [weak self] in self?.ownedPresentation },
+                onInvalidated: { [weak self] in self?.invalidateRequest() })
+            if ownerContext == nil || !isRequestCurrent() { invalidateRequest() }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -133,7 +151,9 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        if isLeavingSettings { templateImport?.close() }
+        if isLeavingSettings && !isExportDismissal {
+            invalidateRequest()
+        }
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int {
@@ -222,6 +242,7 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         case .template:
             view.endEditing(true)
             templateImport?.select(row: indexPath.row)
+            ownedPresentation = presentedViewController
         default:
             break
         }
@@ -231,6 +252,10 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         textField.resignFirstResponder()
         return true
     }
+
+    func textFieldShouldClear(_ textField: UITextField) -> Bool { canInteract }
+
+    func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool { canInteract }
 
     override func accessibilityPerformEscape() -> Bool {
         guard canInteract else { return false }
@@ -305,13 +330,17 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     }
 
     private func updateCharsetMenu() {
+        let menuID = UUID()
+        charsetMenuID = menuID
+        var consumed = false
         charsetButton.configuration?.title = draft.charset
         charsetButton.accessibilityValue = draft.charset
         charsetButton.menu = UIMenu(
             options: .singleSelection,
             children: CacheExportOptions.charsets.map { charset in
                 UIAction(title: charset, state: charset == draft.charset ? .on : .off) { [weak self] _ in
-                    guard let self, self.canInteract else { return }
+                    guard let self, !consumed, self.charsetMenuID == menuID, self.canInteract else { return }
+                    consumed = true
                     self.draft.charset = charset
                     self.updateCharsetMenu()
                 }
@@ -349,7 +378,8 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
     @objc private func finishEditing() { view.endEditing(true) }
 
     private var canInteract: Bool {
-        !hasFinished && !isCommitting && isVisible && viewIfLoaded?.window != nil && !isBeingDismissed
+        !hasFinished && !isCommitting && isVisible && isRequestCurrent()
+            && ownerContext?.isCurrent(allowing: ownedPresentation) == true && !isBeingDismissed
             && navigationController?.isBeingDismissed != true
     }
 
@@ -362,14 +392,42 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
 
     @objc private func cancel() {
         guard canInteract else { return }
+        invalidateRequest()
+    }
+
+    func invalidateRequest() {
+        guard !hasDeliveredExport else { return }
         hasFinished = true
+        viewIfLoaded?.endEditing(true)
+        exportButton.isEnabled = false
+        cancelButton.isEnabled = false
+        tableView.isUserInteractionEnabled = false
+        // A commit already queued on disk owns its terminal result; invalidation only forbids delivery.
+        if !isCommitting { retireRequest() }
+    }
+
+    private func retireRequest() {
+        guard retirementTask == nil, !hasClosed else { return }
         templateImport?.close()
-        view.endEditing(true)
-        if let dismissalTarget {
-            dismissalTarget.dismiss(animated: true)
-        } else {
-            navigationController?.popViewController(animated: true)
+        ownerContext?.finish()
+        let target = dismissalTarget
+        retirementTask = Task { [self] in
+            if let target {
+                await CacheExportSharing.dismiss(target)
+            } else if navigationController?.topViewController === self {
+                navigationController?.popViewController(animated: true)
+            }
+            closeRequest()
+            retirementTask = nil
         }
+    }
+
+    private func closeRequest() {
+        guard !hasClosed else { return }
+        hasClosed = true
+        templateImport?.close()
+        ownerContext?.finish()
+        onClose()
     }
 
     @objc private func confirmExport() {
@@ -432,6 +490,14 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         let wasModalInPresentation = dismissalTarget.isModalInPresentation
         dismissalTarget.isModalInPresentation = true
         confirmationTask = Task { [self, dismissalTarget] in
+            guard !hasFinished, isRequestCurrent(), ownerContext?.isCurrent() == true else {
+                isCommitting = false
+                dismissalTarget.isModalInPresentation = wasModalInPresentation
+                confirmationTask = nil
+                hasFinished = true
+                retireRequest()
+                return
+            }
             do {
                 let snapshot: CacheExportOptions
                 if format == .epub, let templateImport {
@@ -443,19 +509,39 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
                     textOptions.epubTemplateName = ""
                     snapshot = textOptions
                 }
-                confirmationTask = nil
-                guard !hasFinished, viewIfLoaded?.window != nil, !dismissalTarget.isBeingDismissed else { return }
+                guard !hasFinished, isRequestCurrent(), ownerContext?.isCurrent() == true,
+                    isVisible, !dismissalTarget.isBeingDismissed
+                else {
+                    isCommitting = false
+                    dismissalTarget.isModalInPresentation = wasModalInPresentation
+                    confirmationTask = nil
+                    hasFinished = true
+                    retireRequest()
+                    return
+                }
                 hasFinished = true
-                dismissalTarget.dismiss(animated: true) { [self, dismissalTarget] in
-                    guard !hasDeliveredExport, dismissalTarget.presentingViewController == nil, viewIfLoaded?.window == nil
-                    else { return }
+                isExportDismissal = true
+                ownerContext?.finish()
+                await CacheExportSharing.dismiss(dismissalTarget)
+                isCommitting = false
+                dismissalTarget.isModalInPresentation = wasModalInPresentation
+                confirmationTask = nil
+                if !hasDeliveredExport, isRequestCurrent(), dismissalTarget.presentingViewController == nil,
+                    dismissalTarget.viewIfLoaded?.window == nil, viewIfLoaded?.window == nil
+                {
                     hasDeliveredExport = true
                     onExport(snapshot)
                 }
+                closeRequest()
             } catch {
                 confirmationTask = nil
                 isCommitting = false
                 dismissalTarget.isModalInPresentation = wasModalInPresentation
+                guard !hasFinished, isRequestCurrent(), ownerContext?.isCurrent() == true else {
+                    hasFinished = true
+                    retireRequest()
+                    return
+                }
                 cancelButton.isEnabled = true
                 tableView.isUserInteractionEnabled = true
                 reloadTemplateSection()
@@ -474,17 +560,21 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
         guard canInteract, presentedViewController == nil else { return }
         let alert = UIAlertController(title: "EPUB 模板", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "确定", style: .default))
+        ownedPresentation = alert
         present(alert, animated: true)
     }
 
     private func showError(_ message: String, field: UIView, at indexPath: IndexPath) {
         let alert = UIAlertController(title: "导出设置", message: message, preferredStyle: .alert)
+        var consumed = false
         alert.addAction(
-            UIAlertAction(title: "确定", style: .default) { [weak self, weak field] _ in
-                guard let self, self.canInteract else { return }
+            UIAlertAction(title: "确定", style: .default) { [weak self, weak field, weak alert] _ in
+                guard let self, let alert, !consumed, self.ownedPresentation === alert, self.canInteract else { return }
+                consumed = true
                 self.tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
                 field?.becomeFirstResponder()
             })
+        ownedPresentation = alert
         present(alert, animated: true)
     }
 }

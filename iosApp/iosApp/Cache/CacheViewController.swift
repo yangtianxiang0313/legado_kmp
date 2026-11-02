@@ -23,6 +23,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     private var contentRevisions: [String: UUID] = [:]
     private var infoRevisions: [String: UUID] = [:]
     private var snapshots: [String: CacheDownloadCoordinator.Snapshot] = [:]
+    private var downloadRevisions: [String: UUID] = [:]
     private var downloadObservation: UUID?
     private var loadTask: Task<Void, Never>?
     private var loadID = UUID()
@@ -35,6 +36,10 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     private var cloudDelivery: CacheExportCloudDelivery?
     private var exportResults: [String: String] = [:]
     private var exportFormat: CacheExportFormat = .txt
+    private var menuRequest: CacheExportRequestScope?
+    private var exportRequest: CacheExportRequestScope?
+    private var rowContext: CacheExportOwnerContext?
+    private var rowRefreshTask: Task<Void, Never>?
     private var ready = false
     private var hasLeftPage = false
 
@@ -49,6 +54,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     deinit {
         loadTask?.cancel()
         exportTask?.cancel()
+        rowRefreshTask?.cancel()
         Task { @MainActor [screen, downloads, downloadObservation, exportSharing, cloudDelivery] in
             exportSharing?.cancelUndelivered()
             cloudDelivery?.cancel()
@@ -95,6 +101,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
             self.snapshots = snapshots
             var finished = false
             for (url, snapshot) in snapshots {
+                if previous[url]?.isActive != snapshot.isActive { self.downloadRevisions[url] = UUID() }
                 if previous[url]?.phase != snapshot.phase || previous[url]?.cached != snapshot.cached
                     || previous[url]?.total != snapshot.total
                 {
@@ -114,6 +121,12 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
         navigationController?.setNavigationBarHidden(true, animated: animated)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        refreshRowContext()
+        reloadList()
+    }
+
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
@@ -126,7 +139,13 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
         super.viewWillDisappear(animated)
         popup?.dismiss()
         typePopup.dismiss()
+        menuRequest?.finish()
+        rowContext?.finish()
+        rowContext = nil
+        rowRefreshTask?.cancel()
+        rowRefreshTask = nil
         if isMovingFromParent || isBeingDismissed || navigationController?.isBeingDismissed == true {
+            exportRequest?.invalidate()
             cancelExport()
             exportSharing?.cancelUndelivered()
             cloudDelivery?.cancel()
@@ -258,6 +277,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     }
 
     private func reloadList() {
+        refreshRowContext()
         let offset = tableView.contentOffset
         let urls = visibleBooks.map(\.bookUrl)
         if displayedURLs == urls {
@@ -287,20 +307,54 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
         return true
     }
 
-    @objc private func back() { navigationController?.popViewController(animated: true) }
+    private func refreshRowContext() {
+        guard canInteract, rowContext?.isCurrent() != true else { return }
+        rowContext?.finish()
+        rowContext = CacheExportOwnerContext(owner: self)
+        rowContext?.startMonitoring(
+            allowing: { nil },
+            onInvalidated: { [weak self] in
+                self?.rowRefreshTask?.cancel()
+                self?.rowRefreshTask = Task { [weak self] in
+                    while !Task.isCancelled {
+                        do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
+                        guard let self, !self.hasLeftPage else { return }
+                        if self.canInteract {
+                            self.rowRefreshTask = nil
+                            self.reloadList()
+                            return
+                        }
+                    }
+                }
+            })
+    }
+
+    private func request(_ targets: [Book]? = nil, format: CacheExportFormat? = nil) -> CacheExportRequestScope? {
+        guard canInteract else { return nil }
+        let group = groupID
+        return CacheExportRequestScope(
+            owner: self, groupID: group, targets: targets ?? visibleBooks, groups: groups,
+            format: format ?? exportFormat,
+            selectionIsCurrent: { [weak self] in self?.groupID == group && self?.hasLeftPage == false })
+    }
+
+    @objc private func back() {
+        guard canInteract else { return }
+        navigationController?.popViewController(animated: true)
+    }
 
     @objc private func toggleDownloads() {
         guard canInteract else { return }
         if snapshots.values.contains(where: \.isActive) {
             downloads.stopAll()
         } else {
-            startDownloads(fromCurrent: true)
+            startDownloads(visibleBooks, fromCurrent: true)
         }
     }
 
-    private func startDownloads(fromCurrent: Bool) {
+    private func startDownloads(_ targets: [Book], fromCurrent: Bool) {
         guard canInteract else { return }
-        for book in visibleBooks where !book.isLocal && exportBookURL != book.bookUrl {
+        for book in targets where !book.isLocal && exportBookURL != book.bookUrl {
             downloads.start(book: book, startIndex: fromCurrent ? max(0, Int(book.durChapterIndex)) : 0)
         }
     }
@@ -316,30 +370,46 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     }
 
     private func showDownloadOptions() {
+        guard let request = request() else { return }
+        let stopping = downloadRevisions.filter { snapshots[$0.key]?.isActive == true }
         presentPopup(
             [
-                item("download.after", title: "下载之后章节") { $0.performDownloadOption(fromCurrent: true) },
-                item("download.all", title: "下载全部章节") { $0.performDownloadOption(fromCurrent: false) },
-            ], anchor: toolbar.downloadButton)
+                item("download.after", title: "下载之后章节", request: request) {
+                    $0.performDownloadOption(request, stopping: stopping, fromCurrent: true)
+                },
+                item("download.all", title: "下载全部章节", request: request) {
+                    $0.performDownloadOption(request, stopping: stopping, fromCurrent: false)
+                },
+            ], anchor: toolbar.downloadButton, request: request)
     }
 
-    private func performDownloadOption(fromCurrent: Bool) {
-        if snapshots.values.contains(where: \.isActive) {
-            downloads.stopAll()
+    private func performDownloadOption(_ request: CacheExportRequestScope, stopping: [String: UUID], fromCurrent: Bool)
+    {
+        if stopping.isEmpty {
+            guard !snapshots.values.contains(where: \.isActive) else { return }
+            startDownloads(request.targets, fromCurrent: fromCurrent)
         } else {
-            startDownloads(fromCurrent: fromCurrent)
+            for (url, revision) in stopping where downloadRevisions[url] == revision && snapshots[url]?.isActive == true
+            {
+                downloads.stop(bookURL: url)
+            }
         }
     }
 
     @objc private func showGroups() {
-        let entries = groups.enumerated().map { index, group in
-            item("group.\(index)", title: group.groupName) { $0.selectGroup(group.groupId) }
+        guard let request = request() else { return }
+        let entries = request.groups.enumerated().map { index, group in
+            item("group.\(index)", title: group.groupName, request: request) { $0.selectGroup(group.groupId) }
         }
-        presentPopup(entries, anchor: toolbar.groupButton)
+        presentPopup(entries, anchor: toolbar.groupButton, request: request)
     }
 
     private func selectGroup(_ id: Int64) {
         guard id != groupID else { return }
+        menuRequest?.finish()
+        exportRequest?.invalidate()
+        rowContext?.finish()
+        rowContext = nil
         groupID = id
         loadID = UUID()
         loadTask?.cancel()
@@ -354,102 +424,155 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
     }
 
     @objc private func showMore() {
+        guard let request = request() else { return }
         var entries = [
             item(
                 "export.all", title: "导出全部",
-                enabled: exportTask == nil && exportSharing == nil && cloudDelivery == nil && !visibleBooks.isEmpty
-            ) { $0.configureExport($0.visibleBooks, anchor: $0.toolbar.moreButton) },
-            item("export.type", title: "导出类型(\(exportFormat.title))") { $0.showExportTypes() },
-            item("log", title: "日志") { $0.present(ReaderAppLogDialogViewController(), animated: true) },
+                enabled: exportRequest == nil && !request.targets.isEmpty, request: request
+            ) { $0.configureExport(request.targets, format: request.format, anchor: $0.toolbar.moreButton) },
+            item("export.type", title: "导出类型(\(request.format.title))", request: request) { $0.showExportTypes() },
+            item("log", title: "日志", request: request) {
+                $0.present(ReaderAppLogDialogViewController(), animated: true)
+            },
         ]
         if exportTask != nil {
+            let cancellationID = exportID
             entries.insert(
                 item(
                     "export.cancel", title: exportCancellationRequested ? "正在取消导出..." : "取消导出",
-                    enabled: !exportCancellationRequested
-                ) { $0.cancelExport() }, at: 1)
+                    enabled: !exportCancellationRequested, request: request
+                ) { if $0.exportID == cancellationID { $0.cancelExport() } }, at: 1)
         }
-        presentPopup(entries, anchor: toolbar.moreButton)
+        presentPopup(entries, anchor: toolbar.moreButton, request: request)
     }
 
     private func showExportTypes() {
-        guard canInteract else { return }
+        guard let request = request() else { return }
+        menuRequest?.finish()
+        menuRequest = request
         popup?.dismiss()
+        typePopup.canActivateItem = { [weak request] in request?.isCurrent() == true }
+        typePopup.onVisibilityChange = { visible in
+            if !visible { Task { @MainActor in request.finish() } }
+        }
         typePopup.show(
             in: view, anchor: toolbar.moreButton,
             items: CacheExportFormat.allCases.map {
                 .init(id: $0.rawValue, title: $0.title, selection: .radio, isSelected: exportFormat == $0)
             }
         ) { [weak self] id in
-            guard let self, self.canInteract, let format = CacheExportFormat(rawValue: id) else { return }
+            guard let self, self.canInteract, request.consume(), let format = CacheExportFormat(rawValue: id) else {
+                return
+            }
+            request.finish()
             self.exportFormat = format
             self.exportPreferences.save(format)
+            self.reloadList()
         }
     }
 
     private func item(
-        _ id: String, title: String, enabled: Bool = true, action: @escaping (CacheViewController) -> Void
+        _ id: String, title: String, enabled: Bool = true, request: CacheExportRequestScope,
+        action: @escaping (CacheViewController) -> Void
     ) -> ReaderOverflowMenuView.Item {
         .init(identifier: "cacheManagement." + id, title: title, isEnabled: enabled) { [weak self] in
-            guard let self, self.canInteract else { return }
+            guard let self, enabled, self.canInteract, request.consume() else { return }
+            request.finish()
             action(self)
         }
     }
 
-    private func presentPopup(_ items: [ReaderOverflowMenuView.Item], anchor: UIView) {
+    private func presentPopup(_ items: [ReaderOverflowMenuView.Item], anchor: UIView, request: CacheExportRequestScope)
+    {
         guard canInteract, anchor.window === view.window else { return }
         popup?.dismiss()
         typePopup.dismiss()
+        menuRequest?.finish()
+        menuRequest = request
         let menu = ReaderOverflowMenuView(
             items: items, anchorView: anchor, interfaceStyle: traitCollection.userInterfaceStyle)
         popup = menu
-        menu.onDismiss = { [weak self, weak menu] in if self?.popup === menu { self?.popup = nil } }
+        menu.onDismiss = { [weak self, weak menu] in
+            if self?.popup === menu { self?.popup = nil }
+            // Selection is dispatched synchronously after onDismiss; outside dismissals expire next turn.
+            Task { @MainActor in request.finish() }
+        }
         menu.present(in: view)
     }
 
-    private func configureExport(_ targets: [Book], anchor: UIView) {
-        guard canInteract, exportTask == nil, exportSharing == nil, cloudDelivery == nil, !targets.isEmpty else { return }
-        let format = exportFormat
+    private func configureExport(_ targets: [Book], format: CacheExportFormat? = nil, anchor: UIView) {
+        guard exportRequest == nil, !targets.isEmpty, let request = request(targets, format: format) else { return }
+        exportRequest = request
         let controller = CacheExportOptionsViewController(
-            options: exportOptionsPreferences.load(), format: format
-        ) { [weak self, weak anchor] options in
-            guard let self, self.canInteract, self.exportTask == nil, self.exportSharing == nil,
-                self.cloudDelivery == nil
-            else { return }
-            self.exportOptionsPreferences.save(options)
-            self.export(targets, format: format, options: options, anchor: anchor ?? self.toolbar.moreButton)
-        }
+            options: exportOptionsPreferences.load(), format: request.format,
+            isRequestCurrent: { [weak request] in request?.isCurrent() == true },
+            onClose: { [weak self, weak request] in
+                guard let self, let request, self.exportRequest === request, self.exportID == nil else { return }
+                request.finish()
+                self.exportRequest = nil
+                self.reloadList()
+            },
+            onExport: { [weak self, weak anchor] options in
+                guard let self, self.canInteract, self.exportRequest === request, request.consume(),
+                    self.exportTask == nil,
+                    self.exportSharing == nil, self.cloudDelivery == nil
+                else { return }
+                self.exportOptionsPreferences.save(options)
+                request.presentation = nil
+                self.export(
+                    request.targets, format: request.format, options: options, anchor: anchor ?? self.toolbar.moreButton
+                )
+            })
         let navigation = UINavigationController(rootViewController: controller)
         navigation.modalPresentationStyle = .formSheet
+        request.presentation = navigation
+        request.onInvalidated = { [weak controller] in controller?.invalidateRequest() }
         present(navigation, animated: true)
     }
 
     private func export(_ targets: [Book], format: CacheExportFormat, options: CacheExportOptions, anchor: UIView) {
-        guard canInteract, exportTask == nil, exportSharing == nil, cloudDelivery == nil, !targets.isEmpty else { return }
-        let id = UUID()
+        guard canInteract, let request = exportRequest, request.isCurrent(), exportTask == nil,
+            exportSharing == nil, cloudDelivery == nil, !targets.isEmpty
+        else { return }
+        let capturedSession: BookExportCloudSession?
+        do {
+            capturedSession =
+                options.destination == .webDAV
+                ? try BookExportCloudFacade.companion.create().startSession() : nil
+        } catch {
+            request.finish()
+            exportRequest = nil
+            showTransientMessage(error.userFacingMessage)
+            reloadList()
+            return
+        }
+        let id = request.id
         exportID = id
+        request.onInvalidated = { [weak self] in self?.cancelExport() }
         exportCancellationRequested = false
         exportProgress = nil
         for book in targets { exportResults[book.bookUrl] = nil }
         exportTask = Task { [weak self, exporter] in
+            var pendingSession = capturedSession
             var prepared: [CacheExportSharing.Item] = []
             var failedCount = 0
             var wasCancelled = false
             var preparedUploadBytes: Int64 = 0
             defer {
+                pendingSession?.close()
                 for item in prepared {
                     item.result.cleanup()
                     if self?.exportID == id {
-                        let reason = Task.isCancelled || wasCancelled ? "已取消导出，未交付" : "未交付，请重新导出"
-                        self?.exportResults[item.bookURL] =
-                            item.result.isPartial
-                            ? "\(reason)；\(item.result.missingContentMessage)" : reason
+                        self?.exportResults[item.bookURL] = item.undeliveredMessage(
+                            cancelled: Task.isCancelled || wasCancelled)
                     }
                 }
                 self?.finishExport(id: id)
             }
             for book in targets {
-                guard let self, !self.hasLeftPage, self.exportID == id, !Task.isCancelled else { break }
+                guard let self, request.isCurrent(), !self.hasLeftPage, self.exportID == id, !Task.isCancelled else {
+                    break
+                }
                 if self.snapshots[book.bookUrl]?.isActive == true {
                     self.exportResults[book.bookUrl] = "正在下载，请完成后导出"
                     failedCount += 1
@@ -480,7 +603,7 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
                         self.exportProgress = progress
                         self.reloadList()
                     }
-                    guard !Task.isCancelled, !self.hasLeftPage, self.exportID == id else {
+                    guard !Task.isCancelled, request.isCurrent(), !self.hasLeftPage, self.exportID == id else {
                         result.cleanup()
                         self.exportResults[book.bookUrl] = "已取消导出"
                         wasCancelled = true
@@ -517,29 +640,30 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
                 }
                 return
             }
-            guard self.canInteract else { return }
+            guard request.isCurrent(), self.canInteract else { return }
+            // Delivery coordinators take over presentation monitoring; the request stays busy until their callback.
+            request.endMonitoring()
             let items = prepared
             if options.destination == .webDAV {
-                let delivery = CacheExportCloudDelivery(items: items, failedCount: failedCount)
+                let delivery = CacheExportCloudDelivery(items: items, failedCount: failedCount, session: pendingSession)
+                pendingSession = nil
                 self.cloudDelivery = delivery
                 prepared = []
                 delivery.present(
                     from: self,
                     canContinue: { [weak self] in
-                        guard let self, !self.hasLeftPage, let window = self.viewIfLoaded?.window else { return false }
-                        return AppLockManager.shared.isUnlocked(in: window)
+                        guard let self else { return false }
+                        return !self.hasLeftPage && self.exportID == id
                     }
                 ) { [weak self, weak delivery] outcome in
                     guard let self, let delivery, self.cloudDelivery === delivery else { return }
                     self.cloudDelivery = nil
                     for item in items { self.exportResults[item.bookURL] = outcome.message(for: item) }
+                    self.finishExport(id: id)
                     guard !self.hasLeftPage else { return }
                     self.reloadList()
-                    if self.canInteract {
-                        let uploaded = outcome.uploaded.values.reduce(0, +)
-                        let uncertain = outcome.uncertain.isEmpty ? "" : "，部分状态不确定，请检查云端"
-                        self.showTransientMessage("WebDAV 已上传 \(uploaded) 个文件\(uncertain)")
-                    }
+                    guard self.canInteract else { return }
+                    self.showTransientMessage(outcome.summary)
                 }
                 return
             }
@@ -561,18 +685,15 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
                         self.exportResults[item.bookURL] = completed ? "导出完成" : "已取消分享"
                     }
                 }
+                self.finishExport(id: id)
                 guard !self.hasLeftPage else { return }
                 self.reloadList()
                 guard self.canInteract else { return }
                 if error != nil {
                     self.showTransientMessage("分享失败，请重试")
                 } else if completed {
-                    let partialCount = items.filter { $0.result.isPartial }.count
-                    let message =
-                        partialCount > 0 || failedCount > 0
-                        ? "已分享 \(items.count) 本，内容不完整 \(partialCount) 本，失败 \(failedCount) 本"
-                        : "导出完成：\(items.count) 本，\(items.reduce(0) { $0 + $1.result.files.count }) 个文件"
-                    self.showTransientMessage(message)
+                    self.showTransientMessage(
+                        CacheExportSharing.completionMessage(for: items, failedCount: failedCount))
                 }
             }
         }
@@ -590,9 +711,12 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
         guard exportID == id else { return }
         exportBookURL = nil
         exportProgress = nil
-        exportCancellationRequested = false
         exportTask = nil
+        guard exportSharing == nil, cloudDelivery == nil else { return }
+        exportCancellationRequested = false
         exportID = nil
+        exportRequest?.finish()
+        exportRequest = nil
         guard !hasLeftPage else { return }
         updateToolbar()
         reloadList()
@@ -644,21 +768,33 @@ final class CacheViewController: UIViewController, UITableViewDataSource, UITabl
                 cacheText: text, message: message, isLocal: book.isLocal,
                 isRunning: state?.isActive == true, isStopping: state?.phase == .stopping,
                 canDownload: ready && exportBookURL != url,
-                canExport: exportTask == nil && exportSharing == nil && cloudDelivery == nil && state?.isActive != true,
+                canExport: exportRequest == nil && state?.isActive != true,
                 isExporting: isExporting, exportProgress: progress?.fraction))
+        let context = rowContext
+        let group = groupID
+        let format = exportFormat
+        let downloadRevision = downloadRevisions[url]
+        var consumed = false
         cell.onDownload = { [weak self] in
-            guard let self, self.canInteract, let current = self.visibleBooks.first(where: { $0.bookUrl == url }) else {
-                return
-            }
-            if self.snapshots[url]?.isActive == true {
+            guard let self, let context, self.rowContext === context, !consumed, group == self.groupID,
+                context.isCurrent(), self.canInteract
+            else { return }
+            consumed = true
+            if state?.isActive == true {
+                guard self.downloadRevisions[url] == downloadRevision, self.snapshots[url]?.isActive == true else {
+                    return
+                }
                 self.downloads.stop(bookURL: url)
-            } else if self.exportBookURL != url {
-                self.downloads.start(book: current, startIndex: 0)
+            } else if self.exportBookURL != url, self.snapshots[url]?.isActive != true {
+                self.downloads.start(book: book, startIndex: 0)
             }
         }
         cell.onExport = { [weak self, weak cell] in
-            guard let self, let current = self.visibleBooks.first(where: { $0.bookUrl == url }) else { return }
-            self.configureExport([current], anchor: cell?.exportAnchor ?? self.tableView)
+            guard let self, let context, self.rowContext === context, !consumed, group == self.groupID,
+                context.isCurrent(), self.canInteract
+            else { return }
+            consumed = true
+            self.configureExport([book], format: format, anchor: cell?.exportAnchor ?? self.tableView)
         }
     }
 }
