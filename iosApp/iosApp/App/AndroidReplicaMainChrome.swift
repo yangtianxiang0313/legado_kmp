@@ -114,10 +114,12 @@ final class AndroidReplicaBottomTabButton: UIControl {
         let lightSurface = ReaderPaletteColor.isLight(surface)
         let resourceTraits = UITraitCollection(userInterfaceStyle: lightSurface ? .light : .dark)
         let normalColor = lightSurface ? AndroidReplicaTheme.secondaryText : AndroidReplicaTheme.primaryText
-        iconView.tintColor = isCurrentTab
+        iconView.tintColor =
+            isCurrentTab
             ? AndroidReplicaTheme.accent.resolvedColor(with: traitCollection)
             : normalColor.resolvedColor(with: resourceTraits)
-        backgroundColor = isHighlighted && isEnabled && !ReaderPaletteColor.isEInk
+        backgroundColor =
+            isHighlighted && isEnabled && !ReaderPaletteColor.isEInk
             ? AndroidReplicaTheme.activeIndicator.resolvedColor(with: resourceTraits) : .clear
     }
 }
@@ -507,13 +509,17 @@ final class AndroidReplicaThemePalette {
         case "DARK": style = .dark
         default: style = .unspecified
         }
-        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
-            for window in scene.windows {
-                window.overrideUserInterfaceStyle = style
-                refreshColors(in: window)
+        UIView.performWithoutAnimation {
+            for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+                for window in scene.windows {
+                    window.overrideUserInterfaceStyle = style
+                    refreshColors(in: window)
+                }
             }
+            NotificationCenter.default.post(name: .androidReplicaThemeDidChange, object: self)
+            // Reconcile wallpaper surfaces after all synchronous theme observers finish.
+            ThemeBackgroundConsumer.refreshAll()
         }
-        NotificationCenter.default.post(name: .androidReplicaThemeDidChange, object: self)
     }
 
     private func refreshColors(in view: UIView) {

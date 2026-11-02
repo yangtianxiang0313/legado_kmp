@@ -249,6 +249,8 @@ final class AndroidReplicaExploreViewController: UIViewController, UITableViewDe
         emptyLabel.numberOfLines = 0
         emptyLabel.isHidden = true
         emptyLabel.accessibilityIdentifier = "discovery.empty"
+        stateView.backgroundColor = AndroidReplicaTheme.background
+        stateView.tintColor = AndroidReplicaTheme.accent
         stateView.setTestingIdentifier(UIIdentifiers.Discovery.state)
         for item in [toolbar, tableView, emptyLabel, stateView] {
             item.translatesAutoresizingMaskIntoConstraints = false
@@ -520,7 +522,8 @@ final class AndroidReplicaExploreViewController: UIViewController, UITableViewDe
         if kind.title.hasPrefix("ERROR:") {
             present(ExploreErrorTextDialogViewController(text: url, owner: self), animated: true)
         } else {
-            navigationController?.pushViewController(AndroidReplicaExploreDetailViewController(source: source, initialKind: kind), animated: true)
+            navigationController?.pushViewController(
+                AndroidReplicaExploreDetailViewController(source: source, initialKind: kind), animated: true)
         }
     }
 
@@ -579,7 +582,8 @@ final class AndroidReplicaExploreViewController: UIViewController, UITableViewDe
             actions.login(sourceURL: source.bookSourceUrl)
         case "search":
             navigationController?.pushViewController(
-                AndroidReplicaSearchViewController(initialScope: .source(url: source.bookSourceUrl, name: source.bookSourceName)), animated: true)
+                AndroidReplicaSearchViewController(initialScope: .source(url: source.bookSourceUrl, name: source.bookSourceName)),
+                animated: true)
         case "refresh":
             kindsCache[source.bookSourceUrl] = nil
             invalidatedSourceURLs.insert(source.bookSourceUrl)
