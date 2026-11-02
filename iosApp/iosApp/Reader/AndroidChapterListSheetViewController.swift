@@ -5,7 +5,7 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
     UITextFieldDelegate, UIGestureRecognizerDelegate, BookmarkListDelegate
 {
     private static let cellIdentifier = "ReaderTocChapterCell"
-    private static let reverseLoadingMessage = "正在反转目录"
+    private static var reverseLoadingMessage: String { ReaderChapterListMenuText.reversing }
 
     private var items: [ReaderChapterListItem]
     private var pendingTitleItems: [ReaderChapterListItem]?
@@ -18,11 +18,11 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
         let revision: UUID
     }
     private var pendingChapterTitle: ChapterTitleRequest?
+    private var chapterCellRequests: [ObjectIdentifier: ChapterTitleRequest] = [:]
     private lazy var chapterLongPress = UILongPressGestureRecognizer(
         target: self, action: #selector(showLongPressedChapterTitle(_:)))
-    private var operationTask: Task<Void, Never>?
-    private var operationRequestID: UUID?
-    private var isReversing = false
+    private let orderOperation = ReaderChapterListPanelOrderOperation()
+    private var isReversing: Bool { orderOperation.isRunning }
     private var isFastScrolling = false
     private var canEditSearch: Bool { !isClosing && !isReversing && !isFastScrolling }
     private var canUseControls: Bool { canEditSearch && !tabPager.isTransitioning }
@@ -95,7 +95,6 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
     }
 
     deinit {
-        operationTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -179,7 +178,10 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
     }
 
     func updateItems(_ items: [ReaderChapterListItem]) {
-        guard isViewLoaded else { self.items = items; return }
+        guard isViewLoaded else {
+            self.items = items
+            return
+        }
         if canApplyChapterUpdates {
             applyReloadedTitles(items)
         } else {
@@ -279,6 +281,7 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
 
     private func applyFilter() {
         itemsRevision = UUID()
+        chapterCellRequests.removeAll()
         pendingChapterTitle = nil
         chapterState = ReaderTocChapterState(items: items, book: bookmarkBookURL.flatMap { bookContext(for: $0) })
         filteredIndices = chapterState.visibleIndices(in: items, query: chapterSearchQuery)
@@ -321,21 +324,10 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
     }
 
     private func preservingVisibleChapter(_ updates: () -> Void) {
-        let row = tableView.indexPathsForVisibleRows?.min()
-        let url = row.flatMap {
-            filteredIndices.indices.contains($0.row) ? items[filteredIndices[$0.row]].chapter.url : nil
-        }
-        let offset = row.map { tableView.rectForRow(at: $0).minY - tableView.contentOffset.y }
-        updates()
-        tableView.layoutIfNeeded()
-        guard let url, let offset,
-            let row = filteredIndices.firstIndex(where: { items[$0].chapter.url == url })
-        else { return }
-        let minY = -tableView.adjustedContentInset.top
-        let maxY = max(
-            minY, tableView.contentSize.height - tableView.bounds.height + tableView.adjustedContentInset.bottom)
-        let y = tableView.rectForRow(at: IndexPath(row: row, section: 0)).minY - offset
-        tableView.setContentOffset(CGPoint(x: 0, y: min(maxY, max(minY, y))), animated: false)
+        ReaderChapterListViewportAnchor.preserve(
+            in: tableView,
+            urlAtRow: { row in filteredIndices.indices.contains(row) ? items[filteredIndices[row]].chapter.url : nil },
+            rowForURL: { url in filteredIndices.firstIndex(where: { items[$0].chapter.url == url }) }, updates: updates)
     }
 
     private func applyReloadedTitles(_ items: [ReaderChapterListItem]) {
@@ -456,11 +448,17 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
     }
 
     override func accessibilityPerformEscape() -> Bool {
+        guard canUpdateChapterList else { return false }
         if isReversing {
             showTransientMessage(Self.reverseLoadingMessage)
             return true
         }
-        if menuCoordinator.hasPresentedMenu { menuCoordinator.dismissMenu() } else { handleBack() }
+        if menuCoordinator.hasPresentedMenu {
+            menuCoordinator.dismissMenu()
+        } else {
+            guard canUseControls else { return false }
+            handleBack()
+        }
         return true
     }
 
@@ -479,6 +477,7 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
         guard filteredIndices.indices.contains(indexPath.row) else { return }
         let item = items[filteredIndices[indexPath.row]]
         let request = ChapterTitleRequest(cell: cell, item: item, revision: itemsRevision)
+        chapterCellRequests[ObjectIdentifier(cell)] = request
         cell.configure(
             item: item, palette: palette, showWordCount: menuCoordinator.showWordCount,
             canActivate: { [weak self] in self?.isCurrentChapterTitleRequest(request) ?? false },
@@ -488,13 +487,14 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard canUseControls, filteredIndices.indices.contains(indexPath.row) else { return }
-        let item = items[filteredIndices[indexPath.row]]
-        selectChapter(item)
+        guard let cell = tableView.cellForRow(at: indexPath) as? ReaderTocChapterCell,
+            let request = chapterCellRequests[ObjectIdentifier(cell)], isCurrentChapterTitleRequest(request)
+        else { return }
+        selectChapter(request.item)
     }
 
     private func selectChapter(_ item: ReaderChapterListItem) {
-        guard canUseControls else { return }
+        guard canUseControls, canUpdateChapterList else { return }
         // Keep the current chapter callback so the presenter can preserve its reading position.
         closePanel { [onSelect] in onSelect(Int(item.chapter.index)) }
     }
@@ -569,17 +569,26 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
     }
 
     @objc private func showMoreMenu() {
-        guard canUseControls else { return }
+        guard canUseControls, canUpdateChapterList else { return }
         view.endEditing(true)
+        let revision = itemsRevision
+        let tab = selectedTab
+        let bookURL = bookmarkBookURL
+        let query = searchField.text ?? ""
         menuCoordinator.presentMenu(
             in: self, anchorView: moreButton, showingChapters: selectedTab == .chapters,
             canReverse: onReverse != nil && !items.isEmpty && !isReversing,
+            isCurrentState: { [weak self] in
+                guard let self else { return false }
+                return self.canUseControls && self.itemsRevision == revision && self.selectedTab == tab
+                    && self.bookmarkBookURL == bookURL && (self.searchField.text ?? "") == query
+            },
             onExportBookmarks: { [weak self] markdown in self?.exportBookmarks(markdown: markdown) },
             onReverse: { [weak self] in self?.reverseOrder() })
     }
 
     private func exportBookmarks(markdown: Bool) {
-        guard canUseControls,
+        guard canUseControls, canUpdateChapterList, selectedTab == .bookmarks,
             let bookURL = bookmarkBookURL,
             let book = bookContext(for: bookURL)
         else { return }
@@ -592,30 +601,16 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
         guard canUseControls, canUpdateChapterList, selectedTab == .chapters, !items.isEmpty,
             !isReversing, !menuCoordinator.isUpdating, let onReverse
         else { return }
-        let requestID = UUID()
-        operationRequestID = requestID
-        isReversing = true
         menuCoordinator.dismissMenu()
         view.endEditing(true)
-        updateOperationControls()
-        showTransientMessage(Self.reverseLoadingMessage)
-        operationTask = Task { @MainActor [weak self] in
-            defer {
-                if let self, self.operationRequestID == requestID {
-                    self.operationTask = nil
-                    self.operationRequestID = nil
-                    self.isReversing = false
-                    self.updateOperationControls()
-                    self.resumeChapterUpdates()
-                }
-            }
-            do {
-                try Task.checkCancellation()
-                // A committed reversal must rebind the reader inside onReverse, even after cancellation.
-                let updated = try await onReverse()
-                guard !Task.isCancelled, let self, self.operationRequestID == requestID,
-                    self.canUpdateChapterList
-                else { return }
+        orderOperation.reverse(
+            action: onReverse, canApply: { [weak self] in self?.canUpdateChapterList == true },
+            onStarted: {
+                updateOperationControls()
+                showTransientMessage(Self.reverseLoadingMessage)
+            },
+            onItems: { [weak self] updated in
+                guard let self else { return }
                 self.items = updated
                 self.chapterSearchQuery = self.searchField.text ?? ""
                 self.applyFilter()
@@ -625,18 +620,16 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
                 } else {
                     self.scrollAfterFilter(animated: false)
                 }
-            } catch {
-                guard !Task.isCancelled, !(error is CancellationError),
-                    let self, self.operationRequestID == requestID, self.canUpdateChapterList
-                else { return }
-                self.showTransientMessage("反转目录失败: \(error.userFacingMessage)")
-            }
-        }
+            },
+            onError: { [weak self] error in self?.showTransientMessage(ReaderChapterListMenuText.reverseFailed(error)) },
+            onFinished: { [weak self] in
+                self?.updateOperationControls()
+                self?.resumeChapterUpdates()
+            })
     }
 
     private var canUpdateChapterList: Bool {
-        !isClosing && !isBeingDismissed && !isMovingFromParent
-            && navigationController?.isBeingDismissed != true && viewIfLoaded?.window != nil
+        !isClosing && menuCoordinator.canUsePresentation(self)
     }
 
     private func makeLiveState() -> ReaderTocLiveStateCoordinator? {
@@ -721,7 +714,7 @@ class AndroidChapterListSheetViewController: UIViewController, UITableViewDataSo
         pendingTitleItems = nil
         bookmarkExportCoordinator.cancel()
         // A shared reversal can still commit after cancellation; keep its flight until it settles.
-        operationTask?.cancel()
+        orderOperation.cancel()
         updateOperationControls()
     }
 

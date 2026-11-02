@@ -41,10 +41,16 @@ final class SearchEmptyResultPrompt {
         else { return }
         let requestID = revision
         let action: Action = context.precisionSearch ? .disablePrecision : .switchToAll
-        let question = context.precisionSearch ? "关闭精准搜索" : "切换到全部分组"
+        let question =
+            context.precisionSearch
+            ? L10n.Search.disablePrecision
+            : NSLocalizedString("search.empty_result.switch_all", value: "切换到全部分组", comment: "")
         let alert = ReaderRestoreProgressDialogViewController(
-            title: "搜索结果为空",
-            message: "\(context.scope.displayName)分组搜索结果为空，是否\(question)？",
+            title: NSLocalizedString("search.empty_result.title", value: "搜索结果为空", comment: ""),
+            message: String(
+                format: NSLocalizedString(
+                    "search.empty_result.message_format", value: "%1$@分组搜索结果为空，是否%2$@？", comment: ""),
+                context.scope.displayName, question),
             accessibilityIdentifierPrefix: "search.emptyResult"
         ) { [weak self] accepted in
             guard accepted, let self, self.revision == requestID, isCurrent(context, nil) else { return }

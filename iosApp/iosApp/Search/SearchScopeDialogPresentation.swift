@@ -2,17 +2,134 @@ import ObjectiveC
 import UIKit
 import shared
 
+/// Captures the caller's visible source, not the container UIKit forwards `present` to.
+@MainActor
+final class SearchScopeDialogOwnership {
+    private weak var source: UIViewController?
+    private weak var leaf: UIViewController?
+    private weak var root: UIViewController?
+    private(set) weak var window: UIWindow?
+
+    init?(source: UIViewController) {
+        guard let window = source.viewIfLoaded?.window, let root = window.rootViewController else { return nil }
+        self.source = source
+        leaf = Self.visibleSource(from: source)
+        self.window = window
+        self.root = root
+    }
+
+    var hasSameSource: Bool {
+        guard let source, let leaf, let window, let root, window.rootViewController === root,
+            Self.visibleSource(from: source) === leaf,
+            let chain = Self.chain(from: leaf), chain.contains(where: { $0 === source }), chain.last === root
+        else { return false }
+        return Self.hasSelectedContainers(chain)
+    }
+
+    func isCurrent(allowing dialog: UIViewController? = nil, completing dismissal: UIViewController? = nil) -> Bool {
+        guard hasSameSource, let source, let leaf, let window,
+            Self.isActive(window), let host = source.viewIfLoaded, let leafView = leaf.viewIfLoaded,
+            host.window === window, leafView.window === window,
+            !host.isHidden, host.alpha > 0, !leafView.isHidden, leafView.alpha > 0,
+            let chain = Self.chain(from: leaf)
+        else { return false }
+        for controller in chain {
+            guard Self.isStable(controller, allowing: dialog ?? dismissal) else { return false }
+            // A navigation controller may be the actual presenter while its visible child
+            // also reports that modal. Both must allow this same dialog, not require nil.
+            if let presented = controller.presentedViewController,
+                presented !== dialog, !chain.contains(where: { $0 === presented })
+            {
+                return false
+            }
+        }
+        if let dialog, let presenter = dialog.presentingViewController {
+            return presenter.presentedViewController === dialog && chain.contains(where: { $0 === presenter })
+        }
+        return true
+    }
+
+    static func ownsPresentation(_ dialog: UIViewController) -> Bool {
+        guard let host = dialog.viewIfLoaded, let window = host.window, isActive(window),
+            !host.isHidden, host.alpha > 0, host.superview != nil,
+            let presenter = dialog.presentingViewController, presenter.presentedViewController === dialog,
+            let chain = Self.chain(from: dialog), chain.last === window.rootViewController, hasSelectedContainers(chain)
+        else { return false }
+        for controller in chain {
+            guard isStable(controller, allowing: nil) else { return false }
+            if let presented = controller.presentedViewController, !chain.contains(where: { $0 === presented }) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func isActive(_ window: UIWindow) -> Bool {
+        !window.isHidden && window.alpha > 0 && window.isKeyWindow
+            && UIApplication.shared.applicationState == .active
+            && window.windowScene?.activationState == .foregroundActive
+            && AppLockManager.shared.isUnlocked(in: window)
+    }
+
+    private static func isStable(_ controller: UIViewController, allowing dialog: UIViewController?) -> Bool {
+        guard !controller.isBeingPresented, !controller.isBeingDismissed,
+            !controller.isMovingFromParent, !controller.isMovingToParent
+        else { return false }
+        guard let transition = controller.transitionCoordinator else { return true }
+        guard let dialog else { return false }
+        return transition.viewController(forKey: .from) === dialog || transition.viewController(forKey: .to) === dialog
+    }
+
+    private static func hasSelectedContainers(_ chain: [UIViewController]) -> Bool {
+        for controller in chain {
+            if let navigation = controller.parent as? UINavigationController, navigation.topViewController !== controller {
+                return false
+            }
+            if let tabs = controller.parent as? UITabBarController, tabs.selectedViewController !== controller {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func chain(from controller: UIViewController) -> [UIViewController]? {
+        var result: [UIViewController] = []
+        var current: UIViewController? = controller
+        while let candidate = current, result.count < 64 {
+            guard !result.contains(where: { $0 === candidate }) else { return nil }
+            result.append(candidate)
+            current = candidate.parent ?? candidate.presentingViewController
+        }
+        return current == nil ? result : nil
+    }
+
+    private static func visibleSource(from controller: UIViewController) -> UIViewController {
+        var current = controller
+        for _ in 0..<64 {
+            if let navigation = current as? UINavigationController, let top = navigation.topViewController {
+                current = top
+            } else if let tabs = current as? UITabBarController, let selected = tabs.selectedViewController {
+                current = selected
+            } else {
+                break
+            }
+        }
+        return current
+    }
+}
+
 @MainActor
 enum SearchScopeDialogSourceLoader {
     private static var requestKey: UInt8 = 0
 
     static func load(from presenter: UIViewController, onLoaded: @escaping ([BookSource]) -> Void) {
-        guard canPresent(from: presenter) else { return }
-        activeRequest(for: presenter)?.task?.cancel()
-        let request = SearchScopeDialogSourceRequest()
+        guard let ownership = SearchScopeDialogOwnership(source: presenter), ownership.isCurrent() else { return }
+        activeRequest(for: presenter)?.cancel()
+        let request = SearchScopeDialogSourceRequest(ownership: ownership)
         objc_setAssociatedObject(presenter, &requestKey, request, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         request.task = Task { [weak presenter, weak request] in
             defer {
+                request?.stopObserving()
                 if let presenter, let request, activeRequest(for: presenter) === request {
                     objc_setAssociatedObject(presenter, &requestKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
                 }
@@ -23,13 +140,13 @@ enum SearchScopeDialogSourceLoader {
                 let sources = try await facade.getAllSourcesAsync()
                 try Task.checkCancellation()
                 guard let presenter, let request, activeRequest(for: presenter) === request,
-                    canPresent(from: presenter)
+                    !request.isCancelled, request.ownership.isCurrent()
                 else { return }
                 onLoaded(sources)
             } catch {
                 guard !Task.isCancelled, !(error is CancellationError),
                     let presenter, let request, activeRequest(for: presenter) === request,
-                    canPresent(from: presenter)
+                    !request.isCancelled, request.ownership.isCurrent()
                 else { return }
                 presenter.presentError(error)
             }
@@ -39,32 +156,42 @@ enum SearchScopeDialogSourceLoader {
     private static func activeRequest(for presenter: UIViewController) -> SearchScopeDialogSourceRequest? {
         objc_getAssociatedObject(presenter, &requestKey) as? SearchScopeDialogSourceRequest
     }
-
-    private static func canPresent(from presenter: UIViewController) -> Bool {
-        guard let window = presenter.viewIfLoaded?.window,
-            window.windowScene?.activationState == .foregroundActive
-        else { return false }
-        var current: UIViewController? = presenter
-        while let controller = current {
-            guard !controller.isBeingDismissed, !controller.isBeingPresented,
-                !controller.isMovingFromParent, controller.presentedViewController == nil
-            else { return false }
-            if let navigation = controller.parent as? UINavigationController, navigation.topViewController !== controller {
-                return false
-            }
-            if let tabs = controller.parent as? UITabBarController, tabs.selectedViewController !== controller {
-                return false
-            }
-            current = controller.parent
-        }
-        return true
-    }
 }
 
-private final class SearchScopeDialogSourceRequest {
+@MainActor
+private final class SearchScopeDialogSourceRequest: NSObject {
+    let ownership: SearchScopeDialogOwnership
+    private(set) var isCancelled = false
     var task: Task<Void, Never>?
 
+    init(ownership: SearchScopeDialogOwnership) {
+        self.ownership = ownership
+        super.init()
+        for name in [
+            UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification,
+            UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification,
+            UIWindow.didResignKeyNotification, UIWindow.didBecomeHiddenNotification, .appLockWillCover,
+        ] {
+            NotificationCenter.default.addObserver(self, selector: #selector(invalidated(_:)), name: name, object: nil)
+        }
+    }
+
+    func cancel() {
+        isCancelled = true
+        task?.cancel()
+        stopObserving()
+    }
+
+    func stopObserving() { NotificationCenter.default.removeObserver(self) }
+
+    @objc private func invalidated(_ notification: Notification) {
+        if let scene = notification.object as? UIScene, scene !== ownership.window?.windowScene { return }
+        if let window = notification.object as? UIWindow, window !== ownership.window { return }
+        cancel()
+    }
+
     deinit {
+        NotificationCenter.default.removeObserver(self)
         task?.cancel()
     }
 }
@@ -77,9 +204,10 @@ final class SearchScopeDialogTransitioningDelegate: NSObject, UIViewControllerTr
     func presentationController(
         forPresented presented: UIViewController,
         presenting: UIViewController?,
-        source _: UIViewController
+        source: UIViewController
     ) -> UIPresentationController? {
-        SearchScopeDialogPresentationController(presentedViewController: presented, presenting: presenting)
+        (presented as? SearchScopeViewController)?.bindSource(source)
+        return SearchScopeDialogPresentationController(presentedViewController: presented, presenting: presenting)
     }
 
     func animationController(
@@ -103,6 +231,7 @@ private final class SearchScopeDialogPresentationController: UIPresentationContr
     private var keyboardFrameInScreen: CGRect?
     private var isObservingKeyboard = false
     private var isPresented = false
+    private var isRemoved = false
 
     override init(presentedViewController: UIViewController, presenting presentingViewController: UIViewController?) {
         super.init(presentedViewController: presentedViewController, presenting: presentingViewController)
@@ -122,6 +251,7 @@ private final class SearchScopeDialogPresentationController: UIPresentationContr
     }
 
     override var presentedView: UIView? {
+        guard !isRemoved else { return dialogView }
         let contentView = presentedViewController.view!
         if contentView.superview !== dialogView {
             contentView.frame = dialogView.bounds
@@ -163,6 +293,7 @@ private final class SearchScopeDialogPresentationController: UIPresentationContr
 
     override func presentationTransitionWillBegin() {
         super.presentationTransitionWillBegin()
+        isRemoved = false
         guard let containerView else { return }
         dialogView.frame = frameOfPresentedViewInContainerView
         _ = presentedView
@@ -183,6 +314,7 @@ private final class SearchScopeDialogPresentationController: UIPresentationContr
         } else {
             removePresentation()
         }
+        (presentedViewController as? SearchScopeViewController)?.presentationTransitionEnded(completed: completed)
     }
 
     override func dismissalTransitionWillBegin() {
@@ -201,6 +333,7 @@ private final class SearchScopeDialogPresentationController: UIPresentationContr
             dimmingControl.isUserInteractionEnabled = true
             containerView?.setNeedsLayout()
         }
+        (presentedViewController as? SearchScopeViewController)?.dismissalTransitionEnded(completed: completed)
     }
 
     override func containerViewWillLayoutSubviews() {
@@ -235,10 +368,14 @@ private final class SearchScopeDialogPresentationController: UIPresentationContr
     }
 
     private func removePresentation() {
+        isRemoved = true
         NotificationCenter.default.removeObserver(self)
         isObservingKeyboard = false
         keyboardFrameInScreen = nil
         dimmingControl.removeFromSuperview()
+        if presentedViewController.viewIfLoaded?.superview === dialogView {
+            presentedViewController.viewIfLoaded?.removeFromSuperview()
+        }
         dialogView.removeFromSuperview()
     }
 
@@ -266,16 +403,11 @@ private final class SearchScopeDialogPresentationController: UIPresentationContr
     }
 
     private func cancel() -> Bool {
-        guard isPresented, !presentedViewController.isBeingDismissed,
-            presentedViewController.presentedViewController == nil
+        guard isPresented, let scope = presentedViewController as? SearchScopeViewController
         else { return false }
-        dimmingControl.isUserInteractionEnabled = false
-        if let scope = presentedViewController as? SearchScopeViewController {
-            scope.cancelSelection(animated: !UIAccessibility.isReduceMotionEnabled)
-        } else {
-            presentedViewController.dismiss(animated: !UIAccessibility.isReduceMotionEnabled)
-        }
-        return true
+        let accepted = scope.cancelSelection(animated: !UIAccessibility.isReduceMotionEnabled)
+        if accepted { dimmingControl.isUserInteractionEnabled = false }
+        return accepted
     }
 }
 
@@ -284,6 +416,21 @@ private final class SearchScopeDialogView: UIView {
 
     override func accessibilityPerformEscape() -> Bool {
         onEscape?() ?? false
+    }
+}
+
+@MainActor
+final class SearchScopeDialogHostView: UIView {
+    var onDetach: (() -> Void)?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { onDetach?() }
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        if superview == nil { onDetach?() }
     }
 }
 

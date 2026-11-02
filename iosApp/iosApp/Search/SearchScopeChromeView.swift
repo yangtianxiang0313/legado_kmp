@@ -51,8 +51,10 @@ internal enum SearchScopeStyle {
 }
 
 /// Owns the SearchView interaction; filtering and source/group state remain with the controller.
-final class SearchScopeToolbarView: UIView {
+final class SearchScopeToolbarView: UIView, UITextFieldDelegate {
     let searchField: UITextField = SearchScopeSearchField()
+    var canInteract: (() -> Bool)?
+    var onEscape: (() -> Bool)?
     var onQueryChanged: ((String) -> Void)?
     private(set) var isFilterExpanded = false
 
@@ -108,6 +110,7 @@ final class SearchScopeToolbarView: UIView {
             "search.scope_android_search", value: "搜索", comment: "AppCompat search description")
         searchField.accessibilityLabel = searchDescription
         searchField.accessibilityIdentifier = "SearchScopeFilter"
+        searchField.delegate = self
         searchField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         searchField.addTarget(self, action: #selector(submitQuery), for: .editingDidEndOnExit)
         searchField.addTarget(self, action: #selector(focusChanged), for: [.editingDidBegin, .editingDidEnd])
@@ -181,7 +184,7 @@ final class SearchScopeToolbarView: UIView {
     }
 
     func toggleFilter() {
-        guard isSourceMode, controlsEnabled else { return }
+        guard isSourceMode, interactionAllowed else { return }
         setFilterExpanded(!isFilterExpanded)
     }
 
@@ -231,9 +234,15 @@ final class SearchScopeToolbarView: UIView {
     }
 
     override func accessibilityPerformEscape() -> Bool {
-        guard isSourceMode, isFilterExpanded else { return super.accessibilityPerformEscape() }
-        setFilterExpanded(false, focusSearch: false)
-        return true
+        onEscape?() ?? false
+    }
+
+    private var interactionAllowed: Bool { controlsEnabled && canInteract?() != false }
+
+    func textFieldShouldBeginEditing(_: UITextField) -> Bool { interactionAllowed }
+
+    func textField(_: UITextField, shouldChangeCharactersIn _: NSRange, replacementString _: String) -> Bool {
+        interactionAllowed
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -311,12 +320,12 @@ final class SearchScopeToolbarView: UIView {
     }
 
     @objc private func expandSearch() {
-        guard controlsEnabled else { return }
+        guard interactionAllowed else { return }
         setFilterExpanded(true)
     }
 
     @objc private func closeSearch() {
-        guard controlsEnabled else { return }
+        guard interactionAllowed else { return }
         if query.isEmpty {
             setFilterExpanded(false, focusSearch: false)
         } else {
@@ -326,6 +335,11 @@ final class SearchScopeToolbarView: UIView {
     }
 
     @objc private func queryChanged() {
+        guard interactionAllowed else {
+            searchField.text = lastQuery
+            updateCloseAction()
+            return
+        }
         let value = query
         guard value != lastQuery else { return }
         lastQuery = value
@@ -349,6 +363,7 @@ final class SearchScopeToolbarView: UIView {
 
 /// The controller supplies the RadioGroup's 11dp inset; this view owns only its 4dp child margins.
 final class SearchScopeModeControl: UIControl {
+    var canInteract: (() -> Bool)?
     var selectedSegmentIndex: Int = 0 {
         didSet {
             selectedSegmentIndex = min(max(selectedSegmentIndex, 0), 1)
@@ -447,7 +462,7 @@ final class SearchScopeModeControl: UIControl {
     }
 
     @objc private func selectMode(_ sender: UIButton) {
-        guard isEnabled, selectedSegmentIndex != sender.tag else { return }
+        guard isEnabled, canInteract?() != false, selectedSegmentIndex != sender.tag else { return }
         selectedSegmentIndex = sender.tag
         sendActions(for: .valueChanged)
     }
@@ -512,6 +527,13 @@ final class SearchScopeActionsView: UIView {
             button.backgroundColor = .clear
             button.accessibilityTraits = enabled ? .button : [.button, .notEnabled]
         }
+    }
+
+    func setCancellationEnabled(_ enabled: Bool) {
+        let button = buttons[1]
+        button.isEnabled = enabled
+        button.alpha = enabled ? 1 : 0.38
+        button.accessibilityTraits = enabled ? .button : [.button, .notEnabled]
     }
 
     override func layoutSubviews() {

@@ -25,6 +25,12 @@ final class SearchScreenMenuCoordinator {
         onScopeDialog: @escaping () -> Void,
         onScopeSelected: @escaping (SearchScopeSelection) -> Void
     ) {
+        guard let host = presenter.viewIfLoaded else { return }
+        let context = ReaderOverflowPresentationContext(anchor: host, host: host)
+        guard canActivate(from: presenter, context: context) else {
+            dismiss()
+            return
+        }
         let menuScope: SearchScopeSelection
         switch scope {
         case .group(let group) where !groups.contains(group):
@@ -40,20 +46,20 @@ final class SearchScreenMenuCoordinator {
         let id = UUID()
         presentationID = id
         menu.dismiss()
-        guard presentationID == id else { return }
+        guard presentationID == id, canActivate(from: presenter, context: context) else { return }
         // The real toolbar anchor is intentionally paused by onPresentationChange(true).
-        let context = ReaderOverflowPresentationContext(anchor: presenter.view, host: presenter.view)
         menu.canActivateItem = { [weak self, weak presenter] in
-            guard let self, self.presentationID == id, let presenter, context.isCurrent,
-                presenter.navigationController?.topViewController === presenter,
-                presenter.presentedViewController == nil
+            guard let self, self.presentationID == id, let presenter,
+                self.canActivate(from: presenter, context: context)
             else { return false }
             return true
         }
         var items: [SearchOverflowMenuView.Item] = [
             .init(id: "precision", title: L10n.Settings.precisionSearchTitle, selection: .checkbox, isSelected: precisionSearch),
             .init(id: "sources", title: L10n.Settings.sourceManagementTitle),
-            .init(id: "scope", title: "多分组/书源"),
+            .init(
+                id: "scope",
+                title: NSLocalizedString("search.menu.groups_or_source", value: "多分组/书源", comment: "")),
         ]
         var selections: [String: SearchScopeSelection] = [:]
         let selectedGroups: [String]
@@ -75,7 +81,10 @@ final class SearchScreenMenuCoordinator {
             let remaining = selectedGroups.filter { $0 != group }
             selections[key] = remaining.isEmpty ? .allEnabled : (remaining.count == 1 ? .group(remaining[0]) : .groups(remaining))
         }
-        items.append(.init(id: "all", title: "全部书源", selection: .radio, isSelected: menuScope == .allEnabled))
+        items.append(
+            .init(
+                id: "all", title: NSLocalizedString("search.scope_all_sources", value: "全部书源", comment: ""),
+                selection: .radio, isSelected: menuScope == .allEnabled))
         selections["all"] = .allEnabled
         for group in groups where !selectedGroups.contains(group) {
             let key = "group.\(group)"
@@ -84,11 +93,11 @@ final class SearchScreenMenuCoordinator {
         }
         items.append(.init(id: "log", title: L10n.Bookshelf.logTitle))
         menu.show(in: presenter.view, anchor: anchor, items: items) { [weak self, weak presenter] action in
-            guard let self, self.presentationID == id, let presenter, context.isCurrent,
-                presenter.navigationController?.topViewController === presenter,
-                presenter.presentedViewController == nil
+            guard let self, self.presentationID == id, let presenter,
+                self.canActivate(from: presenter, context: context)
             else { return }
             self.dismiss()
+            guard self.canActivate(from: presenter, context: context) else { return }
             if let selection = selections[action] {
                 onScopeSelected(selection)
                 return
@@ -117,5 +126,14 @@ final class SearchScreenMenuCoordinator {
     func dismiss() {
         presentationID = UUID()
         menu.dismiss()
+    }
+
+    private func canActivate(from presenter: UIViewController, context: ReaderOverflowPresentationContext) -> Bool {
+        guard context.isCurrent, let window = presenter.viewIfLoaded?.window,
+            AppLockManager.shared.isUnlocked(in: window),
+            presenter.navigationController?.topViewController === presenter,
+            presenter.presentedViewController == nil
+        else { return false }
+        return true
     }
 }

@@ -62,9 +62,13 @@ final class ReaderChapterListPresentationCoordinator {
     }
 
     private func canPresent(in reader: ReaderContainerViewController) -> Bool {
-        !reader.isMovingFromParent && !reader.isBeingDismissed
+        guard let window = reader.viewIfLoaded?.window,
+            window.isKeyWindow, !window.isHidden,
+            window.windowScene?.activationState == .foregroundActive,
+            UIApplication.shared.applicationState == .active, AppLockManager.shared.isUnlocked(in: window)
+        else { return false }
+        return !reader.isMovingFromParent && !reader.isBeingDismissed
             && reader.navigationController?.topViewController === reader
             && reader.presentedViewController == nil
-            && reader.viewIfLoaded?.window != nil
     }
 }
