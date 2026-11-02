@@ -19,6 +19,7 @@ enum LocalBookFileStore {
     private static let importLeases = ImportFileLeases()
     private static let archiveImportLimitGiB = 16
     private static let archiveImportByteLimit = archiveImportLimitGiB * 1024 * 1024 * 1024
+    private static let uploadByteLimit = 2 * 1024 * 1024 * 1024
 
     static func prepare(from url: URL) async throws -> PreparedLocalBookFile {
         try await prepareCopy(from: url, forUpload: false)
@@ -35,6 +36,7 @@ enum LocalBookFileStore {
                 try Task.checkCancellation()
                 return try await withCheckedThrowingContinuation { continuation in
                     queue.async {
+                        // Only this worker resumes, after coordination, handles and security scope have ended.
                         do {
                             let prepared = try prepareSynchronously(
                                 from: url,
@@ -99,7 +101,26 @@ enum LocalBookFileStore {
             if accessing { sourceURL.stopAccessingSecurityScopedResource() }
         }
 
+        let byteLimit: Int? =
+            forUpload
+            ? uploadByteLimit
+            : (LocalBookArchiveType.isArchive(fileExtension: fileExtension) ? archiveImportByteLimit : nil)
+        let limitError: StoreError = forUpload ? .uploadTooLarge : .archiveTooLarge
+        try cancellation.check()
+        // Coordination may open the path before calling its accessor. Reject known nonregular nodes first.
+        // A provider item without local metadata must still reach coordination for materialization.
+        try sourceURL.withUnsafeFileSystemRepresentation { path in
+            guard let path else { throw StoreError.invalidFile }
+            var status = stat()
+            if Darwin.lstat(path, &status) == 0 {
+                try validateRegularFile(status, byteLimit: byteLimit, limitError: limitError)
+            }
+        }
+        try cancellation.check()
+
         let coordinator = NSFileCoordinator(filePresenter: nil)
+        try cancellation.register(coordinator)
+        defer { cancellation.unregister(coordinator) }
         var coordinationError: NSError?
         var result: Result<PreparedLocalBookFile, Error>?
         // A false security-scope result is normal for files already inside the app sandbox.
@@ -110,12 +131,16 @@ enum LocalBookFileStore {
                     originalURL: sourceURL,
                     fileExtension: fileExtension,
                     forUpload: forUpload,
+                    byteLimit: byteLimit,
+                    limitError: limitError,
                     cancellation: cancellation
                 )
             }
         }
 
         // Once publication succeeds, neither cancellation nor a late coordinator error may hide it.
+        if let result, case .success(let prepared) = result { return prepared }
+        try cancellation.check()
         if let result { return try result.get() }
         if let coordinationError { throw coordinationError }
         throw StoreError.invalidFile
@@ -126,17 +151,12 @@ enum LocalBookFileStore {
         originalURL: URL,
         fileExtension: String,
         forUpload: Bool,
+        byteLimit: Int?,
+        limitError: StoreError,
         cancellation: ImportCancellation
     ) throws -> PreparedLocalBookFile {
         try cancellation.check()
         let fileManager = FileManager.default
-        try validateFile(at: readableURL, fileManager: fileManager)
-        if forUpload,
-            let size = try fileManager.attributesOfItem(atPath: readableURL.path)[.size] as? NSNumber,
-            size.uint64Value > 2 * 1024 * 1024 * 1024
-        {
-            throw StoreError.uploadTooLarge
-        }
         let root = try storageRoot(fileManager: fileManager, create: true, forUpload: forUpload)
         let stagingDirectory = root.appendingPathComponent(".import-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: stagingDirectory, withIntermediateDirectories: false)
@@ -148,10 +168,8 @@ enum LocalBookFileStore {
             to: temporaryURL,
             fileManager: fileManager,
             cancellation: cancellation,
-            byteLimit: forUpload
-                ? 2 * 1024 * 1024 * 1024
-                : (LocalBookArchiveType.isArchive(fileExtension: fileExtension) ? archiveImportByteLimit : nil),
-            limitError: forUpload ? .uploadTooLarge : .archiveTooLarge
+            byteLimit: byteLimit,
+            limitError: limitError
         )
         // Upload snapshots never share a mutable retained book or another filename's deduplicated original.
         let identity = forUpload ? UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased() : hash
@@ -188,8 +206,25 @@ enum LocalBookFileStore {
         byteLimit: Int? = nil,
         limitError: StoreError = .archiveTooLarge
     ) throws -> String {
-        let input = try FileHandle(forReadingFrom: source)
+        try cancellation.check()
+        guard source.isFileURL else { throw StoreError.invalidFile }
+        // Do not follow a substituted final symlink or block opening a substituted FIFO.
+        let descriptor = try source.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { throw StoreError.invalidFile }
+            let descriptor = Darwin.open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+            guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            return descriptor
+        }
+        let input = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? input.close() }
+        try cancellation.check()
+        var status = stat()
+        guard Darwin.fstat(descriptor, &status) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        try validateRegularFile(status, byteLimit: byteLimit, limitError: limitError)
+        guard status.st_size > 0 else { throw StoreError.emptyFile }
+        try cancellation.check()
         guard fileManager.createFile(atPath: destination.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
             throw StoreError.cannotCreateFile
         }
@@ -205,11 +240,13 @@ enum LocalBookFileStore {
         while true {
             try cancellation.check()
             let copiedChunk = try autoreleasepool {
-                let data = try input.read(upToCount: 1024 * 1024) ?? Data()
-                guard data.isEmpty == false else { return false }
-                copiedBytes += data.count
-                if let byteLimit, copiedBytes > byteLimit { throw limitError }
+                // Read at most one byte beyond the budget, including when the file grows after fstat.
+                let readCount = byteLimit.map { min(1024 * 1024, $0 - copiedBytes + 1) } ?? 1024 * 1024
+                let data = try input.read(upToCount: readCount) ?? Data()
                 try cancellation.check()
+                guard data.isEmpty == false else { return false }
+                if let byteLimit, data.count > byteLimit - copiedBytes { throw limitError }
+                copiedBytes += data.count
                 try output.write(contentsOf: data)
                 hasher.update(data: data)
                 return true
@@ -225,10 +262,26 @@ enum LocalBookFileStore {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func validateFile(at url: URL, fileManager: FileManager) throws {
-        let attributes = try fileManager.attributesOfItem(atPath: url.path)
-        guard attributes[.type] as? FileAttributeType == .typeRegular else { throw StoreError.invalidFile }
-        guard let size = attributes[.size] as? NSNumber, size.uint64Value > 0 else { throw StoreError.emptyFile }
+    private static func validateRegularFile(
+        _ status: stat,
+        byteLimit: Int? = nil,
+        limitError: StoreError = .archiveTooLarge
+    ) throws {
+        guard (status.st_mode & S_IFMT) == S_IFREG, status.st_size >= 0 else { throw StoreError.invalidFile }
+        if let byteLimit, status.st_size > Int64(byteLimit) { throw limitError }
+    }
+
+    private static func validateFile(at url: URL) throws {
+        guard url.isFileURL else { throw StoreError.invalidFile }
+        try url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { throw StoreError.invalidFile }
+            var status = stat()
+            guard Darwin.lstat(path, &status) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            try validateRegularFile(status)
+            guard status.st_size > 0 else { throw StoreError.emptyFile }
+        }
     }
 
     private static func existingFile(
@@ -250,7 +303,7 @@ enum LocalBookFileStore {
         guard files.count == 1, let file = files.first,
             file.pathExtension.lowercased() == fileExtension
         else { throw StoreError.invalidStorage }
-        try validateFile(at: file, fileManager: fileManager)
+        try validateFile(at: file)
         return file
     }
 
@@ -359,11 +412,15 @@ enum LocalBookFileStore {
     private final class ImportCancellation: @unchecked Sendable {
         private let lock = NSLock()
         private var isCancelled = false
+        private var coordinator: NSFileCoordinator?
 
         func cancel() {
             lock.lock()
             isCancelled = true
+            let coordinator = self.coordinator
             lock.unlock()
+            // Request cancellation of coordination waits; never resume while the worker still owns resources.
+            coordinator?.cancel()
         }
 
         func check() throws {
@@ -371,6 +428,23 @@ enum LocalBookFileStore {
             let cancelled = isCancelled
             lock.unlock()
             if cancelled { throw CancellationError() }
+        }
+
+        func register(_ coordinator: NSFileCoordinator) throws {
+            lock.lock()
+            let cancelled = isCancelled
+            if !cancelled { self.coordinator = coordinator }
+            lock.unlock()
+            if cancelled {
+                coordinator.cancel()
+                throw CancellationError()
+            }
+        }
+
+        func unregister(_ coordinator: NSFileCoordinator) {
+            lock.lock()
+            if self.coordinator === coordinator { self.coordinator = nil }
+            lock.unlock()
         }
     }
 
