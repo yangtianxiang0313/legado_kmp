@@ -40,27 +40,44 @@ final class ReaderTipTitleModeControl: UIView {
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let widths = buttonWidths(for: size.width)
-        let height =
-            zip(buttons, widths).map { button, width in
-                button.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-            }.max() ?? 0
-        return CGSize(width: size.width, height: ceil(height))
+        CGSize(width: size.width, height: buttonLayout(width: size.width).height)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        var x: CGFloat = 0
-        for (button, width) in zip(buttons, buttonWidths(for: bounds.width)) {
-            button.frame = CGRect(x: x, y: 0, width: width, height: bounds.height)
-            x += width
+        for (button, frame) in zip(buttons, buttonLayout(width: bounds.width).frames) {
+            button.frame = frame
         }
     }
 
-    private func buttonWidths(for width: CGFloat) -> [CGFloat] {
-        let natural = buttons.map(\.naturalWidth)
-        guard natural.reduce(0, +) > width else { return natural }
-        return Array(repeating: max(1, width / CGFloat(max(1, buttons.count))), count: buttons.count)
+    private func buttonLayout(width: CGFloat) -> (height: CGFloat, frames: [CGRect]) {
+        let width = max(1, width)
+        var frames: [CGRect] = []
+        var rowStart = 0
+        var rowHeight: CGFloat = 0
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+
+        func finishRow() {
+            for index in rowStart..<frames.count {
+                frames[index].origin.y = y + (rowHeight - frames[index].height) / 2
+            }
+            y += rowHeight
+            x = 0
+            rowHeight = 0
+            rowStart = frames.count
+        }
+
+        for button in buttons {
+            let buttonWidth = min(width, button.naturalWidth)
+            if x > 0, x + buttonWidth > width { finishRow() }
+            let height = button.sizeThatFits(CGSize(width: buttonWidth, height: .greatestFiniteMagnitude)).height
+            frames.append(CGRect(x: x, y: y, width: buttonWidth, height: height))
+            x += buttonWidth
+            rowHeight = max(rowHeight, height)
+        }
+        finishRow()
+        return (ceil(y), frames)
     }
 }
 
@@ -239,7 +256,9 @@ final class ReaderTipValueControl: ReaderMenuPressButton {
         guard valueLabel.text != value else { return }
         valueLabel.text = value
         accessibilityValue = value
+        invalidateIntrinsicContentSize()
         setNeedsLayout()
+        superview?.setNeedsLayout()
     }
 
     func apply(palette _: ReaderMenuPalette) {
@@ -258,12 +277,8 @@ final class ReaderTipValueControl: ReaderMenuPressButton {
     override func layoutSubviews() {
         super.layoutSubviews()
         let metrics = measure(width: bounds.width)
-        optionLabel.frame = CGRect(
-            x: 6, y: (bounds.height - metrics.titleHeight) / 2,
-            width: metrics.titleWidth, height: metrics.titleHeight)
-        valueLabel.frame = CGRect(
-            x: metrics.titleWidth + 18, y: (bounds.height - metrics.valueHeight) / 2,
-            width: metrics.valueWidth, height: metrics.valueHeight)
+        optionLabel.frame = metrics.titleFrame
+        valueLabel.frame = metrics.valueFrame
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -281,16 +296,16 @@ final class ReaderTipValueControl: ReaderMenuPressButton {
     }
 
     private func measure(width: CGFloat) -> (
-        height: CGFloat, titleWidth: CGFloat, valueWidth: CGFloat, titleHeight: CGFloat, valueHeight: CGFloat
+        height: CGFloat, titleFrame: CGRect, valueFrame: CGRect
     ) {
-        // Each XML TextView has its own 6dp padding; leave both text columns room to wrap.
+        // Preserve weighted title + wrap_content value and each TextView's 6dp padding.
         let textWidth = max(2, width - 24)
         let unconstrained = CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         let naturalTitleWidth = ceil(optionLabel.sizeThatFits(unconstrained).width)
         let naturalValueWidth = ceil(valueLabel.sizeThatFits(unconstrained).width)
-        let reservedTitleWidth = min(naturalTitleWidth, textWidth * 0.4)
-        let valueWidth = min(naturalValueWidth, textWidth - reservedTitleWidth)
-        let titleWidth = textWidth - valueWidth
+        let stacked = naturalTitleWidth + naturalValueWidth > textWidth
+        let titleWidth = stacked ? max(1, width - 12) : textWidth - naturalValueWidth
+        let valueWidth = stacked ? min(naturalValueWidth, max(1, width - 12)) : naturalValueWidth
         let titleHeight = ceil(
             optionLabel.sizeThatFits(
                 CGSize(width: max(1, titleWidth), height: .greatestFiniteMagnitude)
@@ -299,6 +314,18 @@ final class ReaderTipValueControl: ReaderMenuPressButton {
             valueLabel.sizeThatFits(
                 CGSize(width: max(1, valueWidth), height: .greatestFiniteMagnitude)
             ).height)
-        return (max(titleHeight, valueHeight) + 12, titleWidth, valueWidth, titleHeight, valueHeight)
+        if stacked {
+            return (
+                titleHeight + valueHeight + 24,
+                CGRect(x: 6, y: 6, width: titleWidth, height: titleHeight),
+                CGRect(x: width - valueWidth - 6, y: titleHeight + 18, width: valueWidth, height: valueHeight)
+            )
+        }
+        let height = max(titleHeight, valueHeight) + 12
+        return (
+            height,
+            CGRect(x: 6, y: (height - titleHeight) / 2, width: titleWidth, height: titleHeight),
+            CGRect(x: titleWidth + 18, y: (height - valueHeight) / 2, width: valueWidth, height: valueHeight)
+        )
     }
 }

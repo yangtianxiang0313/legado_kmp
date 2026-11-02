@@ -171,12 +171,22 @@ final class AndroidReaderStyleSliderRow: UIStackView {
     private var isInteractionEnabled = true
     private var isCancellingPendingTracking = false
     private var palette: ReaderMenuPalette?
+    private var compactTitleWidth: NSLayoutConstraint?
+    private var compactValueWidth: NSLayoutConstraint?
+    private var compactPreferredHeight: NSLayoutConstraint?
+    private var compactMinimumHeight: NSLayoutConstraint?
+    private var compactValueTexts: [String] = []
+    private var compactLayoutCache:
+        (
+            width: CGFloat, titleFont: UIFont, valueFont: UIFont, scale: CGFloat, layout: ReaderStyleSliderRowLayout
+        )?
 
     /// The owner must capture itself weakly and reject inactive or covered contexts.
     var canInteract: (() -> Bool)?
 
     var valueFormatter: ((Float) -> String)? {
         didSet {
+            if compactStep != nil { reserveCompactValueTexts() }
             if compactStep != nil || valueFormatter != nil { refreshValueText() }
         }
     }
@@ -188,6 +198,10 @@ final class AndroidReaderStyleSliderRow: UIStackView {
                 rawCompactValueText = newValue
                 valueLabel.text = Self.compactDisplayText(newValue)
                 valueLabel.accessibilityLabel = newValue
+                if let text = valueLabel.text, !compactValueTexts.contains(text) {
+                    compactValueTexts.append(text)
+                    invalidateCompactLayout()
+                }
             } else {
                 valueLabel.text = newValue
             }
@@ -236,6 +250,7 @@ final class AndroidReaderStyleSliderRow: UIStackView {
         slider.maximumValue = max
         if compactStep != nil {
             if rangeChanged { cancelPendingTracking() }
+            if rangeChanged { reserveCompactValueTexts() }
             guard !isCompactTracking && !slider.isTracking else { return }
             slider.value = normalizedValue(slider.value)
             lastCommittedValue = slider.value
@@ -303,6 +318,7 @@ final class AndroidReaderStyleSliderRow: UIStackView {
         slider.value = normalizedValue(slider.value)
         lastCommittedValue = slider.value
         guard !wasCompact else {
+            if previousStep != compactStep { reserveCompactValueTexts() }
             refreshValueText()
             return
         }
@@ -360,15 +376,18 @@ final class AndroidReaderStyleSliderRow: UIStackView {
         // view_detail_seek_bar.xml: 60 / 24 / flexible / 24 / 60; only the track is 25dp high.
         let rowHeight = heightAnchor.constraint(equalToConstant: 25)
         rowHeight.priority = .defaultHigh
-        let trackWidth = slider.widthAnchor.constraint(greaterThanOrEqualToConstant: 24)
-        trackWidth.priority = UILayoutPriority(999)
+        let minimumHeight = heightAnchor.constraint(greaterThanOrEqualToConstant: 25)
+        let titleWidth = titleLabel.widthAnchor.constraint(equalToConstant: 60)
+        let valueWidth = valueLabel.widthAnchor.constraint(equalToConstant: 60)
+        compactPreferredHeight = rowHeight
+        compactMinimumHeight = minimumHeight
+        compactTitleWidth = titleWidth
+        compactValueWidth = valueWidth
         var constraints = [
-            rowHeight, trackWidth,
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 25),
+            rowHeight, minimumHeight,
             heightAnchor.constraint(greaterThanOrEqualTo: titleLabel.heightAnchor),
             heightAnchor.constraint(greaterThanOrEqualTo: valueLabel.heightAnchor),
-            titleLabel.widthAnchor.constraint(equalToConstant: 60),
-            valueLabel.widthAnchor.constraint(equalToConstant: 60),
+            titleWidth, valueWidth,
             slider.widthAnchor.constraint(greaterThanOrEqualToConstant: 12),
             slider.heightAnchor.constraint(equalToConstant: 25),
         ]
@@ -378,6 +397,7 @@ final class AndroidReaderStyleSliderRow: UIStackView {
         }
         NSLayoutConstraint.activate(constraints)
         updateCompactFont()
+        reserveCompactValueTexts()
         apply(palette: palette ?? ReaderMenuPalette(readerTheme: ReaderThemeController(), traits: traitCollection))
         refreshValueText()
     }
@@ -387,9 +407,8 @@ final class AndroidReaderStyleSliderRow: UIStackView {
         label.text = compactDisplayText(text)
         label.accessibilityLabel = text
         label.textAlignment = alignment
-        label.numberOfLines = 1
-        // Non-editable singleLine TextViews default to END ellipsis, not wrapping or autosizing.
-        label.lineBreakMode = .byTruncatingTail
+        label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
         label.adjustsFontSizeToFitWidth = false
         label.adjustsFontForContentSizeCategory = false
         label.isAccessibilityElement = false
@@ -467,6 +486,75 @@ final class AndroidReaderStyleSliderRow: UIStackView {
             size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
         titleLabel.font = font
         valueLabel.font = font
+        invalidateCompactLayout()
+    }
+
+    override func layoutSubviews() {
+        if compactStep != nil { updateCompactLayout(width: bounds.width) }
+        super.layoutSubviews()
+    }
+
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize, withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
+        verticalFittingPriority: UILayoutPriority
+    ) -> CGSize {
+        if compactStep != nil { updateCompactLayout(width: targetSize.width) }
+        return super.systemLayoutSizeFitting(
+            targetSize, withHorizontalFittingPriority: horizontalFittingPriority,
+            verticalFittingPriority: verticalFittingPriority)
+    }
+
+    private func invalidateCompactLayout() {
+        compactLayoutCache = nil
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+        superview?.setNeedsLayout()
+    }
+
+    private func updateCompactLayout(width: CGFloat) {
+        guard width.isFinite, width > 0 else { return }
+        // Older hosts also style arranged labels; wrapping belongs to this shared surface.
+        for label in [titleLabel, valueLabel] {
+            label.numberOfLines = 0
+            label.lineBreakMode = .byWordWrapping
+            label.adjustsFontSizeToFitWidth = false
+        }
+        let layout: ReaderStyleSliderRowLayout
+        if let cached = compactLayoutCache, cached.width == width,
+            cached.titleFont.isEqual(titleLabel.font), cached.valueFont.isEqual(valueLabel.font),
+            cached.scale == traitCollection.displayScale
+        {
+            layout = cached.layout
+        } else {
+            layout = ReaderStyleSliderRowLayout.measure(
+                width: width, title: titleLabel, value: valueLabel, valueTexts: compactValueTexts)
+            compactLayoutCache = (width, titleLabel.font, valueLabel.font, traitCollection.displayScale, layout)
+        }
+        titleLabel.preferredMaxLayoutWidth = layout.titleWidth
+        valueLabel.preferredMaxLayoutWidth = layout.valueWidth
+        compactTitleWidth?.constant = layout.titleWidth
+        compactValueWidth?.constant = layout.valueWidth
+        compactPreferredHeight?.constant = layout.height
+        compactMinimumHeight?.constant = layout.height
+    }
+
+    private func reserveCompactValueTexts() {
+        guard let step = compactStep else { return }
+        var values = [slider.minimumValue, slider.maximumValue]
+        let ticks = (Double(slider.maximumValue) - Double(slider.minimumValue)) / Double(step)
+        // All current reader ranges fit this bound; avoid unbounded work for future consumers.
+        if ticks.isFinite, ticks >= 0, ticks <= 4096 {
+            values += (0...Int(ceil(ticks))).map {
+                normalizedValue(slider.minimumValue + Float($0) * step)
+            }
+        }
+        var seen = Set<String>()
+        compactValueTexts = values.compactMap { value in
+            let text = Self.compactDisplayText(valueFormatter?(value) ?? String(format: "%g", Double(value)))
+            return seen.insert(text).inserted ? text : nil
+        }
+        if let text = valueLabel.text, seen.insert(text).inserted { compactValueTexts.append(text) }
+        invalidateCompactLayout()
     }
 
     private func normalizedValue(_ value: Float) -> Float {
@@ -549,5 +637,61 @@ final class AndroidReaderStyleSliderRow: UIStackView {
         slider.value = normalizedValue(value)
         refreshValueText()
         commitCompactValue(force: true)
+    }
+}
+
+/// DetailSeekBar's resource dimensions remain the default, not a limit on scaled text.
+@MainActor
+private struct ReaderStyleSliderRowLayout {
+    let titleWidth: CGFloat
+    let valueWidth: CGFloat
+    let height: CGFloat
+
+    static func measure(
+        width: CGFloat, title: UILabel, value: UILabel, valueTexts: [String]
+    ) -> Self {
+        let titleSize = textSize(title, texts: [title.text ?? ""], width: .greatestFiniteMagnitude)
+        let valueSize = textSize(value, texts: valueTexts, width: .greatestFiniteMagnitude)
+        let desiredTitle = max(60, titleSize.width)
+        let desiredValue = max(60, valueSize.width)
+        let width = width.isFinite && width > 0 ? width : desiredTitle + desiredValue + 92
+        // Leave a usable track beyond its two 16dp end insets before borrowing label space.
+        let trackWidth = min(44, max(12, width - 50))
+        let available = max(2, width - 48 - trackWidth)
+        let titleWidth: CGFloat
+        let valueWidth: CGFloat
+        if desiredTitle + desiredValue <= available {
+            titleWidth = desiredTitle
+            valueWidth = desiredValue
+        } else if available >= 120 {
+            let extra = available - 120
+            let titleExtra = desiredTitle - 60
+            let valueExtra = desiredValue - 60
+            titleWidth = 60 + extra * titleExtra / max(1, titleExtra + valueExtra)
+            valueWidth = available - titleWidth
+        } else {
+            titleWidth = max(1, min(available - 1, available * desiredTitle / (desiredTitle + desiredValue)))
+            valueWidth = available - titleWidth
+        }
+        let titleHeight = textSize(title, texts: [title.text ?? ""], width: titleWidth).height
+        let valueHeight = textSize(value, texts: valueTexts, width: valueWidth).height
+        return Self(titleWidth: titleWidth, valueWidth: valueWidth, height: ceil(max(25, max(titleHeight, valueHeight))))
+    }
+
+    private static func textSize(_ label: UILabel, texts: [String], width: CGFloat) -> CGSize {
+        // Use the same UILabel wrapping and Android font padding as the displayed labels.
+        let measurer = UILabel()
+        measurer.font = label.font
+        measurer.numberOfLines = 0
+        measurer.lineBreakMode = .byWordWrapping
+        let padding = (label as? AndroidExploreTextLabel)?.fontPadding ?? .zero
+        var result = CGSize(width: 0, height: label.font.lineHeight + padding.top + padding.bottom)
+        for text in texts {
+            measurer.text = text
+            let size = measurer.sizeThatFits(CGSize(width: max(1, width), height: .greatestFiniteMagnitude))
+            result.width = max(result.width, ceil(size.width))
+            result.height = max(result.height, ceil(max(label.font.lineHeight, size.height) + padding.top + padding.bottom))
+        }
+        return result
     }
 }

@@ -139,14 +139,6 @@ final class ReaderTipBodyView: UIView {
                     self, action: #selector(sliderTrackingEnded),
                     for: [.touchUpInside, .touchUpOutside, .touchCancel])
             }
-            // DetailSeekBar keeps single-line text inside its fixed 60dp label columns.
-            for case let label as UILabel in row.arrangedSubviews {
-                label.numberOfLines = 1
-                label.lineBreakMode = .byTruncatingTail
-                label.adjustsFontSizeToFitWidth = false
-                label.adjustsFontForContentSizeCategory = false
-                label.preferredMaxLayoutWidth = 60
-            }
         }
         titleSizeRow.configure(min: 0, max: 10) { [weak self] value in
             guard value.isFinite else { return }

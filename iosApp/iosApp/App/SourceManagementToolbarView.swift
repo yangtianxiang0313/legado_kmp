@@ -14,15 +14,16 @@ final class SourceManagementToolbarView: NavigationToolbarView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        chrome.canInteract = { [weak self] in self?.canInteract?() != false }
         chrome.isSubmitButtonEnabled = false
         chrome.searchField.accessibilityIdentifier = UIIdentifiers.SourceManagement.searchField
         chrome.moreButton.accessibilityIdentifier = "sourceManagement.more"
         chrome.translatesAutoresizingMaskIntoConstraints = false
         addSubview(chrome)
-        configure(sortButton, image: Self.sortImage, label: "排序", identifier: "sourceManagement.sort")
+        configure(sortButton, image: Self.sortImage, label: L10n.SourceManagement.sortAction, identifier: "sourceManagement.sort")
         configure(
             groupButton, image: UIImage(named: "BookDetailAndroidGroups")?.withRenderingMode(.alwaysTemplate),
-            label: "分组", identifier: "sourceManagement.group")
+            label: L10n.SourceManagement.groupFilter, identifier: "sourceManagement.group")
         let actions = UIStackView(arrangedSubviews: [sortButton, groupButton])
         actions.axis = .horizontal
         actions.distribution = .fillEqually
@@ -114,22 +115,37 @@ final class SourceManagementToolbarView: NavigationToolbarView {
     }()
 }
 
-final class SourceManagementToolbarActionButton: UIButton {
-    var canInteract: (() -> Bool)?
+final class SourceManagementToolbarActionButton: ReaderMenuPressButton {
+    var canInteract: (() -> Bool)? {
+        didSet { if canInteract?() == false { cancelPendingActivation() } }
+    }
+
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        feedbackColor = ReaderMenuToolbarInteraction.feedbackColor(for: tintColor, traits: traitCollection)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if canInteract?() == false { cancelPendingActivation() }
+    }
+
+    private var permitsActivation: Bool {
+        ReaderMenuToolbarInteraction.isAvailable(self) && canInteract?() != false
+    }
 
     override func sendAction(_ action: Selector, to target: Any?, for event: UIEvent?) {
-        guard isEnabled, canInteract?() != false else { return }
+        guard permitsActivation else { return }
         super.sendAction(action, to: target, for: event)
     }
 
     override func sendActions(for controlEvents: UIControl.Event) {
-        guard isEnabled, canInteract?() != false else { return }
+        guard permitsActivation else { return }
         super.sendActions(for: controlEvents)
     }
 
     override func accessibilityActivate() -> Bool {
-        guard isEnabled, canInteract?() != false else { return false }
-        sendActions(for: .touchUpInside)
-        return true
+        guard permitsActivation else { return false }
+        return super.accessibilityActivate()
     }
 }

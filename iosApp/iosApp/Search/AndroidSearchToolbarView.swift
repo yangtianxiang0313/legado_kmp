@@ -2,13 +2,16 @@ import UIKit
 
 final class AndroidSearchToolbarView: UIView {
     let searchField: UITextField = AndroidSearchToolbarTextField(frame: .zero)
-    let backButton = UIButton(type: .custom)
-    let submitButton = UIButton(type: .custom)
-    let moreButton = UIButton(type: .custom)
+    let backButton = ReaderMenuPressButton(type: .custom)
+    let submitButton = ReaderMenuPressButton(type: .custom)
+    let moreButton = ReaderMenuPressButton(type: .custom)
 
     var onBack: (() -> Void)?
     var onSubmit: (() -> Void)?
     var onMore: (() -> Void)?
+    var canInteract: (() -> Bool)? {
+        didSet { updateQueryControls() }
+    }
     var isSubmitButtonEnabled = true {
         didSet { updateQueryControls() }
     }
@@ -36,7 +39,7 @@ final class AndroidSearchToolbarView: UIView {
 
     private let searchBackground = UIView()
     private let searchFocusTarget = UIControl()
-    private let clearButton = UIButton(type: .custom)
+    private let clearButton = ReaderMenuPressButton(type: .custom)
     private var queryHint = NSLocalizedString(
         "search.toolbar.query", value: "搜索书名、作者", comment: "Search query and hint"
     )
@@ -55,6 +58,7 @@ final class AndroidSearchToolbarView: UIView {
     private lazy var presentation = AndroidSearchPresentationState(view: self) { [weak self] in
         self?.updateInteractionState()
     }
+    private var canUseToolbar: Bool { presentation.isActive && canInteract?() != false }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -119,7 +123,7 @@ final class AndroidSearchToolbarView: UIView {
     func updateQueryControls() {
         let query = searchField.text ?? ""
         let hasQuery = !query.isEmpty
-        let canInteract = interactionEnabled && presentation.isActive
+        let canInteract = interactionEnabled && canUseToolbar
         clearButton.isHidden = !hasQuery
         clearButton.isEnabled = canInteract && hasQuery
 
@@ -141,6 +145,10 @@ final class AndroidSearchToolbarView: UIView {
         interactionEnabled = enabled
         searchField.isEnabled = enabled
         updateInteractionState()
+    }
+
+    func setClearButtonAccessibilityIdentifier(_ identifier: String) {
+        clearButton.accessibilityIdentifier = identifier
     }
 
     /// The owner must suspend covered pages, including non-fullscreen presentations.
@@ -309,6 +317,7 @@ final class AndroidSearchToolbarView: UIView {
         addSubview(searchFocusTarget)
 
         configureButton(backButton, image: ReaderMenuAndroidIcon.back.image())
+        backButton.feedbackRadius = 20
         backButton.accessibilityIdentifier = UIIdentifiers.Common.drillDownBackButton
         backButton.accessibilityLabel = NSLocalizedString(
             "search.toolbar.back", value: "返回", comment: "Search toolbar back button"
@@ -403,6 +412,8 @@ final class AndroidSearchToolbarView: UIView {
         // AppConfig.isNightTheme. Both default primaries therefore keep go/close white.
         submitButton.tintColor = primaryText
         clearButton.tintColor = primaryText
+        let feedback = ReaderMenuToolbarInteraction.feedbackColor(for: toolbarIconColor, traits: traitCollection)
+        for button in [backButton, submitButton, clearButton, moreButton] { button.feedbackColor = feedback }
         searchField.textColor = primaryText
         // AppBarOverlay overrides colorAccent to md_grey_900 / md_grey_50.
         searchField.tintColor = UIColor(white: lightOverlay ? 33.0 / 255 : 250.0 / 255, alpha: 1)
@@ -495,24 +506,24 @@ final class AndroidSearchToolbarView: UIView {
     }
 
     @objc private func handleBack() {
-        guard presentation.isActive else { return }
+        guard canUseToolbar else { return }
         onBack?()
     }
 
     @objc private func handleSubmit() {
-        guard interactionEnabled, isSubmitButtonEnabled, presentation.isActive,
+        guard interactionEnabled, isSubmitButtonEnabled, canUseToolbar,
             searchField.isFirstResponder, !submitButton.isHidden
         else { return }
         onSubmit?()
     }
 
     @objc private func handleSearchFocus() {
-        guard interactionEnabled, presentation.isActive else { return }
+        guard interactionEnabled, canUseToolbar else { return }
         searchField.becomeFirstResponder()
     }
 
     @objc private func handleClear() {
-        guard interactionEnabled, presentation.isActive, !(searchField.text ?? "").isEmpty else { return }
+        guard interactionEnabled, canUseToolbar, !(searchField.text ?? "").isEmpty else { return }
         searchField.text = ""
         updateQueryControls()
         searchField.becomeFirstResponder()
@@ -520,7 +531,7 @@ final class AndroidSearchToolbarView: UIView {
     }
 
     @objc private func handleMore() {
-        guard interactionEnabled, presentation.isActive else { return }
+        guard interactionEnabled, canUseToolbar else { return }
         onMore?()
     }
 }

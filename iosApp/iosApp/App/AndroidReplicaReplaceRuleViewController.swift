@@ -16,6 +16,10 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     let screen = ReplaceRuleScreenAdapter()
     private let topBar = AndroidReplicaReplaceRuleToolbarView()
     private let selectionBar = AndroidReplicaReplaceRuleSelectionBar()
+    private lazy var chromeLifecycle = ReplaceRuleChromeLifecycle(owner: self) { [weak self] active in
+        self?.topBar.setPresentationActive(active)
+        self?.selectionBar.setPresentationActive(active)
+    }
     private var searchField: UITextField { topBar.searchField }
     private var popup: ReaderOverflowMenuView?
     private let tableView = UITableView(frame: .zero, style: .plain)
@@ -42,10 +46,33 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
         navigationController?.setNavigationBarHidden(true, animated: animated)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        chromeLifecycle.setAppeared(true)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        topBar.updateLayout(availableSize: view.bounds.size)
+        chromeLifecycle.refresh()
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        chromeLifecycle.setAppeared(false)
         popup?.dismiss()
         cancelVisibleRuleInteractions()
+    }
+
+    override func present(_ controller: UIViewController, animated: Bool, completion: (() -> Void)? = nil) {
+        guard chromeLifecycle.canUsePage, controller.presentingViewController == nil,
+            controller.parent == nil, !controller.isBeingPresented
+        else { return }
+        popup?.dismiss()
+        cancelVisibleRuleInteractions()
+        guard let request = chromeLifecycle.observePresentation(of: controller) else { return }
+        super.present(controller, animated: animated, completion: completion)
+        chromeLifecycle.resolvePresentationRequest(of: controller, request: request)
     }
 
     deinit {
@@ -66,7 +93,6 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
             topBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             topBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topBar.heightAnchor.constraint(equalToConstant: 56),
 
             tableView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -75,7 +101,6 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
             selectionBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
             selectionBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             selectionBar.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
-            selectionBar.heightAnchor.constraint(equalToConstant: 56),
 
             emptyLabel.centerXAnchor.constraint(equalTo: tableView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: tableView.centerYAnchor),
@@ -85,6 +110,9 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     }
 
     private func configureTopBar() {
+        topBar.canInteract = { [weak self] in self?.chromeLifecycle.canUseChrome == true }
+        selectionBar.canInteract = { [weak self] in self?.chromeLifecycle.canUseChrome == true }
+        chromeLifecycle.setAppeared(false)
         topBar.backButton.addTarget(self, action: #selector(handleBack), for: .touchUpInside)
         topBar.groupButton.addTarget(self, action: #selector(showGroupFilter), for: .touchUpInside)
         topBar.moreButton.addTarget(self, action: #selector(showMoreMenu), for: .touchUpInside)
@@ -207,16 +235,21 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     }
 
     @objc private func handleBack() {
+        guard chromeLifecycle.canUseChrome else { return }
         navigationController?.popViewController(animated: true)
     }
 
     @objc private func searchTextChanged() {
+        guard chromeLifecycle.canUseChrome else { return }
         filterGroup = .all
         searchKeyword = searchField.text ?? ""
         applyFilter()
     }
 
+    func textFieldShouldBeginEditing(_: UITextField) -> Bool { chromeLifecycle.canUseChrome }
+
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        guard chromeLifecycle.canUseChrome else { return false }
         textField.resignFirstResponder()
         return true
     }
@@ -285,6 +318,7 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     }
 
     @objc private func showGroupFilter() {
+        guard chromeLifecycle.canUseChrome else { return }
         var items: [ReaderOverflowMenuView.Item] = [
             menuItem("menu_group_manage", title: L10n.ReplaceRule.groupManageAction) { $0.showGroupManage() },
             menuItem("menu_group_null", title: L10n.ReplaceRule.ungrouped) { $0.selectGroup(.ungrouped) },
@@ -310,6 +344,7 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     }
 
     @objc private func showMoreMenu() {
+        guard chromeLifecycle.canUseChrome else { return }
         presentPopup(
             [
                 menuItem("menu_add_replace_rule", title: L10n.ReplaceRule.newRuleAction) { $0.openEditor(rule: nil) },
@@ -367,23 +402,35 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     private func menuItem(
         _ id: String, title: String, action: @escaping (AndroidReplicaReplaceRuleViewController) -> Void
     ) -> ReaderOverflowMenuView.Item {
-        .init(identifier: "replaceRule.\(id)", title: title) { [weak self] in
-            guard let self, self.viewIfLoaded?.window != nil, self.navigationController?.topViewController === self,
-                self.presentedViewController == nil, !self.isMovingFromParent, !self.isBeingDismissed
-            else { return }
+        let generation = chromeLifecycle.generation
+        return .init(identifier: "replaceRule.\(id)", title: title) { [weak self] in
+            guard let self, self.chromeLifecycle.canUsePage, self.chromeLifecycle.generation == generation else { return }
             action(self)
         }
     }
 
     private func presentPopup(_ items: [ReaderOverflowMenuView.Item], anchor: UIView) {
-        guard presentedViewController == nil, viewIfLoaded?.window != nil, anchor.window === view.window else { return }
+        guard chromeLifecycle.canUseChrome, anchor.window === view.window else { return }
         popup?.dismiss()
         view.endEditing(true)
         let menu = ReaderOverflowMenuView(
             items: items, anchorView: anchor, interfaceStyle: traitCollection.userInterfaceStyle)
         popup = menu
+        let generation = chromeLifecycle.generation
+        let selection = selectedRuleIDs
+        let ruleIDs = displayedRules.map(\.id)
+        let group = filterGroup
+        let query = searchKeyword
+        menu.canActivateItem = { [weak self] in
+            guard let self else { return false }
+            return self.chromeLifecycle.canUsePage && self.chromeLifecycle.generation == generation
+                && self.selectedRuleIDs == selection && self.displayedRules.map(\.id) == ruleIDs
+                && self.filterGroup == group && self.searchKeyword == query
+        }
         menu.onDismiss = { [weak self, weak menu] in
-            if self?.popup === menu { self?.popup = nil }
+            if self?.popup === menu {
+                self?.popup = nil
+            }
         }
         menu.present(in: view)
     }
@@ -399,6 +446,7 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     }
 
     @objc private func batchMoreTapped() {
+        guard chromeLifecycle.canUseChrome else { return }
         let selected = displayedRules.filter { selectedRuleIDs.contains($0.id) }
         guard !selected.isEmpty else { return }
         presentPopup(
@@ -441,9 +489,16 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
             ], anchor: selectionBar.moreButton)
     }
 
-    @objc private func selectAllTapped() { toggleSelectAll() }
-    @objc private func invertTapped() { invertSelection() }
+    @objc private func selectAllTapped() {
+        guard chromeLifecycle.canUseChrome, !displayedRules.isEmpty else { return }
+        toggleSelectAll()
+    }
+    @objc private func invertTapped() {
+        guard chromeLifecycle.canUseChrome, !selectedRuleIDs.isEmpty else { return }
+        invertSelection()
+    }
     @objc private func deleteSelectionTapped() {
+        guard chromeLifecycle.canUseChrome else { return }
         let selected = displayedRules.filter { selectedRuleIDs.contains($0.id) }
         guard !selected.isEmpty else { return }
         confirmBatchDelete(selected)

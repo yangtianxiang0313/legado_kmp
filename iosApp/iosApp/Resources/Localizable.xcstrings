@@ -33644,6 +33644,23 @@
         }
       }
     },
+    "replace_rule.android_search_placeholder" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Replacement"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换净化-搜索"
+          }
+        }
+      }
+    },
     "reader.view_session_info_menu_item" : {
       "extractionState": "manual",
       "localizations": {
