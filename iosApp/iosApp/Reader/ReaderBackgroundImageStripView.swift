@@ -12,7 +12,9 @@ final class ReaderBackgroundImageStripView: UIView {
     private let scrollView = ReaderBackgroundImageScrollView()
     private let stackView = UIStackView()
     private let importButton = ReaderBackgroundImageButton(
-        title: "选择图片", identifier: "reader.background.import", isImport: true)
+        title: NSLocalizedString(
+            "settings.theme_background_select", value: "选择图片", comment: "Select a reader background image"),
+        identifier: "reader.background.import", isImport: true)
     private var imageButtons: [ReaderBackgroundImageButton] = []
     private var selectedPath: String?
     private var imagesEnabled = true
@@ -251,7 +253,9 @@ private final class ReaderBackgroundImageButton: UIButton {
         nameLabel.text = title
         nameLabel.numberOfLines = 1
         nameLabel.textAlignment = .center
-        nameLabel.lineBreakMode = .byClipping
+        // Keep numbered image variants distinct when a localized caption does not fit.
+        nameLabel.lineBreakMode = isImport ? .byTruncatingTail : .byTruncatingMiddle
+        nameLabel.adjustsFontSizeToFitWidth = false
         nameLabel.isAccessibilityElement = false
         nameLabel.isUserInteractionEnabled = false
         nameLabel.clipsToBounds = true
@@ -306,7 +310,11 @@ private final class ReaderBackgroundImageButton: UIButton {
         isEnabled = enabled && (isImport || previewImageView.image != nil)
         accessibilityTraits = selected ? [.button, .selected] : .button
         if !isEnabled { accessibilityTraits.insert(.notEnabled) }
-        accessibilityValue = !isImport && previewImageView.image == nil ? "图片不可用" : nil
+        accessibilityValue =
+            !isImport && previewImageView.image == nil
+            ? NSLocalizedString(
+                "reader.background_image.unavailable", value: "图片不可用",
+                comment: "Accessibility state for a built-in reader background image whose thumbnail is unavailable") : nil
         updateAppearance()
     }
 

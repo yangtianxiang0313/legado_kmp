@@ -10,7 +10,10 @@ enum ReaderBackgroundImageCatalog {
 
         fileprivate init(id: String, fileName: String) {
             self.id = id
-            title = (fileName as NSString).deletingPathExtension
+            title = Bundle.main.localizedString(
+                forKey: "reader.background_image.name.\(id)",
+                value: (fileName as NSString).deletingPathExtension,
+                table: nil)
             self.fileName = fileName
             storedPath = ReaderBackgroundImageCatalog.builtinPrefix + id
         }
