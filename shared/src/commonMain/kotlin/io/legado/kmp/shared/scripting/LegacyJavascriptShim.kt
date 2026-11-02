@@ -26,10 +26,6 @@ internal val LEGACY_SHIM = """
               if (header == null) return null;
               return typeof header === 'string' ? header : JSON.stringify(header);
             }
-            function __legacyCryptoArg(value) {
-              if (value === undefined || value === null) return null;
-              return Array.isArray(value) ? JSON.stringify(value) : String(value);
-            }
             function __legacyErrorText(error) {
               if (error == null) return '';
               if (error.stack != null && error.stack !== '') return String(error.stack);
@@ -87,20 +83,33 @@ internal val LEGACY_SHIM = """
               __legacyPut(name, value);
               return value;
             };
-            java.md5Encode = function(value) { return __legacyMd5Encode(String(value)); };
-            java.md5Encode16 = function(value) { return __legacyMd5Encode16(String(value)); };
-            java.digestHex = function(data, algorithm) {
-              return __legacyDigestHex(data != null ? String(data) : '', algorithm != null ? String(algorithm) : '');
-            };
-            java.digestBase64Str = function(data, algorithm) {
-              return __legacyDigestBase64(data != null ? String(data) : '', algorithm != null ? String(algorithm) : '');
-            };
-            java.HMacHex = function(data, algorithm, key) {
-              return __legacyHMacHex(data != null ? String(data) : '', algorithm != null ? String(algorithm) : '', key != null ? String(key) : '');
-            };
-            java.HMacBase64 = function(data, algorithm, key) {
-              return __legacyHMacBase64(data != null ? String(data) : '', algorithm != null ? String(algorithm) : '', key != null ? String(key) : '');
-            };
+            (function() {
+              var md5Encode = __legacyMd5Encode;
+              var md5Encode16 = __legacyMd5Encode16;
+              var digestHex = __legacyDigestHex;
+              var digestBase64 = __legacyDigestBase64;
+              var hmacHex = __legacyHMacHex;
+              var hmacBase64 = __legacyHMacBase64;
+              var stringify = JSON.stringify;
+              var string = String;
+              function textArg(value) {
+                return stringify(value != null ? string(value) : '');
+              }
+              java.md5Encode = function(value) { return md5Encode(stringify(string(value))); };
+              java.md5Encode16 = function(value) { return md5Encode16(stringify(string(value))); };
+              java.digestHex = function(data, algorithm) {
+                return digestHex(textArg(data), textArg(algorithm));
+              };
+              java.digestBase64Str = function(data, algorithm) {
+                return digestBase64(textArg(data), textArg(algorithm));
+              };
+              java.HMacHex = function(data, algorithm, key) {
+                return hmacHex(textArg(data), textArg(algorithm), textArg(key));
+              };
+              java.HMacBase64 = function(data, algorithm, key) {
+                return hmacBase64(textArg(data), textArg(algorithm), textArg(key));
+              };
+            })();
             java.getHeaderMap = function(includeLoginHeader) {
               var raw = __legacySourceGetHeaderMap(includeLoginHeader === true);
               if (raw == null || raw === undefined) {
@@ -206,15 +215,21 @@ internal val LEGACY_SHIM = """
             };
             java.base64Decode = (function() {
               var nativeBase64Decode = __legacyBase64Decode;
+              var stringify = JSON.stringify;
               var parse = JSON.parse;
               var string = String;
               return function(str, flagsOrCharset) {
-                return parse(nativeBase64Decode(str != null ? string(str) : '', flagsOrCharset));
+                return parse(nativeBase64Decode(stringify(str != null ? string(str) : ''), flagsOrCharset));
               };
             })();
-            java.base64Encode = function(str, flags) {
-              return __legacyBase64Encode(str != null ? String(str) : '', flags);
-            };
+            java.base64Encode = (function() {
+              var nativeBase64Encode = __legacyBase64Encode;
+              var stringify = JSON.stringify;
+              var string = String;
+              return function(str, flags) {
+                return nativeBase64Encode(stringify(str != null ? string(str) : ''), flags);
+              };
+            })();
             java.cacheFile = function(url, saveTime) {
               return __legacyCacheFile(
                 url != null ? String(url) : '',
@@ -267,198 +282,192 @@ internal val LEGACY_SHIM = """
             java.webViewGetOverrideUrl = function(html, url, js, overrideUrlRegex) {
               return __legacyWebViewGetOverrideUrl(html, url, js, overrideUrlRegex != null ? String(overrideUrlRegex) : '');
             };
-            java.createSymmetricCrypto = function(transformation, key, iv) {
-              var args = [String(transformation), __legacyCryptoArg(key), __legacyCryptoArg(iv)];
-              return {
-                encryptBase64: function(data) {
-                  return __legacySymmetricEncryptBase64(args[0], args[1], args[2], data != null ? String(data) : '');
-                },
-                encryptHex: function(data) {
-                  return __legacySymmetricEncryptHex(args[0], args[1], args[2], data != null ? String(data) : '');
-                },
-                decryptStr: function(data) {
-                  return __legacySymmetricDecryptStr(args[0], args[1], args[2], data != null ? String(data) : '');
-                },
-                encrypt: function(data) {
-                  return JSON.parse(__legacySymmetricEncrypt(
-                    args[0],
-                    args[1],
-                    args[2],
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  ));
-                },
-                decrypt: function(data) {
-                  return JSON.parse(__legacySymmetricDecrypt(
-                    args[0],
-                    args[1],
-                    args[2],
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  ));
-                }
+            (function() {
+              var symmetricEncryptBase64 = __legacySymmetricEncryptBase64;
+              var symmetricEncryptHex = __legacySymmetricEncryptHex;
+              var symmetricDecryptStr = __legacySymmetricDecryptStr;
+              var symmetricEncrypt = __legacySymmetricEncrypt;
+              var symmetricDecrypt = __legacySymmetricDecrypt;
+              var asymmetricEncrypt = __legacyAsymmetricEncrypt;
+              var asymmetricEncryptBase64 = __legacyAsymmetricEncryptBase64;
+              var asymmetricEncryptHex = __legacyAsymmetricEncryptHex;
+              var asymmetricDecrypt = __legacyAsymmetricDecrypt;
+              var asymmetricDecryptStr = __legacyAsymmetricDecryptStr;
+              var sign = __legacySign;
+              var signHex = __legacySignHex;
+              var verifySign = __legacyVerifySign;
+              var stringify = JSON.stringify;
+              var parse = JSON.parse;
+              var string = String;
+              var isArray = Array.isArray;
+              function textArg(value) {
+                return stringify(value != null ? string(value) : '');
+              }
+              function dataArg(value) {
+                // Preserve the legacy array JSON as text inside the escaped bridge payload.
+                return isArray(value) ? stringify(stringify(value)) : textArg(value);
+              }
+              function cryptoArg(value) {
+                if (value === undefined || value === null) return null;
+                return dataArg(value);
+              }
+              java.createSymmetricCrypto = function(transformation, key, iv) {
+                var args = [stringify(string(transformation)), cryptoArg(key), cryptoArg(iv)];
+                return {
+                  encryptBase64: function(data) {
+                    return symmetricEncryptBase64(args[0], args[1], args[2], textArg(data));
+                  },
+                  encryptHex: function(data) {
+                    return symmetricEncryptHex(args[0], args[1], args[2], textArg(data));
+                  },
+                  decryptStr: function(data) {
+                    return parse(symmetricDecryptStr(args[0], args[1], args[2], textArg(data)));
+                  },
+                  encrypt: function(data) {
+                    return parse(symmetricEncrypt(args[0], args[1], args[2], dataArg(data)));
+                  },
+                  decrypt: function(data) {
+                    return parse(symmetricDecrypt(args[0], args[1], args[2], dataArg(data)));
+                  }
+                };
               };
-            };
-            java.aesDecodeToByteArray = function(str, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).decrypt(str);
-            };
-            java.aesDecodeToString = function(str, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).decryptStr(str);
-            };
-            java.aesDecodeArgsBase64Str = function(data, key, mode, padding, iv) {
-              return java.createSymmetricCrypto(
-                'AES/' + String(mode) + '/' + String(padding),
-                java.base64DecodeToByteArray(key),
-                java.base64DecodeToByteArray(iv)
-              ).decryptStr(data);
-            };
-            java.aesBase64DecodeToByteArray = function(str, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).decrypt(str);
-            };
-            java.aesBase64DecodeToString = function(str, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).decryptStr(str);
-            };
-            java.aesEncodeToByteArray = function(data, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).encrypt(data);
-            };
-            java.aesEncodeToString = function(data, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).decryptStr(data);
-            };
-            java.aesEncodeToBase64ByteArray = function(data, key, transformation, iv) {
-              return java.strToBytes(java.createSymmetricCrypto(transformation, key, iv).encryptBase64(data));
-            };
-            java.aesEncodeToBase64String = function(data, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).encryptBase64(data);
-            };
-            java.aesEncodeArgsBase64Str = function(data, key, mode, padding, iv) {
-              return java.createSymmetricCrypto('AES/' + String(mode) + '/' + String(padding), key, iv).encryptBase64(data);
-            };
-            java.desDecodeToString = function(data, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).decryptStr(data);
-            };
-            java.desBase64DecodeToString = function(data, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).decryptStr(data);
-            };
-            java.desEncodeToString = function(data, key, transformation, iv) {
-              return java.bytesToStr(java.createSymmetricCrypto(transformation, key, iv).encrypt(data));
-            };
-            java.desEncodeToBase64String = function(data, key, transformation, iv) {
-              return java.createSymmetricCrypto(transformation, key, iv).encryptBase64(data);
-            };
-            java.tripleDESDecodeStr = function(data, key, mode, padding, iv) {
-              return java.createSymmetricCrypto('DESede/' + String(mode) + '/' + String(padding), key, iv).decryptStr(data);
-            };
-            java.tripleDESDecodeArgsBase64Str = function(data, key, mode, padding, iv) {
-              return java.createSymmetricCrypto(
-                'DESede/' + String(mode) + '/' + String(padding),
-                java.base64DecodeToByteArray(key),
-                iv
-              ).decryptStr(data);
-            };
-            java.tripleDESEncodeBase64Str = function(data, key, mode, padding, iv) {
-              return java.createSymmetricCrypto('DESede/' + String(mode) + '/' + String(padding), key, iv).encryptBase64(data);
-            };
-            java.tripleDESEncodeArgsBase64Str = function(data, key, mode, padding, iv) {
-              return java.createSymmetricCrypto(
-                'DESede/' + String(mode) + '/' + String(padding),
-                java.base64DecodeToByteArray(key),
-                iv
-              ).encryptBase64(data);
-            };
-            java.createAsymmetricCrypto = function() {
-              var args = [String(arguments[0]), null, null];
-              return {
-                setPublicKey: function(key) {
-                  args[1] = __legacyCryptoArg(key);
-                  return this;
-                },
-                setPrivateKey: function(key) {
-                  args[2] = __legacyCryptoArg(key);
-                  return this;
-                },
-                encrypt: function(data, usePublicKey) {
-                  return JSON.parse(__legacyAsymmetricEncrypt(
-                    args[0],
-                    args[1],
-                    args[2],
-                    usePublicKey !== undefined ? usePublicKey === true : true,
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  ));
-                },
-                encryptBase64: function(data, usePublicKey) {
-                  return __legacyAsymmetricEncryptBase64(
-                    args[0],
-                    args[1],
-                    args[2],
-                    usePublicKey !== undefined ? usePublicKey === true : true,
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  );
-                },
-                encryptHex: function(data, usePublicKey) {
-                  return __legacyAsymmetricEncryptHex(
-                    args[0],
-                    args[1],
-                    args[2],
-                    usePublicKey !== undefined ? usePublicKey === true : true,
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  );
-                },
-                decrypt: function(data, usePublicKey) {
-                  return JSON.parse(__legacyAsymmetricDecrypt(
-                    args[0],
-                    args[1],
-                    args[2],
-                    usePublicKey !== undefined ? usePublicKey === true : true,
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  ));
-                },
-                decryptStr: function(data, usePublicKey) {
-                  return __legacyAsymmetricDecryptStr(
-                    args[0],
-                    args[1],
-                    args[2],
-                    usePublicKey !== undefined ? usePublicKey === true : true,
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  );
-                }
+              java.aesDecodeToByteArray = function(str, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).decrypt(str);
               };
-            };
-            java.createSign = function() {
-              var args = [String(arguments[0]), null, null];
-              return {
-                setPublicKey: function(key) {
-                  args[1] = __legacyCryptoArg(key);
-                  return this;
-                },
-                setPrivateKey: function(key) {
-                  args[2] = __legacyCryptoArg(key);
-                  return this;
-                },
-                sign: function(data) {
-                  return JSON.parse(__legacySign(
-                    args[0],
-                    args[1],
-                    args[2],
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  ));
-                },
-                signHex: function(data) {
-                  return __legacySignHex(
-                    args[0],
-                    args[1],
-                    args[2],
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : '')
-                  );
-                },
-                verify: function(data, signature) {
-                  return __legacyVerifySign(
-                    args[0],
-                    args[1],
-                    args[2],
-                    Array.isArray(data) ? JSON.stringify(data) : (data != null ? String(data) : ''),
-                    Array.isArray(signature) ? JSON.stringify(signature) : (signature != null ? String(signature) : '')
-                  );
-                }
+              java.aesDecodeToString = function(str, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).decryptStr(str);
               };
-            };
+              java.aesDecodeArgsBase64Str = function(data, key, mode, padding, iv) {
+                return java.createSymmetricCrypto(
+                  'AES/' + String(mode) + '/' + String(padding),
+                  java.base64DecodeToByteArray(key),
+                  java.base64DecodeToByteArray(iv)
+                ).decryptStr(data);
+              };
+              java.aesBase64DecodeToByteArray = function(str, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).decrypt(str);
+              };
+              java.aesBase64DecodeToString = function(str, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).decryptStr(str);
+              };
+              java.aesEncodeToByteArray = function(data, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).encrypt(data);
+              };
+              java.aesEncodeToString = function(data, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).decryptStr(data);
+              };
+              java.aesEncodeToBase64ByteArray = function(data, key, transformation, iv) {
+                return java.strToBytes(java.createSymmetricCrypto(transformation, key, iv).encryptBase64(data));
+              };
+              java.aesEncodeToBase64String = function(data, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).encryptBase64(data);
+              };
+              java.aesEncodeArgsBase64Str = function(data, key, mode, padding, iv) {
+                return java.createSymmetricCrypto('AES/' + String(mode) + '/' + String(padding), key, iv).encryptBase64(data);
+              };
+              java.desDecodeToString = function(data, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).decryptStr(data);
+              };
+              java.desBase64DecodeToString = function(data, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).decryptStr(data);
+              };
+              java.desEncodeToString = function(data, key, transformation, iv) {
+                return java.bytesToStr(java.createSymmetricCrypto(transformation, key, iv).encrypt(data));
+              };
+              java.desEncodeToBase64String = function(data, key, transformation, iv) {
+                return java.createSymmetricCrypto(transformation, key, iv).encryptBase64(data);
+              };
+              java.tripleDESDecodeStr = function(data, key, mode, padding, iv) {
+                return java.createSymmetricCrypto('DESede/' + String(mode) + '/' + String(padding), key, iv).decryptStr(data);
+              };
+              java.tripleDESDecodeArgsBase64Str = function(data, key, mode, padding, iv) {
+                return java.createSymmetricCrypto(
+                  'DESede/' + String(mode) + '/' + String(padding),
+                  java.base64DecodeToByteArray(key),
+                  iv
+                ).decryptStr(data);
+              };
+              java.tripleDESEncodeBase64Str = function(data, key, mode, padding, iv) {
+                return java.createSymmetricCrypto('DESede/' + String(mode) + '/' + String(padding), key, iv).encryptBase64(data);
+              };
+              java.tripleDESEncodeArgsBase64Str = function(data, key, mode, padding, iv) {
+                return java.createSymmetricCrypto(
+                  'DESede/' + String(mode) + '/' + String(padding),
+                  java.base64DecodeToByteArray(key),
+                  iv
+                ).encryptBase64(data);
+              };
+              java.createAsymmetricCrypto = function() {
+                var args = [stringify(string(arguments[0])), null, null];
+                return {
+                  setPublicKey: function(key) {
+                    args[1] = cryptoArg(key);
+                    return this;
+                  },
+                  setPrivateKey: function(key) {
+                    args[2] = cryptoArg(key);
+                    return this;
+                  },
+                  encrypt: function(data, usePublicKey) {
+                    return parse(asymmetricEncrypt(
+                      args[0], args[1], args[2],
+                      usePublicKey !== undefined ? usePublicKey === true : true,
+                      dataArg(data)
+                    ));
+                  },
+                  encryptBase64: function(data, usePublicKey) {
+                    return asymmetricEncryptBase64(
+                      args[0], args[1], args[2],
+                      usePublicKey !== undefined ? usePublicKey === true : true,
+                      dataArg(data)
+                    );
+                  },
+                  encryptHex: function(data, usePublicKey) {
+                    return asymmetricEncryptHex(
+                      args[0], args[1], args[2],
+                      usePublicKey !== undefined ? usePublicKey === true : true,
+                      dataArg(data)
+                    );
+                  },
+                  decrypt: function(data, usePublicKey) {
+                    return parse(asymmetricDecrypt(
+                      args[0], args[1], args[2],
+                      usePublicKey !== undefined ? usePublicKey === true : true,
+                      dataArg(data)
+                    ));
+                  },
+                  decryptStr: function(data, usePublicKey) {
+                    return parse(asymmetricDecryptStr(
+                      args[0], args[1], args[2],
+                      usePublicKey !== undefined ? usePublicKey === true : true,
+                      dataArg(data)
+                    ));
+                  }
+                };
+              };
+              java.createSign = function() {
+                var args = [stringify(string(arguments[0])), null, null];
+                return {
+                  setPublicKey: function(key) {
+                    args[1] = cryptoArg(key);
+                    return this;
+                  },
+                  setPrivateKey: function(key) {
+                    args[2] = cryptoArg(key);
+                    return this;
+                  },
+                  sign: function(data) {
+                    return parse(sign(args[0], args[1], args[2], dataArg(data)));
+                  },
+                  signHex: function(data) {
+                    return signHex(args[0], args[1], args[2], dataArg(data));
+                  },
+                  verify: function(data, signature) {
+                    return verifySign(args[0], args[1], args[2], dataArg(data), dataArg(signature));
+                  }
+                };
+              };
+            })();
             java.toast = function(msg) { __legacyToast(msg, false); };
             java.longToast = function(msg) { __legacyToast(msg, true); };
             java.startBrowser = function(url, title) {
@@ -490,21 +499,39 @@ internal val LEGACY_SHIM = """
               }
               return __legacyGetCookie(url != null ? String(url) : '');
             };
-            java.t2s = function(str) { return __legacyT2s(str != null ? String(str) : ''); };
-            java.s2t = function(str) { return __legacyS2t(str != null ? String(str) : ''); };
-            java.toNumChapter = function(str) { return __legacyToNumChapter(str != null ? String(str) : ''); };
+            (function() {
+              var t2s = __legacyT2s;
+              var s2t = __legacyS2t;
+              var toNumChapter = __legacyToNumChapter;
+              var hexEncodeToString = __legacyHexEncodeToString;
+              var stringify = JSON.stringify;
+              var parse = JSON.parse;
+              var string = String;
+              function textArg(value) {
+                return stringify(value != null ? string(value) : '');
+              }
+              java.t2s = function(str) { return parse(t2s(textArg(str))); };
+              java.s2t = function(str) { return parse(s2t(textArg(str))); };
+              java.toNumChapter = function(str) { return parse(toNumChapter(textArg(str))); };
+              java.hexEncodeToString = function(str) { return hexEncodeToString(textArg(str)); };
+            })();
             java.hexDecodeToString = (function() {
               var nativeHexDecodeToString = __legacyHexDecodeToString;
+              var stringify = JSON.stringify;
               var parse = JSON.parse;
               var string = String;
               return function(str) {
-                return parse(nativeHexDecodeToString(str != null ? string(str) : ''));
+                return parse(nativeHexDecodeToString(stringify(str != null ? string(str) : '')));
               };
             })();
-            java.hexEncodeToString = function(str) { return __legacyHexEncodeToString(str != null ? String(str) : ''); };
-            java.hexDecodeToByteArray = function(hex) {
-              return __legacyHexDecodeToByteArray(hex != null ? String(hex) : '');
-            };
+            java.hexDecodeToByteArray = (function() {
+              var nativeHexDecodeToByteArray = __legacyHexDecodeToByteArray;
+              var stringify = JSON.stringify;
+              var string = String;
+              return function(hex) {
+                return nativeHexDecodeToByteArray(stringify(hex != null ? string(hex) : ''));
+              };
+            })();
             java.strToBytes = (function() {
               var nativeStrToBytes = __legacyStrToBytes;
               var stringify = JSON.stringify;
@@ -533,9 +560,14 @@ internal val LEGACY_SHIM = """
                 return parse(nativeBytesToStr(stringify(bytes), charset));
               };
             })();
-            java.base64DecodeToByteArray = function(str, flags) {
-              return __legacyBase64DecodeToByteArray(str, flags);
-            };
+            java.base64DecodeToByteArray = (function() {
+              var nativeBase64DecodeToByteArray = __legacyBase64DecodeToByteArray;
+              var stringify = JSON.stringify;
+              var string = String;
+              return function(str, flags) {
+                return nativeBase64DecodeToByteArray(stringify(str != null ? string(str) : ''), flags);
+              };
+            })();
             java.htmlFormat = function(str) {
               return __legacyHtmlFormat(str != null ? String(str) : '');
             };

@@ -150,8 +150,8 @@ final class AndroidReplicaReplaceRuleSelectionBar: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = AndroidReplicaTheme.background
-        allButton.setTitle("全选", for: .normal)
-        invertButton.setTitle("反选", for: .normal)
+        allButton.setTitle(L10n.ReplaceRule.selectAll, for: .normal)
+        invertButton.setTitle(L10n.Bookshelf.revertSelection, for: .normal)
         deleteButton.setTitle(L10n.ReplaceRule.deleteAction, for: .normal)
         moreButton.setImage(ReaderMenuAndroidIcon.more.image(), for: .normal)
         moreButton.accessibilityLabel = L10n.Reader.menuMore
@@ -160,6 +160,11 @@ final class AndroidReplicaReplaceRuleSelectionBar: UIView {
                 ["replaceRule.selectAll", "replaceRule.invert", "replaceRule.delete", "replaceRule.batchMore"][index]
             button.tintColor = AndroidReplicaTheme.accent
             button.titleLabel?.font = .systemFont(ofSize: 14)
+            button.titleLabel?.numberOfLines = 2
+            button.titleLabel?.lineBreakMode = .byWordWrapping
+            button.titleLabel?.textAlignment = .center
+            button.titleLabel?.adjustsFontSizeToFitWidth = true
+            button.titleLabel?.minimumScaleFactor = 0.75
             button.translatesAutoresizingMaskIntoConstraints = false
             addSubview(button)
         }
@@ -196,6 +201,7 @@ final class AndroidReplicaReplaceRuleSelectionBar: UIView {
     func update(selectedCount: Int, totalCount: Int) {
         let all = totalCount > 0 && selectedCount == totalCount
         allButton.setImage(UIImage(systemName: all ? "checkmark.square.fill" : "square"), for: .normal)
+        allButton.accessibilityLabel = all ? L10n.ReplaceRule.deselectAll : L10n.ReplaceRule.selectAll
         allButton.accessibilityValue = "\(selectedCount)/\(totalCount)"
         allButton.accessibilityTraits = all ? [.button, .selected] : .button
         allButton.isEnabled = totalCount > 0

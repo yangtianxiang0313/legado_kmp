@@ -33507,6 +33507,159 @@
           }
         }
       }
+    },
+    "reader.app_log.load_failed" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to load logs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日志加载失败"
+          }
+        }
+      }
+    },
+    "reader.app_log.clear_failed" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to clear logs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日志清除失败"
+          }
+        }
+      }
+    },
+    "reader.app_log.clear" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除"
+          }
+        }
+      }
+    },
+    "common.not_implemented_message" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is not implemented yet; only the legacy entry point is available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 仍未实现，当前只保留 legacy 结构入口。"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_pause_phone_calls_summary" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause read aloud during calls; requires phone state permission"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在通话期间暂停朗读，需要读取手机状态权限"
+          }
+        }
+      }
+    },
+    "reader.pending_next_iteration" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coming in the next iteration"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一轮接通"
+          }
+        }
+      }
+    },
+    "reader.read_body_to_lh_detail" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paginate and draw text strictly using the reading line height; turn off for spacing closer to the system font's natural line spacing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正文严格按阅读行高分页和绘制，关闭后更接近系统字体自然行距"
+          }
+        }
+      }
+    },
+    "reader.view_session_info_title" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading Session Information"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读会话信息"
+          }
+        }
+      }
+    },
+    "reader.view_session_info_menu_item" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading Session Information"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读会话信息"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

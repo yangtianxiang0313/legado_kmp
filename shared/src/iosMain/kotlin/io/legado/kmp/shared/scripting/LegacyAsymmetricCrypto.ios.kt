@@ -2,18 +2,21 @@
 
 package io.legado.kmp.shared.scripting
 
-import platform.CoreFoundation.CFDataRef
-import platform.CoreFoundation.CFDataCreate
-import platform.CoreFoundation.CFDictionaryRef
-import platform.CoreFoundation.CFStringRef
-import platform.Foundation.NSData
-import platform.Foundation.NSMutableDictionary
-import platform.Foundation.NSNumber
-import platform.Foundation.NSString
-import platform.Foundation.getBytes
 import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.allocArrayOf
+import kotlinx.cinterop.convert
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
+import platform.CoreFoundation.CFDataCreate
+import platform.CoreFoundation.CFDataGetBytePtr
+import platform.CoreFoundation.CFDataGetLength
+import platform.CoreFoundation.CFDataRef
+import platform.CoreFoundation.CFDictionaryCreate
+import platform.CoreFoundation.CFRelease
+import platform.CoreFoundation.CFStringRef
+import platform.CoreFoundation.CFTypeRef
 import platform.Security.SecKeyCopyPublicKey
 import platform.Security.SecKeyCreateDecryptedData
 import platform.Security.SecKeyCreateEncryptedData
@@ -25,7 +28,6 @@ import platform.Security.SecKeyVerifySignature
 import platform.Security.kSecAttrKeyClass
 import platform.Security.kSecAttrKeyClassPrivate
 import platform.Security.kSecAttrKeyClassPublic
-import platform.Security.kSecAttrKeySizeInBits
 import platform.Security.kSecAttrKeyType
 import platform.Security.kSecAttrKeyTypeECSECPrimeRandom
 import platform.Security.kSecAttrKeyTypeRSA
@@ -70,12 +72,16 @@ internal actual object LegacyAsymmetricCrypto {
             privateKey = privateKey,
             usePublicKey = usePublicKey
         )
-        require(SecKeyIsAlgorithmSupported(key, kSecKeyOperationTypeEncrypt, algorithm)) {
-            "Legacy asymmetric crypto encrypt is not supported on iOS for transformation=$transformation"
+        return withAsymmetricKey(key) {
+            require(SecKeyIsAlgorithmSupported(key, kSecKeyOperationTypeEncrypt, algorithm)) {
+                "Legacy asymmetric crypto encrypt is not supported on iOS for transformation=$transformation"
+            }
+            val payload = withAsymmetricData(data) { input ->
+                SecKeyCreateEncryptedData(key, algorithm, input, null)
+                    ?: error("Legacy asymmetric crypto encrypt failed on iOS: transformation=$transformation")
+            }
+            copyOwnedAsymmetricData(payload)
         }
-        val payload = SecKeyCreateEncryptedData(key, algorithm, data.toCFData(), null)
-            ?: error("Legacy asymmetric crypto encrypt failed on iOS: transformation=$transformation")
-        return payload.toByteArray()
     }
 
     actual fun decrypt(
@@ -92,12 +98,16 @@ internal actual object LegacyAsymmetricCrypto {
             privateKey = privateKey,
             usePublicKey = usePublicKey
         )
-        require(SecKeyIsAlgorithmSupported(key, kSecKeyOperationTypeDecrypt, algorithm)) {
-            "Legacy asymmetric crypto decrypt is not supported on iOS for transformation=$transformation"
+        return withAsymmetricKey(key) {
+            require(SecKeyIsAlgorithmSupported(key, kSecKeyOperationTypeDecrypt, algorithm)) {
+                "Legacy asymmetric crypto decrypt is not supported on iOS for transformation=$transformation"
+            }
+            val payload = withAsymmetricData(data) { input ->
+                SecKeyCreateDecryptedData(key, algorithm, input, null)
+                    ?: error("Legacy asymmetric crypto decrypt failed on iOS: transformation=$transformation")
+            }
+            copyOwnedAsymmetricData(payload)
         }
-        val payload = SecKeyCreateDecryptedData(key, algorithm, data.toCFData(), null)
-            ?: error("Legacy asymmetric crypto decrypt failed on iOS: transformation=$transformation")
-        return payload.toByteArray()
     }
 
     actual fun sign(
@@ -113,12 +123,16 @@ internal actual object LegacyAsymmetricCrypto {
                 "Legacy JS sign helper requires a private key"
             }
         )
-        require(SecKeyIsAlgorithmSupported(key, kSecKeyOperationTypeSign, securityAlgorithm)) {
-            "Legacy sign helper is not supported on iOS for algorithm=$algorithm"
+        return withAsymmetricKey(key) {
+            require(SecKeyIsAlgorithmSupported(key, kSecKeyOperationTypeSign, securityAlgorithm)) {
+                "Legacy sign helper is not supported on iOS for algorithm=$algorithm"
+            }
+            val payload = withAsymmetricData(data) { input ->
+                SecKeyCreateSignature(key, securityAlgorithm, input, null)
+                    ?: error("Legacy sign helper failed on iOS: algorithm=$algorithm")
+            }
+            copyOwnedAsymmetricData(payload)
         }
-        val payload = SecKeyCreateSignature(key, securityAlgorithm, data.toCFData(), null)
-            ?: error("Legacy sign helper failed on iOS: algorithm=$algorithm")
-        return payload.toByteArray()
     }
 
     actual fun verify(
@@ -132,19 +146,21 @@ internal actual object LegacyAsymmetricCrypto {
         val keyAlgorithm = resolveSignatureKeyAlgorithm(algorithm)
         val verifier = when {
             publicKey != null -> loadPublicKey(keyAlgorithm, publicKey)
-            privateKey != null -> SecKeyCopyPublicKey(loadPrivateKey(keyAlgorithm, privateKey))
+            privateKey != null -> withAsymmetricKey(loadPrivateKey(keyAlgorithm, privateKey)) {
+                SecKeyCopyPublicKey(it) ?: error("Failed to derive legacy public key on iOS for algorithm=$algorithm")
+            }
             else -> error("Legacy JS sign helper requires a public key for verification")
         }
-        require(SecKeyIsAlgorithmSupported(verifier, kSecKeyOperationTypeVerify, securityAlgorithm)) {
-            "Legacy sign verify helper is not supported on iOS for algorithm=$algorithm"
+        return withAsymmetricKey(verifier) {
+            require(SecKeyIsAlgorithmSupported(verifier, kSecKeyOperationTypeVerify, securityAlgorithm)) {
+                "Legacy sign verify helper is not supported on iOS for algorithm=$algorithm"
+            }
+            withAsymmetricData(data) { input ->
+                withAsymmetricData(signature) { signatureData ->
+                    SecKeyVerifySignature(verifier, securityAlgorithm, input, signatureData, null)
+                }
+            }
         }
-        return SecKeyVerifySignature(
-            verifier,
-            securityAlgorithm,
-            data.toCFData(),
-            signature.toCFData(),
-            null
-        )
     }
 }
 
@@ -174,36 +190,44 @@ private fun loadCipherKey(
 
 private fun loadPublicKey(algorithm: String, encoded: ByteArray): SecKeyRef {
     val decoded = encoded.decodeLegacyKeyMaterial()
-    val attributes = keyAttributes(
+    return createSecurityKey(
+        encoded = decoded,
         keyType = resolveSecurityKeyType(algorithm),
-        keyClass = kSecAttrKeyClassPublic,
-        keySizeBits = decoded.size * 8
-    )
-    return SecKeyCreateWithData(decoded.toCFData(), attributes, null)
-        ?: error("Failed to load legacy public key on iOS for algorithm=$algorithm")
+        keyClass = kSecAttrKeyClassPublic
+    ) ?: error("Failed to load legacy public key on iOS for algorithm=$algorithm")
 }
 
 private fun loadPrivateKey(algorithm: String, encoded: ByteArray): SecKeyRef {
     val decoded = encoded.decodeLegacyKeyMaterial()
-    val attributes = keyAttributes(
+    return createSecurityKey(
+        encoded = decoded,
         keyType = resolveSecurityKeyType(algorithm),
-        keyClass = kSecAttrKeyClassPrivate,
-        keySizeBits = decoded.size * 8
-    )
-    return SecKeyCreateWithData(decoded.toCFData(), attributes, null)
-        ?: error("Failed to load legacy private key on iOS for algorithm=$algorithm")
+        keyClass = kSecAttrKeyClassPrivate
+    ) ?: error("Failed to load legacy private key on iOS for algorithm=$algorithm")
 }
 
-private fun keyAttributes(
+private fun createSecurityKey(
+    encoded: ByteArray,
     keyType: CFStringRef?,
-    keyClass: CFStringRef?,
-    keySizeBits: Int
-): CFDictionaryRef? {
-    val attributes = NSMutableDictionary()
-    attributes.setObject(keyType, forKey = kSecAttrKeyType as NSString)
-    attributes.setObject(keyClass, forKey = kSecAttrKeyClass as NSString)
-    attributes.setObject(NSNumber(integer = keySizeBits.toLong()), forKey = kSecAttrKeySizeInBits as NSString)
-    return attributes as CFDictionaryRef?
+    keyClass: CFStringRef?
+): SecKeyRef? = withAsymmetricData(encoded) { data ->
+    memScoped {
+        // Security infers the key size from the encoded key, not the DER byte count.
+        val attributes: List<Pair<CFStringRef?, CFTypeRef?>> = listOf(
+            kSecAttrKeyType to keyType,
+            kSecAttrKeyClass to keyClass,
+        )
+        val keys = allocArrayOf(*attributes.map { it.first }.toTypedArray())
+        val values = allocArrayOf(*attributes.map { it.second }.toTypedArray())
+        val dictionary = checkNotNull(
+            CFDictionaryCreate(null, keys.reinterpret(), values.reinterpret(), attributes.size.convert(), null, null)
+        ) { "Cannot allocate legacy asymmetric key attributes" }
+        try {
+            SecKeyCreateWithData(data, dictionary, null)
+        } finally {
+            CFRelease(dictionary)
+        }
+    }
 }
 
 private fun resolveCipherAlgorithm(transformation: String): CFStringRef? {
@@ -270,23 +294,39 @@ private fun resolveSecurityKeyType(algorithm: String): CFStringRef? {
     }
 }
 
-private fun ByteArray.toNSData(): NSData {
-    if (isEmpty()) return NSData()
-    return usePinned { pinned ->
-        CFDataCreate(null, pinned.addressOf(0).reinterpret(), size.toLong()) as NSData
+private fun <T> withAsymmetricKey(key: SecKeyRef, action: (SecKeyRef) -> T): T {
+    try {
+        return action(key)
+    } finally {
+        CFRelease(key)
     }
 }
 
-private fun ByteArray.toCFData(): CFDataRef? = toNSData() as CFDataRef?
-
-private fun CFDataRef.toByteArray(): ByteArray = (this as NSData).toByteArray()
-
-private fun NSData.toByteArray(): ByteArray {
-    val count = length.toInt()
-    if (count == 0) return ByteArray(0)
-    val output = ByteArray(count)
-    output.usePinned { pinned ->
-        getBytes(pinned.addressOf(0), length)
+private fun <T> withAsymmetricData(bytes: ByteArray, action: (CFDataRef) -> T): T {
+    val data = checkNotNull(
+        if (bytes.isEmpty()) {
+            CFDataCreate(null, null, 0)
+        } else {
+            bytes.usePinned { pinned ->
+                CFDataCreate(null, pinned.addressOf(0).reinterpret(), bytes.size.convert())
+            }
+        }
+    ) { "Cannot allocate legacy asymmetric data" }
+    try {
+        return action(data)
+    } finally {
+        CFRelease(data)
     }
-    return output
+}
+
+private fun copyOwnedAsymmetricData(data: CFDataRef): ByteArray {
+    try {
+        val length = CFDataGetLength(data)
+        check(length >= 0 && length <= Int.MAX_VALUE.toLong()) { "Invalid legacy asymmetric output length" }
+        if (length == 0L) return ByteArray(0)
+        val pointer = checkNotNull(CFDataGetBytePtr(data)) { "Invalid legacy asymmetric output buffer" }
+        return pointer.readBytes(length.toInt())
+    } finally {
+        CFRelease(data)
+    }
 }

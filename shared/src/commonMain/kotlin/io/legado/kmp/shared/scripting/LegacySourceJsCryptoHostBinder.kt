@@ -50,16 +50,16 @@ internal suspend fun QuickJs.bindLegacyCryptoHost(json: Json) {
         legacyHmacBytes(legacyJavaCryptoBytes(data), algorithm, legacyJavaCryptoBytes(key))
     }
     function("__legacyMd5Encode") { args ->
-        args.firstOrNull()?.toString().orEmpty().md5Hex()
+        json.legacyCryptoText(args.firstOrNull()).orEmpty().md5Hex()
     }
     function("__legacyMd5Encode16") { args ->
-        args.firstOrNull()?.toString().orEmpty().md5Hex().substring(8, 24)
+        json.legacyCryptoText(args.firstOrNull()).orEmpty().md5Hex().substring(8, 24)
     }
     function("__legacyDigestHex") { args ->
         runCatching {
             legacyDigest(
-                data = args.firstOrNull()?.toString().orEmpty(),
-                algorithm = args.getOrNull(1)?.toString().orEmpty()
+                data = json.legacyCryptoText(args.firstOrNull()).orEmpty(),
+                algorithm = json.legacyCryptoText(args.getOrNull(1)).orEmpty()
             ).encodeHex()
         }.getOrDefault("")
     }
@@ -68,8 +68,8 @@ internal suspend fun QuickJs.bindLegacyCryptoHost(json: Json) {
             @OptIn(ExperimentalEncodingApi::class)
             Base64.encode(
                 legacyDigest(
-                    data = args.firstOrNull()?.toString().orEmpty(),
-                    algorithm = args.getOrNull(1)?.toString().orEmpty()
+                    data = json.legacyCryptoText(args.firstOrNull()).orEmpty(),
+                    algorithm = json.legacyCryptoText(args.getOrNull(1)).orEmpty()
                 )
             )
         }.getOrDefault("")
@@ -77,9 +77,9 @@ internal suspend fun QuickJs.bindLegacyCryptoHost(json: Json) {
     function("__legacyHMacHex") { args ->
         runCatching {
             legacyHmac(
-                data = args.firstOrNull()?.toString().orEmpty(),
-                algorithm = args.getOrNull(1)?.toString().orEmpty(),
-                key = args.getOrNull(2)?.toString().orEmpty()
+                data = json.legacyCryptoText(args.firstOrNull()).orEmpty(),
+                algorithm = json.legacyCryptoText(args.getOrNull(1)).orEmpty(),
+                key = json.legacyCryptoText(args.getOrNull(2)).orEmpty()
             ).encodeHex()
         }.getOrDefault("")
     }
@@ -88,113 +88,122 @@ internal suspend fun QuickJs.bindLegacyCryptoHost(json: Json) {
             @OptIn(ExperimentalEncodingApi::class)
             Base64.encode(
                 legacyHmac(
-                    data = args.firstOrNull()?.toString().orEmpty(),
-                    algorithm = args.getOrNull(1)?.toString().orEmpty(),
-                    key = args.getOrNull(2)?.toString().orEmpty()
+                    data = json.legacyCryptoText(args.firstOrNull()).orEmpty(),
+                    algorithm = json.legacyCryptoText(args.getOrNull(1)).orEmpty(),
+                    key = json.legacyCryptoText(args.getOrNull(2)).orEmpty()
                 )
             )
         }.getOrDefault("")
     }
     function("__legacySymmetricEncryptBase64") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val key = args.getOrNull(1)?.toString()?.toLegacyCryptoKeyBytes()
-        val iv = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().encodeToByteArray()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val key = json.legacyCryptoKey(args.getOrNull(1), nullTextIsAbsent = false)
+        val iv = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().encodeToByteArray()
         @OptIn(ExperimentalEncodingApi::class)
         Base64.encode(LegacySymmetricCrypto.encrypt(transformation, key, iv, data))
     }
     function("__legacySymmetricEncrypt") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val key = args.getOrNull(1)?.toString()?.toLegacyCryptoKeyBytes()
-        val iv = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().toLegacyCryptoTextInput()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val key = json.legacyCryptoKey(args.getOrNull(1), nullTextIsAbsent = false)
+        val iv = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().toLegacyCryptoTextInput()
         json.encodeToString(LegacySymmetricCrypto.encrypt(transformation, key, iv, data).toJsonElement())
     }
     function("__legacySymmetricEncryptHex") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val key = args.getOrNull(1)?.toString()?.toLegacyCryptoKeyBytes()
-        val iv = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().encodeToByteArray()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val key = json.legacyCryptoKey(args.getOrNull(1), nullTextIsAbsent = false)
+        val iv = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().encodeToByteArray()
         LegacySymmetricCrypto.encrypt(transformation, key, iv, data).encodeHex()
     }
     function("__legacySymmetricDecrypt") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val key = args.getOrNull(1)?.toString()?.toLegacyCryptoKeyBytes()
-        val iv = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().toLegacyCryptoBinaryInput()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val key = json.legacyCryptoKey(args.getOrNull(1), nullTextIsAbsent = false)
+        val iv = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().toLegacyCryptoBinaryInput()
         json.encodeToString(LegacySymmetricCrypto.decrypt(transformation, key, iv, data).toJsonElement())
     }
     function("__legacySymmetricDecryptStr") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val key = args.getOrNull(1)?.toString()?.toLegacyCryptoKeyBytes()
-        val iv = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().decodeLegacyCipherInput()
-        LegacySymmetricCrypto.decrypt(transformation, key, iv, data).decodeToString()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val key = json.legacyCryptoKey(args.getOrNull(1), nullTextIsAbsent = false)
+        val iv = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().decodeLegacyCipherInput()
+        json.encodeToString(LegacySymmetricCrypto.decrypt(transformation, key, iv, data).decodeToString())
     }
     function("__legacyAsymmetricEncrypt") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
         val usePublicKey = args.getOrNull(3)?.toString()?.toBooleanStrictOrNull() ?: true
-        val data = args.getOrNull(4)?.toString().orEmpty().toLegacyCryptoTextInput()
+        val data = json.legacyCryptoText(args.getOrNull(4)).orEmpty().toLegacyCryptoTextInput()
         json.encodeToString(LegacyAsymmetricCrypto.encrypt(transformation, publicKey, privateKey, usePublicKey, data).toJsonElement())
     }
     function("__legacyAsymmetricEncryptBase64") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
         val usePublicKey = args.getOrNull(3)?.toString()?.toBooleanStrictOrNull() ?: true
-        val data = args.getOrNull(4)?.toString().orEmpty().toLegacyCryptoTextInput()
+        val data = json.legacyCryptoText(args.getOrNull(4)).orEmpty().toLegacyCryptoTextInput()
         @OptIn(ExperimentalEncodingApi::class)
         Base64.encode(LegacyAsymmetricCrypto.encrypt(transformation, publicKey, privateKey, usePublicKey, data))
     }
     function("__legacyAsymmetricEncryptHex") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
         val usePublicKey = args.getOrNull(3)?.toString()?.toBooleanStrictOrNull() ?: true
-        val data = args.getOrNull(4)?.toString().orEmpty().toLegacyCryptoTextInput()
+        val data = json.legacyCryptoText(args.getOrNull(4)).orEmpty().toLegacyCryptoTextInput()
         LegacyAsymmetricCrypto.encrypt(transformation, publicKey, privateKey, usePublicKey, data).encodeHex()
     }
     function("__legacyAsymmetricDecrypt") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
         val usePublicKey = args.getOrNull(3)?.toString()?.toBooleanStrictOrNull() ?: true
-        val data = args.getOrNull(4)?.toString().orEmpty().toLegacyCryptoBinaryInput()
+        val data = json.legacyCryptoText(args.getOrNull(4)).orEmpty().toLegacyCryptoBinaryInput()
         json.encodeToString(LegacyAsymmetricCrypto.decrypt(transformation, publicKey, privateKey, usePublicKey, data).toJsonElement())
     }
     function("__legacyAsymmetricDecryptStr") { args ->
-        val transformation = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
+        val transformation = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
         val usePublicKey = args.getOrNull(3)?.toString()?.toBooleanStrictOrNull() ?: true
-        val data = args.getOrNull(4)?.toString().orEmpty().toLegacyCryptoBinaryInput()
-        LegacyAsymmetricCrypto.decrypt(transformation, publicKey, privateKey, usePublicKey, data).decodeToString()
+        val data = json.legacyCryptoText(args.getOrNull(4)).orEmpty().toLegacyCryptoBinaryInput()
+        json.encodeToString(LegacyAsymmetricCrypto.decrypt(transformation, publicKey, privateKey, usePublicKey, data).decodeToString())
     }
     function("__legacySign") { args ->
-        val algorithm = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().toLegacyCryptoTextInput()
+        val algorithm = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().toLegacyCryptoTextInput()
         json.encodeToString(LegacyAsymmetricCrypto.sign(algorithm, publicKey, privateKey, data).toJsonElement())
     }
     function("__legacySignHex") { args ->
-        val algorithm = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().toLegacyCryptoTextInput()
+        val algorithm = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().toLegacyCryptoTextInput()
         LegacyAsymmetricCrypto.sign(algorithm, publicKey, privateKey, data).encodeHex()
     }
     function("__legacyVerifySign") { args ->
-        val algorithm = args.firstOrNull()?.toString().orEmpty()
-        val publicKey = args.getOrNull(1)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val privateKey = args.getOrNull(2)?.toString()?.takeUnless { it == "undefined" || it == "null" }?.toLegacyCryptoKeyBytes()
-        val data = args.getOrNull(3)?.toString().orEmpty().toLegacyCryptoTextInput()
-        val signature = args.getOrNull(4)?.toString().orEmpty().toLegacyCryptoBinaryInput()
+        val algorithm = json.legacyCryptoText(args.firstOrNull()).orEmpty()
+        val publicKey = json.legacyCryptoKey(args.getOrNull(1))
+        val privateKey = json.legacyCryptoKey(args.getOrNull(2))
+        val data = json.legacyCryptoText(args.getOrNull(3)).orEmpty().toLegacyCryptoTextInput()
+        val signature = json.legacyCryptoText(args.getOrNull(4)).orEmpty().toLegacyCryptoBinaryInput()
         LegacyAsymmetricCrypto.verify(algorithm, publicKey, privateKey, data, signature)
     }
 }
+
+// JSON escaping protects text from the native bridge's NUL-terminated string conversion.
+private fun Json.legacyCryptoText(value: Any?): String? =
+    value?.toString()?.let { decodeFromString<String>(it) }
+
+private fun Json.legacyCryptoKey(value: Any?, nullTextIsAbsent: Boolean = true): ByteArray? =
+    legacyCryptoText(value)
+        ?.takeUnless { nullTextIsAbsent && (it == "undefined" || it == "null") }
+        ?.toLegacyCryptoKeyBytes()
 
 private fun legacyJavaCipherOperation(value: Any?): Int {
     val number = (value as? Number)?.toDouble()

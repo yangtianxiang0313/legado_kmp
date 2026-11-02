@@ -11,11 +11,8 @@ import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.network.SharedCapabilityException
 import io.legado.kmp.shared.network.SourceResponse
 import io.legado.kmp.shared.network.toLegacyJsoupResponseJson
-import io.legado.kmp.shared.platform.TextCodec
 import io.legado.kmp.shared.source.SourceStateStore
-import io.legado.kmp.shared.util.ChineseConverter
 import io.legado.kmp.shared.util.md5Hex
-import io.legado.kmp.shared.util.toNumChapter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -30,8 +27,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.ContinuationInterceptor
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 private const val LEGACY_NETWORK_SCRIPT_TIMEOUT_MS = 30_000L
 
@@ -782,88 +777,7 @@ class LegacySourceJsRuntime(
                         val shiftMillis = args.getOrNull(2)?.toString()?.toLongOrNull() ?: 0L
                         formatTimestamp(ts + shiftMillis, TimeZone.UTC, pattern)
                     }
-                    function("__legacyEncodeURI") { args ->
-                        val textJson = args.firstOrNull()?.toString() ?: "\"\""
-                        val charset = args.getOrNull(1)?.toString()?.takeUnless { it.isBlank() || it == "undefined" || it == "null" }
-                        try {
-                            json.decodeFromString<String>(textJson).legacyUrlEncode(charset ?: "UTF-8")
-                        } catch (_: Exception) {
-                            ""
-                        }
-                    }
-                    function("__legacyBase64Decode") { args ->
-                        val encoded = args.firstOrNull()?.toString().orEmpty()
-                        val decodedText = try {
-                            @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
-                            val decoded = Base64.decode(encoded.normalizedLegacyBase64(args.getOrNull(1).legacyBase64Flags()))
-                            val charset = args.getOrNull(1)?.toString()?.takeIf { it.toIntOrNull() == null }
-                            TextCodec.decode(decoded, charset?.takeUnless { it.isBlank() } ?: "UTF-8")
-                        } catch (_: Exception) { "" }
-                        json.encodeToString(decodedText)
-                    }
-                    function("__legacyBase64DecodeToByteArray") { args ->
-                        val encoded = args.firstOrNull()
-                            ?.toString()
-                            ?.takeUnless { it.isBlank() || it == "undefined" || it == "null" }
-                            ?: return@function null
-                        try {
-                            @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
-                            Base64.decode(encoded.normalizedLegacyBase64(args.getOrNull(1).legacyBase64Flags()))
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
-                    function("__legacyBase64Encode") { args ->
-                        val plain = args.firstOrNull()?.toString().orEmpty()
-                        @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
-                        Base64.encode(plain.encodeToByteArray()).withLegacyBase64Flags(args.getOrNull(1).legacyBase64Flags())
-                    }
-                    function("__legacyStrToBytes") { args ->
-                        // Escaped JSON preserves NUL and lone UTF-16 surrogates across the native bridge.
-                        val text = json.decodeFromString<String>(args.firstOrNull()?.toString() ?: "\"\"")
-                        val charset = args.getOrNull(1)?.toString()?.takeUnless { it.isBlank() || it == "undefined" || it == "null" }
-                        TextCodec.encode(text, charset ?: "UTF-8")
-                    }
-                    function("__legacyBytesToStr") { args ->
-                        val bytesJson = args.firstOrNull()?.toString().orEmpty()
-                        val charset = args.getOrNull(1)?.toString()?.takeUnless { it.isBlank() || it == "undefined" || it == "null" }
-                        val bytes = bytesJson.toLegacyByteArray()
-                        // Escape the decoded text before crossing the NUL-terminated native string bridge.
-                        json.encodeToString(TextCodec.decode(bytes, charset ?: "UTF-8"))
-                    }
-                    function("__legacyJsoupDecodeBytes") { args ->
-                        require(args.size == 2 && args[0] is String) { "Expected Jsoup bytes and charset" }
-                        val bytes = legacyJavaCryptoBytes(args[0] as String)
-                        require(args[1] == null || args[1] is String) { "Expected Jsoup charset or null" }
-                        val charset = args[1] as? String
-                        val decoded = if (charset == null) bytes.decodeToString() else TextCodec.decode(bytes, charset)
-                        // Transfer escaped JSON: a direct native string can truncate at an embedded NUL.
-                        json.encodeToString(decoded)
-                    }
-                    function("__legacyT2s") { args ->
-                        ChineseConverter.t2s(args.firstOrNull()?.toString().orEmpty())
-                    }
-                    function("__legacyS2t") { args ->
-                        ChineseConverter.s2t(args.firstOrNull()?.toString().orEmpty())
-                    }
-                    function("__legacyToNumChapter") { args ->
-                        toNumChapter(args.firstOrNull()?.toString().orEmpty())
-                    }
-                    function("__legacyHexDecodeToString") { args ->
-                        val hexStr = args.firstOrNull()?.toString().orEmpty()
-                        val decodedText = try {
-                            TextCodec.decode(hexStr.decodeLegacyHexBytes(), "UTF-8")
-                        } catch (_: Exception) { "" }
-                        json.encodeToString(decodedText)
-                    }
-                    function("__legacyHexDecodeToByteArray") { args ->
-                        val hexStr = args.firstOrNull()?.toString().orEmpty()
-                        try {
-                            hexStr.decodeLegacyHexBytes()
-                        } catch (_: Exception) {
-                            ByteArray(0)
-                        }
-                    }
+                    bindLegacyTextHost(json)
                     function("__legacyLog") { args ->
                         val message = args.firstOrNull()?.toString().orEmpty()
                         // RSS navigation scripts can contain private article URLs or action payloads.
@@ -901,14 +815,6 @@ class LegacySourceJsRuntime(
                         val url = args.firstOrNull()?.toString().orEmpty()
                         val key = args.getOrNull(1)?.toString().orEmpty()
                         hostCall { cookieLookup?.getKey(url, key) }.orEmpty()
-                    }
-                    function("__legacyHexEncodeToString") { args ->
-                        val utf8 = args.firstOrNull()?.toString().orEmpty()
-                        try {
-                            utf8.encodeToByteArray().joinToString("") {
-                                (it.toInt() and 0xff).toString(16).padStart(2, '0')
-                            }
-                        } catch (_: Exception) { "" }
                     }
                     function("__legacyRandomUUID") { _ ->
                         randomUUID()
