@@ -41,6 +41,19 @@ enum SettingsBackupFilePreparation {
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
         try cancellation.check()
 
+        // Coordination can open the path before its accessor runs. A known FIFO must never reach it.
+        // Missing provider items still enter coordination so their contents can be materialized.
+        try url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { throw PreparationError.invalidFile }
+            var status = stat()
+            if Darwin.lstat(path, &status) == 0 {
+                guard (status.st_mode & S_IFMT) == S_IFREG else { throw PreparationError.invalidFile }
+                guard status.st_size >= 0 else { throw PreparationError.invalidFile }
+                guard status.st_size <= Int64(maximumBytes) else { throw PreparationError.tooLarge }
+            }
+        }
+        try cancellation.check()
+
         let coordinator = NSFileCoordinator(filePresenter: nil)
         try cancellation.register(coordinator)
         defer { cancellation.unregister(coordinator) }
@@ -166,11 +179,26 @@ enum SettingsBackupFilePreparation {
 
         var errorDescription: String? {
             switch self {
-            case .invalidFile: return "请选择可读取的普通备份文件"
-            case .tooLarge: return "备份文件超过 128 MiB"
-            case .emptyFile: return "备份文件为空"
-            case .invalidUTF8: return "备份文件不是 UTF-8 JSON"
-            case .coordinationFailed: return "无法协调读取备份文件"
+            case .invalidFile:
+                return NSLocalizedString(
+                    "backup.file.invalid_file", value: "请选择可读取的普通备份文件",
+                    comment: "Backup preparation requires a readable regular file")
+            case .tooLarge:
+                return NSLocalizedString(
+                    "backup.file.too_large", value: "备份文件超过 128 MiB",
+                    comment: "Backup file exceeds the 128 MiB limit")
+            case .emptyFile:
+                return NSLocalizedString(
+                    "backup.file.empty_file", value: "备份文件为空",
+                    comment: "Backup file contains no data")
+            case .invalidUTF8:
+                return NSLocalizedString(
+                    "backup.file.invalid_utf8", value: "备份文件不是 UTF-8 JSON",
+                    comment: "Backup file cannot be read as UTF-8 JSON")
+            case .coordinationFailed:
+                return NSLocalizedString(
+                    "backup.file.coordination_failed", value: "无法协调读取备份文件",
+                    comment: "Backup file coordination produced no readable result")
             }
         }
     }

@@ -1,6 +1,1145 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "backup.notice.unsupported_preferences": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分 iOS 专用或类型不兼容的偏好仅保留在 KMP metadata，未写入 Android config.xml。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some iOS-specific or type-incompatible preferences are retained only in KMP metadata, not in Android config.xml."
+          }
+        }
+      }
+    },
+    "backup.restore.reading": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取备份…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading backup..."
+          }
+        }
+      }
+    },
+    "backup.restore.android_password": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 备份密码（未设置可留空）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android backup password (leave blank if none)"
+          }
+        }
+      }
+    },
+    "backup.restore.password": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份密码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup password"
+          }
+        }
+      }
+    },
+    "backup.restore.completed_with_notes": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复完成，请查看说明"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Complete With Notes"
+          }
+        }
+      }
+    },
+    "backup.restore.request_stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复请求已停止"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Request Stopped"
+          }
+        }
+      }
+    },
+    "backup.restore.preparation_stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份准备已停止"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup Preparation Stopped"
+          }
+        }
+      }
+    },
+    "backup.restore.commit_uncertain": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交阶段可能已经完成，请核对当前书架和设置。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The restore may already have committed. Check your bookshelf and settings."
+          }
+        }
+      }
+    },
+    "backup.restore.nothing_restored": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未恢复任何数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data was restored."
+          }
+        }
+      }
+    },
+    "backup.restore.bookshelf": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书架"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Books"
+          }
+        }
+      }
+    },
+    "backup.restore.book_sources": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book sources"
+          }
+        }
+      }
+    },
+    "backup.restore.rss_sources": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS 源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS sources"
+          }
+        }
+      }
+    },
+    "backup.restore.replace_rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replacement rules"
+          }
+        }
+      }
+    },
+    "backup.restore.book_groups": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍分组"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book groups"
+          }
+        }
+      }
+    },
+    "backup.restore.bookmarks": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书签"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmarks"
+          }
+        }
+      }
+    },
+    "backup.restore.txt_toc_rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TXT 目录规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TXT chapter rules"
+          }
+        }
+      }
+    },
+    "backup.restore.dictionary_rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictionary rules"
+          }
+        }
+      }
+    },
+    "backup.restore.search_history": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索历史"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search history"
+          }
+        }
+      }
+    },
+    "backup.restore.read_records": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读记录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading records"
+          }
+        }
+      }
+    },
+    "backup.restore.rss_favorites": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS 收藏"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS favorites"
+          }
+        }
+      }
+    },
+    "backup.restore.source_subscriptions": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源订阅"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source subscriptions"
+          }
+        }
+      }
+    },
+    "backup.restore.http_tts": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTTP 朗读配置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTTP speech configurations"
+          }
+        }
+      }
+    },
+    "backup.restore.keyboard_assists": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘辅助"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard accessories"
+          }
+        }
+      }
+    },
+    "backup.restore.servers": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器配置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server configurations"
+          }
+        }
+      }
+    },
+    "backup.restore.preferences_applied": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持的设置已按恢复忽略项应用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supported settings were applied, respecting restore exclusions."
+          }
+        }
+      }
+    },
+    "backup.restore.count_row": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@：%@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %@"
+          }
+        }
+      }
+    },
+    "backup.file.invalid_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择可读取的普通备份文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a readable regular backup file"
+          }
+        }
+      }
+    },
+    "backup.file.too_large": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份文件超过 128 MiB"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup file exceeds 128 MiB"
+          }
+        }
+      }
+    },
+    "backup.file.empty_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份文件为空"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup file is empty"
+          }
+        }
+      }
+    },
+    "backup.file.invalid_utf8": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份文件不是 UTF-8 JSON"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup file is not UTF-8 JSON"
+          }
+        }
+      }
+    },
+    "backup.file.coordination_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法协调读取备份文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to coordinate reading the backup file"
+          }
+        }
+      }
+    },
+    "backup.prepare.invalid_android_backup": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 备份无法读取：文件损坏、格式无效或超过大小上限"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to read the Android backup: the file is damaged, has an invalid format, or exceeds the size limit"
+          }
+        }
+      }
+    },
+    "backup.prepare.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份无法解析，请检查文件后重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to parse the backup. Check the file and try again"
+          }
+        }
+      }
+    },
+    "backup.notice.restore_servers_not_restored": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器配置未恢复：备份密码不正确或加密数据已损坏。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server settings were not restored: the backup password is incorrect or the encrypted data is damaged."
+          }
+        }
+      }
+    },
+    "backup.notice.restore_webdav_password_not_restored": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV 密码未恢复：备份密码不正确或密码数据未加密，请重新填写。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The WebDAV password was not restored: the backup password is incorrect or the password data is not encrypted. Enter it again."
+          }
+        }
+      }
+    },
+    "backup.notice.restore_metadata_unreadable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KMP metadata 无法读取；已忽略扩展快照，仅使用 Android 原生文件恢复。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KMP metadata could not be read. The extended snapshot was ignored; only native Android files are used for restoration."
+          }
+        }
+      }
+    },
+    "backup.notice.restore_fonts_backgrounds_missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 自定义字体和背景图片文件未包含在备份中，已使用系统字体与默认背景；需要在 iOS 重新选择。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android custom font and background image files are not included in the backup. System fonts and default backgrounds are used; select them again on iOS."
+          }
+        }
+      }
+    },
+    "backup.notice.restore_local_books_records_only": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地书籍仅恢复书架记录，Android 本地文件路径不会迁移；请重新导入原书文件，或在忽略项中跳过本地书籍。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only bookshelf records are restored for local books; Android local file paths are not migrated. Import the original book files again, or skip local books in the exclusion options."
+          }
+        }
+      }
+    },
+    "backup.notice.export_partial_encryption": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 备份不是整体加密：仅服务器列表与 WebDAV 密码按原生 BackupAES 加密，书源请求头、规则和变量仍为明文。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android backups are not encrypted as a whole: only the server list and WebDAV password are encrypted with native BackupAES. Book source request headers, rules, and variables remain in plain text."
+          }
+        }
+      }
+    },
+    "backup.notice.export_metadata_android_ignored": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KMP 扩展快照另存为 metadata；Android 不使用此文件，Android 重新备份后不会保留这些扩展。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The KMP extended snapshot is saved separately as metadata. Android does not use this file and will not retain these extensions when creating a new backup."
+          }
+        }
+      }
+    },
+    "backup.notice.export_external_resources_excluded": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ZIP 不包含本地书原文件、字体、背景、封面或欢迎页图片，也不包含正文、Cookie 和独立脚本大变量缓存；资源需在目标设备另行导入。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The ZIP excludes original local book files, fonts, backgrounds, cover and welcome-screen images, book text, cookies, and large-variable caches for standalone scripts. Import resources separately on the target device."
+          }
+        }
+      }
+    },
+    "backup.notice.export_local_books_records_only": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地书仅导出书架记录和进度，不包含原书文件；Android 本地路径不可迁移，需重新导入原书。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only bookshelf records and progress are exported for local books, not the original files. Android local paths cannot be migrated; import the original books again."
+          }
+        }
+      }
+    },
+    "backup.notice.export_local_covers_references_only": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地封面图片文件未迁移，书架和分组仅保留原封面引用；目标设备需重新选择图片。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local cover image files are not migrated. Bookshelf and group records retain only their original cover references; select images again on the target device."
+          }
+        }
+      }
+    },
+    "backup.notice.export_shared_layout_fallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享阅读排版快照无效，Android 备份已回退到原生共享配置或默认排版。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The shared reader layout snapshot is invalid. The Android backup has fallen back to native shared settings or the default layout."
+          }
+        }
+      }
+    },
+    "backup.notice.export_direct_link_plaintext": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 原生直链上传规则为明文文件，可能包含上传凭据；请妥善保管备份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Native Android direct link upload rules are stored in a plaintext file and may contain upload credentials. Keep the backup secure."
+          }
+        }
+      }
+    },
+    "backup.notice.export_title_size_rounded": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 标题字号为整数，小数字号已取整；原值保留在 KMP metadata。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android title font sizes are integers, so fractional sizes have been converted to integers. Original values are retained in KMP metadata."
+          }
+        }
+      }
+    },
+    "backup.notice.export_fonts_not_migrated": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字体文件与 iOS 字体并未迁移；Android 仅保留字体名称或路径引用，需要在目标设备重新选择。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font files and iOS fonts are not migrated. Android retains only font names or path references; select fonts again on the target device."
+          }
+        }
+      }
+    },
+    "backup.notice.export_backgrounds_not_migrated": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义阅读背景图片未迁移；Android 原生配置使用纯色背景，原路径保留在 KMP metadata。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom reader background images are not migrated. Native Android settings use solid-color backgrounds; original paths are retained in KMP metadata."
+          }
+        }
+      }
+    },
+    "backup.notice.export_invalid_colors_fallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分颜色值不符合 Android Color.parseColor 契约，原生配置使用默认颜色，原值保留在 KMP metadata。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some color values are incompatible with Android Color.parseColor. Native settings use default colors; original values are retained in KMP metadata."
+          }
+        }
+      }
+    },
+    "backup.notice.export_invalid_header_footer_colors_fallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "页眉页脚颜色无效，Android 使用默认颜色；原值保留在 KMP metadata。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Header or footer colors are invalid. Android uses default colors; original values are retained in KMP metadata."
+          }
+        }
+      }
+    },
+    "backup.notice.export_color_marker_collision": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分颜色与 Android 的跟随正文／默认分隔线标记重合；原颜色保留在 KMP metadata。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some colors coincide with Android markers for following the body text color or using the default divider color. Original colors are retained in KMP metadata."
+          }
+        }
+      }
+    },
+    "backup.notice.restore_metadata_invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KMP metadata 不匹配、损坏或密码不正确；已忽略扩展快照，仅使用 Android 原生文件恢复。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KMP metadata does not match, is damaged, or has an incorrect password. The extended snapshot was ignored; only native Android files are used for restoration."
+          }
+        }
+      }
+    },
+    "backup.local.restore.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Backup"
+          }
+        }
+      }
+    },
+    "backup.local.export.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back Up Now"
+          }
+        }
+      }
+    },
+    "backup.local.restore.file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从本地文件恢复"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore from Local File"
+          }
+        }
+      }
+    },
+    "backup.local.export.file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份到本地"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back Up Locally"
+          }
+        }
+      }
+    },
+    "backup.local.restore.webdav": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从 WebDAV 恢复"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore from WebDAV"
+          }
+        }
+      }
+    },
+    "backup.local.export.webdav": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份到 WebDAV"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back Up to WebDAV"
+          }
+        }
+      }
+    },
+    "backup.local.password.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份密码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup Password"
+          }
+        }
+      }
+    },
+    "backup.local.password.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于保护服务器和 WebDAV 凭据。请保管密码，以便在其它设备恢复。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protects server and WebDAV credentials. Keep this password to restore on another device."
+          }
+        }
+      }
+    },
+    "backup.local.password.repeat": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次输入密码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter Password Again"
+          }
+        }
+      }
+    },
+    "backup.local.saved.timestamp_warning": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已保存，但最近备份时间未记录。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup was saved, but the last backup time could not be recorded."
+          }
+        }
+      }
+    },
+    "backup.local.share.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已保存，但分享未完成。可稍后从备份目录分享。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup was saved, but sharing did not finish. You can share it later from the backup folder."
+          }
+        }
+      }
+    },
+    "backup.local.share.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已保存，分享已完成。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup was saved and sharing completed."
+          }
+        }
+      }
+    },
+    "backup.local.share.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已保存，已取消分享。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup was saved. Sharing was cancelled."
+          }
+        }
+      }
+    },
+    "backup.local.saved.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已保存"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup Saved"
+          }
+        }
+      }
+    },
+    "backup.local.export.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份未保存。请检查备份数据、可用空间和备份路径后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup was not saved. Check the backup data, available storage, and backup path, then try again."
+          }
+        }
+      }
+    },
     "settings.my_android.book_source_manage_desc" : {
       "extractionState" : "manual",
       "localizations" : {
