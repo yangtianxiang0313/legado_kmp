@@ -77,6 +77,9 @@ final class ReaderTipTitleModeControl: UIView {
             rowHeight = max(rowHeight, height)
         }
         finishRow()
+        if effectiveUserInterfaceLayoutDirection == .rightToLeft {
+            for index in frames.indices { frames[index].origin.x = width - frames[index].maxX }
+        }
         return (ceil(y), frames)
     }
 }
@@ -114,6 +117,7 @@ private final class ReaderTipRadioButton: ReaderMenuPressButton {
         optionLabel.text = title
         optionLabel.numberOfLines = 0
         optionLabel.lineBreakMode = .byWordWrapping
+        optionLabel.textAlignment = .natural
         optionLabel.adjustsFontForContentSizeCategory = false
         optionLabel.isAccessibilityElement = false
         radioImageView.contentMode = .center
@@ -154,13 +158,16 @@ private final class ReaderTipRadioButton: ReaderMenuPressButton {
             optionLabel.sizeThatFits(
                 CGSize(width: titleWidth, height: .greatestFiniteMagnitude)
             ).height)
+        let rtl = effectiveUserInterfaceLayoutDirection == .rightToLeft
         radioImageView.frame = CGRect(
-            x: 3, y: (bounds.height - symbolWidth) / 2, width: symbolWidth, height: symbolWidth)
+            x: rtl ? bounds.width - symbolWidth - 3 : 3,
+            y: (bounds.height - symbolWidth) / 2, width: symbolWidth, height: symbolWidth)
         // Widget.Material.CompoundButton.RadioButton uses a 20dp-radius borderless ripple.
         pressedView.frame = CGRect(x: radioImageView.frame.midX - 20, y: bounds.midY - 20, width: 40, height: 40)
         pressedView.layer.cornerRadius = 20
         optionLabel.frame = CGRect(
-            x: symbolWidth + 3, y: (bounds.height - titleHeight) / 2, width: titleWidth, height: titleHeight)
+            x: rtl ? 3 : symbolWidth + 3,
+            y: (bounds.height - titleHeight) / 2, width: titleWidth, height: titleHeight)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -277,8 +284,12 @@ final class ReaderTipValueControl: ReaderMenuPressButton {
     override func layoutSubviews() {
         super.layoutSubviews()
         let metrics = measure(width: bounds.width)
-        optionLabel.frame = metrics.titleFrame
-        valueLabel.frame = metrics.valueFrame
+        let rtl = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        func frame(_ frame: CGRect) -> CGRect {
+            CGRect(x: rtl ? bounds.width - frame.maxX : frame.minX, y: frame.minY, width: frame.width, height: frame.height)
+        }
+        optionLabel.frame = frame(metrics.titleFrame)
+        valueLabel.frame = frame(metrics.valueFrame)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

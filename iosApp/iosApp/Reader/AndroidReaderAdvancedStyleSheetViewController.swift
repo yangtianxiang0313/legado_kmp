@@ -1,5 +1,5 @@
-import shared
 import UIKit
+import shared
 
 final class AndroidReaderAdvancedStyleSheetViewController: UIViewController {
     private var style: ReaderStylePreferences
@@ -12,9 +12,12 @@ final class AndroidReaderAdvancedStyleSheetViewController: UIViewController {
         L10n.ReaderAppearance.titleModeCenter,
         L10n.ReaderAppearance.titleModeHidden,
     ])
-    private let titleSizeRow = AndroidReaderStyleSliderRow(title: L10n.ReaderAppearance.titleSizeTitle, identifier: "readerAppearance.advanced.titleSizeSlider")
-    private let titleTopSpacingRow = AndroidReaderStyleSliderRow(title: L10n.ReaderAppearance.titleTopSpacingTitle, identifier: "readerAppearance.advanced.titleTopSpacingSlider")
-    private let titleBottomSpacingRow = AndroidReaderStyleSliderRow(title: L10n.ReaderAppearance.titleBottomSpacingTitle, identifier: "readerAppearance.advanced.titleBottomSpacingSlider")
+    private let titleSizeRow = AndroidReaderStyleSliderRow(
+        title: L10n.ReaderAppearance.titleSizeTitle, identifier: "readerAppearance.advanced.titleSizeSlider")
+    private let titleTopSpacingRow = AndroidReaderStyleSliderRow(
+        title: L10n.ReaderAppearance.titleTopSpacingTitle, identifier: "readerAppearance.advanced.titleTopSpacingSlider")
+    private let titleBottomSpacingRow = AndroidReaderStyleSliderRow(
+        title: L10n.ReaderAppearance.titleBottomSpacingTitle, identifier: "readerAppearance.advanced.titleBottomSpacingSlider")
 
     init(
         style: ReaderStylePreferences,
@@ -64,38 +67,51 @@ final class AndroidReaderAdvancedStyleSheetViewController: UIViewController {
     }
 
     private func buildContent() {
-        titleModeControl.addAction(UIAction { [weak self] _ in
-            self?.changeTitleMode()
-        }, for: .valueChanged)
+        titleModeControl.addAction(
+            UIAction { [weak self] _ in
+                self?.changeTitleMode()
+            }, for: .valueChanged)
         titleModeControl.accessibilityIdentifier = "readerAppearance.advanced.titleModeControl"
 
+        titleSizeRow.valueFormatter = { value in
+            L10n.ReaderAppearance.floatPointValue(value.rounded().coerced(to: 0...12))
+        }
         titleSizeRow.configure(min: 0, max: 12) { [weak self] value in
             guard let self else { return }
-            let rounded = value.rounded().coerced(to: 0 ... 12)
+            let rounded = value.rounded().coerced(to: 0...12)
             self.titleSizeRow.valueText = L10n.ReaderAppearance.floatPointValue(rounded)
             self.commit { $0.androidCopy(titleSize: rounded) }
         }
 
+        titleTopSpacingRow.valueFormatter = { value in
+            L10n.ReaderAppearance.pointValue(Int32(value.rounded()).coerced(to: 0...40))
+        }
         titleTopSpacingRow.configure(min: 0, max: 40) { [weak self] value in
             guard let self else { return }
-            let rounded = Int32(value.rounded()).coerced(to: 0 ... 40)
+            let rounded = Int32(value.rounded()).coerced(to: 0...40)
             self.titleTopSpacingRow.valueText = L10n.ReaderAppearance.pointValue(rounded)
             self.commit { $0.androidCopy(titleTopSpacing: rounded) }
         }
 
+        titleBottomSpacingRow.valueFormatter = { value in
+            L10n.ReaderAppearance.pointValue(Int32(value.rounded()).coerced(to: 0...40))
+        }
         titleBottomSpacingRow.configure(min: 0, max: 40) { [weak self] value in
             guard let self else { return }
-            let rounded = Int32(value.rounded()).coerced(to: 0 ... 40)
+            let rounded = Int32(value.rounded()).coerced(to: 0...40)
             self.titleBottomSpacingRow.valueText = L10n.ReaderAppearance.pointValue(rounded)
             self.commit { $0.androidCopy(titleBottomSpacing: rounded) }
         }
 
-        stackView.addArrangedSubview(makeSection(title: L10n.ReaderAppearance.advancedTextSection, rows: [
-            makeSegmentedRow(title: L10n.ReaderAppearance.titleModeTitle, control: titleModeControl),
-            titleSizeRow,
-            titleTopSpacingRow,
-            titleBottomSpacingRow,
-        ]))
+        stackView.addArrangedSubview(
+            makeSection(
+                title: L10n.ReaderAppearance.advancedTextSection,
+                rows: [
+                    makeSegmentedRow(title: L10n.ReaderAppearance.titleModeTitle, control: titleModeControl),
+                    titleSizeRow,
+                    titleTopSpacingRow,
+                    titleBottomSpacingRow,
+                ]))
     }
 
     private func makeSection(title: String, rows: [UIView]) -> UIView {
@@ -137,24 +153,24 @@ final class AndroidReaderAdvancedStyleSheetViewController: UIViewController {
     }
 
     private func refresh() {
-        titleModeControl.selectedSegmentIndex = Int(style.titleMode.coerced(to: 0 ... 2))
+        titleModeControl.selectedSegmentIndex = Int(style.titleMode.coerced(to: 0...2))
         titleModeControl.accessibilityLabel = L10n.ReaderAppearance.titleModeTitle
         titleModeControl.accessibilityValue = titleModeText(style.titleMode)
 
-        let titleSize = style.titleSize.coerced(to: 0 ... 12)
+        let titleSize = style.titleSize.coerced(to: 0...12)
         titleSizeRow.set(value: titleSize, text: L10n.ReaderAppearance.floatPointValue(titleSize))
         titleTopSpacingRow.set(
-            value: Float(style.titleTopSpacing.coerced(to: 0 ... 40)),
+            value: Float(style.titleTopSpacing.coerced(to: 0...40)),
             text: L10n.ReaderAppearance.pointValue(style.titleTopSpacing)
         )
         titleBottomSpacingRow.set(
-            value: Float(style.titleBottomSpacing.coerced(to: 0 ... 40)),
+            value: Float(style.titleBottomSpacing.coerced(to: 0...40)),
             text: L10n.ReaderAppearance.pointValue(style.titleBottomSpacing)
         )
     }
 
     private func changeTitleMode() {
-        let selected = Int32(titleModeControl.selectedSegmentIndex).coerced(to: 0 ... 2)
+        let selected = Int32(titleModeControl.selectedSegmentIndex).coerced(to: 0...2)
         commit { $0.androidCopy(titleMode: selected) }
     }
 
@@ -176,8 +192,8 @@ final class AndroidReaderAdvancedStyleSheetViewController: UIViewController {
     }
 }
 
-private extension Int32 {
-    func coerced(to range: ClosedRange<Int32>) -> Int32 {
+extension Int32 {
+    fileprivate func coerced(to range: ClosedRange<Int32>) -> Int32 {
         Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }

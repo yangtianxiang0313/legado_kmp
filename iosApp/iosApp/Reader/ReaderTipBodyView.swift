@@ -133,12 +133,11 @@ final class ReaderTipBodyView: UIView {
                 guard value.isFinite else { return "0" }
                 return String(Int(min(max(value.rounded(), 0), 100)))
             }
-            for case let slider as UISlider in row.arrangedSubviews {
-                slider.addTarget(self, action: #selector(sliderTrackingBegan), for: .touchDown)
-                slider.addTarget(
-                    self, action: #selector(sliderTrackingEnded),
-                    for: [.touchUpInside, .touchUpOutside, .touchCancel])
-            }
+            let slider = row.detailSlider
+            slider.addTarget(self, action: #selector(sliderTrackingBegan), for: .touchDown)
+            slider.addTarget(
+                self, action: #selector(sliderTrackingEnded),
+                for: [.touchUpInside, .touchUpOutside, .touchCancel])
         }
         titleSizeRow.configure(min: 0, max: 10) { [weak self] value in
             guard value.isFinite else { return }
@@ -185,8 +184,8 @@ final class ReaderTipBodyView: UIView {
             (titleBottomRow, Float(values.titleBottomSpacing)),
         ]
         for (row, value) in rowValues {
-            guard let slider = row.arrangedSubviews.first(where: { $0 is UISlider }) as? UISlider,
-                !slider.isTracking, !trackingSliders.contains(ObjectIdentifier(slider))
+            let slider = row.detailSlider
+            guard !slider.isTracking, !trackingSliders.contains(ObjectIdentifier(slider))
             else { continue }
             let input = value.isFinite ? value : slider.minimumValue
             let normalized = min(max(input, slider.minimumValue), slider.maximumValue).rounded()
