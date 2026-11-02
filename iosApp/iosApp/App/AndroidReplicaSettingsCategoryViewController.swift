@@ -37,6 +37,7 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
     private let backButton = UIButton(type: .custom)
     private let titleLabel = AndroidExploreTextLabel()
     private var toolbarHeight: NSLayoutConstraint?
+    private var themeModeAccessibilityWidth: NSLayoutConstraint?
     private let themeModeButton = ThemeSettingsModeButton()
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let loadingView = UIView()
@@ -107,8 +108,8 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        refreshTypography()
         if tableView.bounds.width != lastListWidth {
-            refreshTypography()
             lastListWidth = tableView.bounds.width
             invalidateRowInteractions()
             requestContentRefresh()
@@ -142,6 +143,8 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
             self.themeCoordinator.showModePicker(current: self.preferences?.themeMode)
         }
         topBar.addSubview(themeModeButton)
+        themeModeAccessibilityWidth = themeModeButton.widthAnchor.constraint(
+            lessThanOrEqualTo: topBar.widthAnchor, multiplier: 0.44)
         NSLayoutConstraint.activate([
             themeModeButton.trailingAnchor.constraint(equalTo: topBar.trailingAnchor),
             themeModeButton.topAnchor.constraint(equalTo: topBar.topAnchor),
@@ -280,12 +283,17 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
     private func refreshTypography() {
         let titleHeight = AndroidReplicaSettingsTypography.apply(
             title: titleLabel, status: loadingLabel, retry: retryButton, traits: traitCollection)
+        let accessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        themeModeAccessibilityWidth?.isActive = accessibilitySize
+        let availableWidth = viewIfLoaded?.bounds.width ?? 0
+        let actionWidth = accessibilitySize ? availableWidth * 0.44 : availableWidth - 92
         let actionHeight =
             category == .theme
             ? themeModeButton.sizeThatFits(
-                CGSize(width: max(48, (viewIfLoaded?.bounds.width ?? 0) - 92), height: CGFloat.greatestFiniteMagnitude)
+                CGSize(width: max(48, actionWidth), height: CGFloat.greatestFiniteMagnitude)
             ).height : 0
-        toolbarHeight?.constant = max(titleHeight, actionHeight)
+        let height = max(titleHeight, actionHeight)
+        if toolbarHeight?.constant != height { toolbarHeight?.constant = height }
     }
 
     private func bootstrapDependencies() {
@@ -373,8 +381,13 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
         return header
     }
 
-    func tableView(_: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        category.sections[section].title == nil ? .leastNormalMagnitude : UITableView.automaticDimension
+    func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        guard let header = self.tableView(tableView, viewForHeaderInSection: section) as? AndroidReplicaSettingsSectionHeader else {
+            return .leastNormalMagnitude
+        }
+        header.prepareTypography(compatibleWith: traitCollection)
+        guard tableView.bounds.width > 0 else { return UITableView.automaticDimension }
+        return header.sizeThatFits(CGSize(width: tableView.bounds.width, height: .greatestFiniteMagnitude)).height
     }
 
     func tableView(_: UITableView, heightForFooterInSection _: Int) -> CGFloat {
@@ -387,6 +400,12 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
             as! AndroidReplicaSettingsRowCell
         configure(cell, at: indexPath)
         return cell
+    }
+
+    func tableView(_: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        guard let cell = cell as? AndroidReplicaSettingsRowCell else { return }
+        // Prefetched cells may have been configured before the latest settings snapshot.
+        configure(cell, at: indexPath)
     }
 
     private func configure(_ cell: AndroidReplicaSettingsRowCell, at indexPath: IndexPath) {

@@ -1,3 +1,5 @@
+import Foundation
+
 extension AndroidReplicaSettingsCategoryViewController {
     enum Category {
         case theme
@@ -21,12 +23,12 @@ extension AndroidReplicaSettingsCategoryViewController {
                 return [
                     Section(title: nil, rows: [.themePreset, .coverConfiguration]),
                     Section(
-                        title: "白天",
+                        title: NSLocalizedString("settings.theme_day", value: "白天", comment: "Legado day"),
                         rows: ThemeColorSetting.allCases.map { .themeColor($0, false) } + [
                             .themeBackground(false), .saveTheme(false),
                         ]),
                     Section(
-                        title: "夜间",
+                        title: NSLocalizedString("settings.theme_night", value: "夜间", comment: "Legado night"),
                         rows: ThemeColorSetting.allCases.map { .themeColor($0, true) } + [
                             .themeBackground(true), .saveTheme(true),
                         ]
@@ -53,7 +55,7 @@ extension AndroidReplicaSettingsCategoryViewController {
                 return [
                     Section(title: nil, rows: [.backupNow, .restoreNow, .automaticBackup, .backupCapabilities]),
                     Section(
-                        title: "WebDAV",
+                        title: L10n.Settings.webDavTitle,
                         rows: [.webDavUrl, .webDavAccount, .webDavPassword, .webDavDir, .webDavDeviceName]),
                     Section(
                         title: L10n.Settings.backupTitle,

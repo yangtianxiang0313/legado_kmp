@@ -34,19 +34,25 @@ struct AndroidReplicaSettingsRowPresentation {
     func title(for row: Row) -> String {
         switch row {
         case .readerAppearance: return L10n.Settings.readerAppearanceTitle
-        case .themePreset: return "主题列表"
-        case .themeBackground: return "背景图片"
-        case .coverConfiguration: return "封面配置"
-        case .appLock: return "应用密码"
-        case .automaticBackup: return "自动备份"
+        case .themePreset:
+            return NSLocalizedString("settings.theme_list_title", value: "主题列表", comment: "Legado theme_list")
+        case .themeBackground:
+            return NSLocalizedString("settings.theme_background_title", value: "背景图片", comment: "Legado background_image")
+        case .coverConfiguration:
+            return NSLocalizedString("settings.cover_config_title", value: "封面配置", comment: "Legado cover_config")
+        case .appLock: return L10n.Settings.appLockTitle
+        case .automaticBackup:
+            return NSLocalizedString("settings.automatic_backup_title", value: "自动备份", comment: "Automatic backup settings")
         case .themeMode: return L10n.Settings.themeModeTitle
         case .themeColor(let field, _): return field.title
-        case .saveTheme: return "保存主题配置"
+        case .saveTheme:
+            return NSLocalizedString("settings.save_theme_config_title", value: "保存主题配置", comment: "Legado save_theme_config")
         case .bookshelfLayout: return L10n.Settings.bookshelfLayoutTitle
         case .precisionSearch: return L10n.Settings.precisionSearchTitle
         case .threadCount: return L10n.Settings.threadCountTitle
         case .preDownloadNum: return AndroidReplicaPreDownloadPreference.title
-        case .sourceCheck: return "校验设置"
+        case .sourceCheck:
+            return NSLocalizedString("settings.source_check_title", value: "校验设置", comment: "Legado check_source_config")
         case .replaceRuleEnabledByDefault: return L10n.Settings.replaceRuleTitle
         case .keepScreenOn: return L10n.Settings.keepScreenOnTitle
         case .showDiscovery: return L10n.Settings.showDiscoveryTitle
@@ -55,7 +61,8 @@ struct AndroidReplicaSettingsRowPresentation {
         case .defaultToRead: return L10n.StartupReading.title
         case .clearCache: return L10n.Settings.clearCacheTitle
         case .backupPath: return L10n.Settings.backupPathTitle
-        case .backupCapabilities: return "订阅与服务"
+        case .backupCapabilities:
+            return NSLocalizedString("settings.backup_capabilities_title", value: "订阅与服务", comment: "Subscriptions and services settings")
         case .backupNow: return L10n.Settings.backupNowTitle
         case .restoreNow: return L10n.Settings.restoreNowTitle
         case .webDavUrl: return L10n.Settings.webDavUrlTitle
@@ -75,7 +82,9 @@ struct AndroidReplicaSettingsRowPresentation {
         case .autoRefreshOnStart: return L10n.Settings.autoRefreshOnStartTitle
         case .userAgent: return L10n.Settings.userAgentTitle
         case .autoChangeSource: return L10n.Settings.autoChangeSourceTitle
-        case .showAddToShelfAlert: return "返回时提示放入书架"
+        case .showAddToShelfAlert:
+            return NSLocalizedString(
+                "settings.show_add_to_shelf_alert_title", value: "返回时提示放入书架", comment: "Legado show_add_to_shelf_alert_title")
         }
     }
 
@@ -84,17 +93,31 @@ struct AndroidReplicaSettingsRowPresentation {
         case .readerAppearance:
             return preferences?.readerPresetName ?? L10n.Settings.readerPresetFallback
         case .themePreset:
-            return "使用、保存、导入或分享主题"
-        case .themeBackground(let night): return night ? "夜间背景" : "白天背景"
-        case .coverConfiguration: return "默认封面与封面加载规则"
-        case .appLock: return "设置、修改或关闭应用密码"
-        case .automaticBackup: return "备份目标、加密密码与执行状态"
+            return NSLocalizedString(
+                "settings.theme_list_detail", value: "使用、保存、导入或分享主题", comment: "Theme list actions")
+        case .themeBackground(let night):
+            return night
+                ? NSLocalizedString("settings.theme_background_night_detail", value: "夜间背景", comment: "Night background summary")
+                : NSLocalizedString("settings.theme_background_day_detail", value: "白天背景", comment: "Day background summary")
+        case .coverConfiguration:
+            return NSLocalizedString(
+                "settings.cover_config_detail", value: "默认封面与封面加载规则", comment: "Default cover and loading rules")
+        case .appLock:
+            return NSLocalizedString(
+                "settings.app_lock_management_detail", value: "设置、修改或关闭应用密码", comment: "App password management")
+        case .automaticBackup:
+            return NSLocalizedString(
+                "settings.automatic_backup_detail", value: "备份目标、加密密码与执行状态", comment: "Automatic backup settings summary")
         case .themeMode:
             return themeModeText(preferences?.themeMode)
         case .themeColor(let field, let isNight):
             return field.summary(isNight: isNight)
         case .saveTheme(let isNight):
-            return isNight ? "保存夜间主题配置以供调用和分享" : "保存白天主题配置以供调用和分享"
+            return isNight
+                ? NSLocalizedString(
+                    "settings.save_night_theme_detail", value: "保存夜间主题配置以供调用和分享", comment: "Save night theme config")
+                : NSLocalizedString(
+                    "settings.save_day_theme_detail", value: "保存白天主题配置以供调用和分享", comment: "Save day theme config")
         case .bookshelfLayout:
             return bookshelfLayoutText(preferences?.bookshelfLayoutMode)
         case .precisionSearch:
@@ -102,7 +125,10 @@ struct AndroidReplicaSettingsRowPresentation {
         case .threadCount:
             return "\(runtimeConfig?.threadCount ?? 16)"
         case .preDownloadNum:
-            return "预先下载 \(runtimeConfig?.preDownloadNum ?? 10) 章正文"
+            return String(
+                format: NSLocalizedString(
+                    "settings.pre_download_detail", value: "预先下载 %d 章正文", comment: "Int32 chapter count to download in advance"),
+                runtimeConfig?.preDownloadNum ?? 10)
         case .sourceCheck:
             return SourceCheckSettingsStore().load().summary
         case .replaceRuleEnabledByDefault:
@@ -122,7 +148,9 @@ struct AndroidReplicaSettingsRowPresentation {
         case .backupPath:
             return runtimeConfig?.backupPath ?? L10n.Settings.notImplementedValue
         case .backupCapabilities:
-            return "源订阅、服务器、朗读引擎、键盘辅助与直链上传"
+            return NSLocalizedString(
+                "settings.backup_capabilities_detail", value: "源订阅、服务器、朗读引擎、键盘辅助与直链上传",
+                comment: "Subscription and service configuration categories")
         case .backupNow:
             return L10n.Settings.backupNowDetail
         case .restoreNow:
@@ -164,7 +192,9 @@ struct AndroidReplicaSettingsRowPresentation {
         case .autoChangeSource:
             return boolText(ReaderAutoChangeSourcePreference.isEnabled())
         case .showAddToShelfAlert:
-            return "阅读未放入书架的书籍在返回时提示放入书架"
+            return NSLocalizedString(
+                "settings.show_add_to_shelf_alert_detail", value: "阅读未放入书架的书籍在返回时提示放入书架",
+                comment: "Legado show_add_to_shelf_alert_summary")
         }
     }
 
@@ -276,7 +306,7 @@ struct AndroidReplicaSettingsRowPresentation {
 
 @MainActor
 enum AndroidReplicaPreDownloadPreference {
-    static let title = "预下载"
+    static let title = NSLocalizedString("settings.pre_download_title", value: "预下载", comment: "Legado pre_download")
 
     static func showPicker(from owner: UIViewController, current: Int, onConfirm: @escaping (Int) -> Void) {
         guard owner.presentedViewController == nil else { return }

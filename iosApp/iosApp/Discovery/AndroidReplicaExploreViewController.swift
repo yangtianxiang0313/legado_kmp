@@ -241,7 +241,7 @@ final class AndroidReplicaExploreViewController: UIViewController, UITableViewDe
         tableView.delegate = self
         tableView.accessibilityIdentifier = UIIdentifiers.Discovery.table
         configureSourceList()
-        emptyLabel.text = "当前没有发现源！"
+        emptyLabel.text = NSLocalizedString("discovery.empty_sources_message", value: "当前没有发现源！", comment: "")
         emptyLabel.font = AndroidExploreTextMetrics.font(compatibleWith: traitCollection)
         emptyLabel.adjustsFontForContentSizeCategory = false
         emptyLabel.textColor = AndroidReplicaTheme.primaryText
@@ -533,7 +533,8 @@ final class AndroidReplicaExploreViewController: UIViewController, UITableViewDe
         sourceList.noteUserInteraction()
         let presentation = presentationID
         let entries: [(String, String)] = [
-            ("edit", "编辑"), ("top", "置顶"), ("login", "登录"), ("search", "搜索"), ("refresh", "刷新"), ("delete", "删除"),
+            ("edit", L10n.Common.edit), ("top", L10n.SourceManagement.moveToTopAction), ("login", L10n.SourceEdit.loginAction),
+            ("search", L10n.Search.title), ("refresh", L10n.Discovery.refresh), ("delete", L10n.Common.delete),
         ].filter {
             $0.0 != "login" || source.hasLoginUrl
                 || sourceScreen.cachedSource(sourceUrl: source.bookSourceUrl)?.hasManagementLoginURL == true

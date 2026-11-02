@@ -266,7 +266,7 @@ final class AndroidReplicaSearchPill: UIControl {
     private let label = UILabel()
     private lazy var surfaceHeightConstraint = heightAnchor.constraint(equalToConstant: 30)
 
-    init(placeholder: String = "搜索") {
+    init(placeholder: String = L10n.Search.title) {
         super.init(frame: .zero)
         backgroundColor = AndroidReplicaTheme.menuBackground
         layer.cornerRadius = 15

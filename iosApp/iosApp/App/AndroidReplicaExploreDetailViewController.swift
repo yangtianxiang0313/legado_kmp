@@ -204,7 +204,9 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
                 guard let self, self.isCurrent(generation), !Task.isCancelled else { return }
                 self.requestTask = nil
                 self.isLoading = false
-                self.selectedKind = kinds.first { !$0.title.hasPrefix("ERROR:") && $0.url?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
+                self.selectedKind = kinds.first {
+                    !$0.title.hasPrefix("ERROR:") && $0.url?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                }
                 self.toolbar.setTitle(self.selectedKind?.title ?? L10n.Tabs.discovery)
                 if self.selectedKind != nil {
                     self.requestBooks(page: 1)
@@ -376,7 +378,8 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
             }
             var shouldRetry = false
             let dialog = ReaderRestoreProgressDialogViewController(
-                title: "错误", message: message, accessibilityIdentifierPrefix: "discovery.explore.error",
+                title: NSLocalizedString("discovery.results.error_title", value: "错误", comment: ""),
+                message: message, accessibilityIdentifierPrefix: "discovery.explore.error",
                 actionLayout: .retry
             ) { shouldRetry = $0 }
             dialog.canConfirm = { [weak self, weak dialog] in

@@ -85,9 +85,13 @@ final class AndroidReplicaSettingsSectionHeader: UIView {
     }
 
     private func updateTypography() {
+        prepareTypography(compatibleWith: traitCollection)
+    }
+
+    func prepareTypography(compatibleWith traits: UITraitCollection) {
         // The custom category XML inherits Widget.Material.TextView's 14sp small appearance.
         label.font = ReaderAndroidDefaultFont.scaledFont(
-            size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
+            size: 14, textStyle: .subheadline, compatibleWith: traits)
         invalidateIntrinsicContentSize()
     }
 }
