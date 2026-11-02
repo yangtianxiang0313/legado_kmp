@@ -5,9 +5,10 @@ import shared
 /// The host owns actions, preferences, safe-area placement, and the maximum height.
 final class ReaderBackgroundTextBodyView: UIView {
     let editNameButton: UIButton = ReaderBackgroundTextBodyIconButton(asset: "BookDetailAndroidEdit", pointSize: 20)
-    let restoreButton: UIButton = ReaderBackgroundTextBodyTextButton(title: "恢复")
-    let textColorButton: UIButton = ReaderBackgroundTextBodyTextButton(title: "文字颜色", outlined: true)
-    let backgroundColorButton: UIButton = ReaderBackgroundTextBodyTextButton(title: "背景颜色", outlined: true)
+    let restoreButton: UIButton = ReaderBackgroundTextBodyTextButton(title: ReaderBackgroundTextBodyStrings.restore)
+    let textColorButton: UIButton = ReaderBackgroundTextBodyTextButton(title: L10n.ReaderAppearance.textColorTitle, outlined: true)
+    let backgroundColorButton: UIButton = ReaderBackgroundTextBodyTextButton(
+        title: L10n.ReaderAppearance.backgroundColorTitle, outlined: true)
     let importButton: UIButton = ReaderBackgroundTextBodyIconButton(asset: "BookshelfAndroidImport")
     let exportButton: UIButton = ReaderBackgroundTextBodyIconButton(asset: "BookshelfAndroidExport")
     let deleteButton: UIButton = ReaderBackgroundTextBodyIconButton(asset: "ReaderPresetAndroidDelete")
@@ -170,7 +171,8 @@ final class ReaderBackgroundTextBodyView: UIView {
     func apply(name: String, style: ReaderStylePreferences, isBusy: Bool) {
         self.isBusy = isBusy
         if isBusy { cancelPendingTracking() }
-        let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "文字" : name
+        // Blank names are stored as-is; only the displayed fallback is localized.
+        let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.ReaderAppearance.presetFallbackName : name
         nameLabel.text = displayName
         nameLabel.accessibilityValue = displayName
         editNameButton.accessibilityValue = displayName
@@ -243,17 +245,17 @@ final class ReaderBackgroundTextBodyView: UIView {
         scrollView.addSubview(contentView)
         for label in labels {
             label.numberOfLines = 0
-            label.lineBreakMode = .byCharWrapping
+            label.lineBreakMode = .byWordWrapping
             label.adjustsFontForContentSizeCategory = true
             label.adjustsFontSizeToFitWidth = false
             contentView.addSubview(label)
         }
-        nameTitleLabel.text = "样式名称："
-        nameLabel.text = "文字"
-        darkStatusLabel.text = "深色状态栏图标"
-        underlineLabel.text = "文字下划线"
-        alphaLabel.text = "背景透明度"
-        imageLabel.text = "背景图片"
+        nameTitleLabel.text = ReaderBackgroundTextBodyStrings.styleNameTitle
+        nameLabel.text = L10n.ReaderAppearance.presetFallbackName
+        darkStatusLabel.text = L10n.ReaderAppearance.darkStatusIcon
+        underlineLabel.text = L10n.ReaderAppearance.underlineTitle
+        alphaLabel.text = L10n.ReaderAppearance.backgroundAlphaTitle
+        imageLabel.text = L10n.ReaderAppearance.backgroundImageTitle
         for button in buttons {
             contentView.addSubview(button)
             if let button = button as? ReaderBackgroundTextBodyTextButton {
@@ -287,20 +289,50 @@ final class ReaderBackgroundTextBodyView: UIView {
         for label in labels { label.isAccessibilityElement = false }
         nameLabel.isAccessibilityElement = true
         nameLabel.accessibilityIdentifier = Self.identifierPrefix + "name"
-        nameLabel.accessibilityLabel = "样式名称"
+        nameLabel.accessibilityLabel = ReaderBackgroundTextBodyStrings.styleNameAccessibilityLabel
         nameLabel.accessibilityValue = nameLabel.text
 
         let entries: [(UIView, String, String, String)] = [
-            (editNameButton, "editNameButton", "编辑样式名称", "修改当前方案的名称"),
-            (restoreButton, "restoreButton", "恢复", "选择预设布局"),
-            (darkStatusRow, "darkStatusSwitch", "深色状态栏图标", "切换状态栏图标的深浅"),
-            (underlineRow, "underlineSwitch", "文字下划线", "切换正文下划线"),
-            (textColorButton, "textColorButton", "文字颜色", "选择正文文字颜色"),
-            (backgroundColorButton, "backgroundColorButton", "背景颜色", "选择阅读背景颜色"),
-            (importButton, "importButton", "导入方案", "导入阅读样式配置"),
-            (exportButton, "exportButton", "导出方案", "导出当前阅读样式配置"),
-            (deleteButton, "deleteButton", "删除方案", "删除当前阅读样式配置"),
-            (alphaSlider, "alphaSlider", "背景透明度", "调整范围为百分之零至百分之一百"),
+            (
+                editNameButton, "editNameButton", ReaderBackgroundTextBodyStrings.editNameAccessibilityLabel,
+                ReaderBackgroundTextBodyStrings.editNameAccessibilityHint
+            ),
+            (
+                restoreButton, "restoreButton", ReaderBackgroundTextBodyStrings.restore,
+                ReaderBackgroundTextBodyStrings.restoreAccessibilityHint
+            ),
+            (
+                darkStatusRow, "darkStatusSwitch", L10n.ReaderAppearance.darkStatusIcon,
+                ReaderBackgroundTextBodyStrings.darkStatusAccessibilityHint
+            ),
+            (
+                underlineRow, "underlineSwitch", L10n.ReaderAppearance.underlineTitle,
+                ReaderBackgroundTextBodyStrings.underlineAccessibilityHint
+            ),
+            (
+                textColorButton, "textColorButton", L10n.ReaderAppearance.textColorTitle,
+                ReaderBackgroundTextBodyStrings.textColorAccessibilityHint
+            ),
+            (
+                backgroundColorButton, "backgroundColorButton", L10n.ReaderAppearance.backgroundColorTitle,
+                ReaderBackgroundTextBodyStrings.backgroundColorAccessibilityHint
+            ),
+            (
+                importButton, "importButton", L10n.ReaderAppearance.importPresetTitle,
+                ReaderBackgroundTextBodyStrings.importAccessibilityHint
+            ),
+            (
+                exportButton, "exportButton", L10n.ReaderAppearance.exportPresetTitle,
+                ReaderBackgroundTextBodyStrings.exportAccessibilityHint
+            ),
+            (
+                deleteButton, "deleteButton", L10n.ReaderAppearance.deletePresetTitle,
+                ReaderBackgroundTextBodyStrings.deleteAccessibilityHint
+            ),
+            (
+                alphaSlider, "alphaSlider", L10n.ReaderAppearance.backgroundAlphaTitle,
+                ReaderBackgroundTextBodyStrings.alphaAccessibilityHint
+            ),
         ]
         for (view, identifier, title, hint) in entries {
             view.isAccessibilityElement = true
@@ -493,6 +525,40 @@ final class ReaderBackgroundTextBodyView: UIView {
     }
 }
 
+private enum ReaderBackgroundTextBodyStrings {
+    static let styleNameTitle = NSLocalizedString(
+        "reader.background_text.style_name_title", value: "样式名称：", comment: "Legado style_name")
+    static let styleNameAccessibilityLabel = NSLocalizedString(
+        "reader.background_text.style_name_accessibility_label", value: "样式名称", comment: "Reading style name, without punctuation")
+    static let restore = NSLocalizedString(
+        "reader.background_text.restore", value: "恢复", comment: "Legado restore; opens the preset layout selector, not a reset confirmation"
+    )
+    static let editNameAccessibilityLabel = NSLocalizedString(
+        "reader.background_text.edit_name_accessibility_label", value: "编辑样式名称", comment: "Edit the reading style name")
+    static let editNameAccessibilityHint = NSLocalizedString(
+        "reader.background_text.edit_name_accessibility_hint", value: "修改当前方案的名称", comment: "Reading style rename action")
+    static let restoreAccessibilityHint = NSLocalizedString(
+        "reader.background_text.restore_accessibility_hint", value: "选择预设布局",
+        comment: "BgTextConfigDialog.tvRestore opens the preset layout selector")
+    static let darkStatusAccessibilityHint = NSLocalizedString(
+        "reader.background_text.dark_status_accessibility_hint", value: "切换状态栏图标的深浅", comment: "Toggle the status bar icon color")
+    static let underlineAccessibilityHint = NSLocalizedString(
+        "reader.background_text.underline_accessibility_hint", value: "切换正文下划线", comment: "Toggle reading text underlines")
+    static let textColorAccessibilityHint = NSLocalizedString(
+        "reader.background_text.text_color_accessibility_hint", value: "选择正文文字颜色", comment: "Open the reading text color picker")
+    static let backgroundColorAccessibilityHint = NSLocalizedString(
+        "reader.background_text.background_color_accessibility_hint", value: "选择阅读背景颜色", comment: "Open the reading background color picker"
+    )
+    static let importAccessibilityHint = NSLocalizedString(
+        "reader.background_text.import_accessibility_hint", value: "导入阅读样式配置", comment: "Import a reading style configuration")
+    static let exportAccessibilityHint = NSLocalizedString(
+        "reader.background_text.export_accessibility_hint", value: "导出当前阅读样式配置", comment: "Export the current reading style configuration")
+    static let deleteAccessibilityHint = NSLocalizedString(
+        "reader.background_text.delete_accessibility_hint", value: "删除当前阅读样式配置", comment: "Delete the current reading style configuration")
+    static let alphaAccessibilityHint = NSLocalizedString(
+        "reader.background_text.alpha_accessibility_hint", value: "调整范围为百分之零至百分之一百", comment: "Reading background alpha slider range")
+}
+
 private final class ReaderBackgroundTextBodyTextButton: UIButton {
     var canInteract: (() -> Bool)?
     private let outlined: Bool
@@ -503,7 +569,7 @@ private final class ReaderBackgroundTextBodyTextButton: UIButton {
         super.init(frame: .zero)
         setTitle(title, for: .normal)
         titleLabel?.numberOfLines = 0
-        titleLabel?.lineBreakMode = .byCharWrapping
+        titleLabel?.lineBreakMode = .byWordWrapping
         titleLabel?.textAlignment = .center
         titleLabel?.adjustsFontForContentSizeCategory = true
         titleLabel?.adjustsFontSizeToFitWidth = false

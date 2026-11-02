@@ -677,9 +677,9 @@ private final class SearchScopeSearchField: UITextField {
         }
     }
 
-    override func textRect(forBounds bounds: CGRect) -> CGRect { lineRect(in: bounds) }
-    override func editingRect(forBounds bounds: CGRect) -> CGRect { lineRect(in: bounds) }
-    override func placeholderRect(forBounds bounds: CGRect) -> CGRect { lineRect(in: bounds, includingHint: true) }
+    override func textRect(forBounds bounds: CGRect) -> CGRect { super.textRect(forBounds: insetBounds(bounds)) }
+    override func editingRect(forBounds bounds: CGRect) -> CGRect { super.editingRect(forBounds: insetBounds(bounds)) }
+    override func placeholderRect(forBounds bounds: CGRect) -> CGRect { super.placeholderRect(forBounds: insetBounds(bounds)) }
 
     private var fontPadding: UIEdgeInsets {
         guard let font else { return .zero }
@@ -697,15 +697,12 @@ private final class SearchScopeSearchField: UITextField {
         return max(textHeight, hintHeight)
     }
 
-    private func lineRect(in bounds: CGRect, includingHint: Bool = false) -> CGRect {
-        let padding = fontPadding
-        let lineHeight = lineHeight(includingHint: includingHint)
-        let paddedLineHeight = lineHeight + padding.top + padding.bottom
+    private func insetBounds(_ bounds: CGRect) -> CGRect {
+        // UITextField needs its complete vertical editing box, not a clipped glyph line.
+        // Android font padding already contributes to the field's intrinsic height above.
         let inset = min(8, max(0, bounds.width / 2))
-        let top = max(0, (bounds.height - paddedLineHeight) / 2) + padding.top
         return CGRect(
-            x: bounds.minX + inset, y: bounds.minY + min(top, bounds.height),
-            width: max(0, bounds.width - 2 * inset),
-            height: min(ceil(lineHeight), max(0, bounds.height - top - padding.bottom)))
+            x: bounds.minX + inset, y: bounds.minY,
+            width: max(0, bounds.width - 2 * inset), height: max(0, bounds.height))
     }
 }

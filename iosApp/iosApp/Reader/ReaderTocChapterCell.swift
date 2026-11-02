@@ -36,7 +36,9 @@ final class ReaderTocChapterCell: UITableViewCell {
         onShowFullTitle: (() -> Bool)? = nil
     ) {
         self.canActivate = canActivate
-        let wordCount = showWordCount && !item.chapter.isVolume ? Self.metadata(item.chapter.wordCount) : nil
+        let wordCount =
+            showWordCount && !item.chapter.isVolume
+            ? Self.metadata(item.chapter.wordCount).map(Self.localizedWordCount) : nil
         let tag = item.chapter.isVolume ? nil : Self.metadata(item.chapter.tag)
         let isLocked = item.chapter.isVip && !item.chapter.isPay
         let isCached = item.chapter.isVolume || item.isCached
@@ -239,6 +241,58 @@ final class ReaderTocChapterCell: UITableViewCell {
             return nil
         }
         return text
+    }
+
+    private static let standardWordCountPattern = try? NSRegularExpression(
+        pattern:
+            #"\A(?:(0|[1-9][0-9]{0,18})字|"#
+            + #"((?:0|[1-9][0-9]{0,18})(?:\.[0-9]{1,2})?)万字)\z"#)
+
+    private static let wordCountNumberFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.maximumFractionDigits = 0
+        return formatter
+    }()
+
+    private static func localizedWordCount(_ text: String) -> String {
+        // Android binds wordCount verbatim: it can be generated or written by source scripts.
+        // Recognize only complete N字 / N[.NN]万字 literals, leaving all other source text opaque.
+        guard let language = Bundle.main.preferredLocalizations.first,
+            Locale(identifier: language).languageCode == "en",
+            let match = standardWordCountPattern?.firstMatch(
+                in: text, range: NSRange(text.startIndex..<text.endIndex, in: text))
+        else {
+            return text
+        }
+        let isTenThousand = match.range(at: 2).location != NSNotFound
+        guard let numberRange = Range(match.range(at: isTenThousand ? 2 : 1), in: text),
+            let coefficient = Decimal(
+                string: String(text[numberRange]), locale: Locale(identifier: "en_US_POSIX"))
+        else {
+            return text
+        }
+        // The bounded grammar keeps Decimal arithmetic exact, including shared's two-decimal 万字.
+        let count = coefficient * Decimal(isTenThousand ? 10_000 : 1)
+        guard count <= Decimal(Int64.max),
+            let formattedCount = wordCountNumberFormatter.string(from: NSDecimalNumber(decimal: count))
+        else {
+            return text
+        }
+        // Shared uses content.length, not English word tokenization; do not recount or persist it.
+        let format: String
+        if count == 1 {
+            format = NSLocalizedString(
+                "reader.toc.character_count.one", value: "%@ character",
+                comment: "TOC character count, singular; %@ is the localized numeric count")
+        } else {
+            format = NSLocalizedString(
+                "reader.toc.character_count.other", value: "%@ characters",
+                comment: "TOC character count, plural; %@ is the localized numeric count")
+        }
+        return String(format: format, formattedCount)
     }
 }
 
