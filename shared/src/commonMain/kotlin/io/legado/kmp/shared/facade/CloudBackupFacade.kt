@@ -33,10 +33,24 @@ class CloudBackupFacade(
         }, onResult)
     }
 
-    fun uploadBackupRequest(password: String?, onResult: (CloudBackupRequestResult) -> Unit): FlowSubscription {
-        val snapshot = snapshot()
-        return CloudBackupRequest.start("uploadBackupRequest", {
-            CloudBackupRequestResult(upload = upload(snapshot, password), completed = true)
+    fun uploadBackupRequest(password: String?, onResult: (CloudBackupRequestResult) -> Unit): FlowSubscription =
+        uploadBackupRequest(snapshot(), password, onResult)
+
+    /** An entered encryption password must not be sent to a target selected after its prompt opened. */
+    fun uploadBackupForConfigurationRequest(
+        configuration: AutomaticBackupConfiguration,
+        password: String?,
+        onResult: (CloudBackupRequestResult) -> Unit,
+    ): FlowSubscription = uploadBackupRequest(configuration.snapshot, password, onResult)
+
+    private fun uploadBackupRequest(
+        snapshot: AppRuntimeConfig,
+        password: String?,
+        onResult: (CloudBackupRequestResult) -> Unit,
+    ): FlowSubscription {
+        return CloudBackupRequest.startSettled("uploadBackupRequest", { terminal ->
+            // Keep a verified upload result when cancellation arrives after its final persistence.
+            CloudBackupRequestResult(upload = upload(snapshot, password), completed = true).also(terminal)
         }, onResult)
     }
 

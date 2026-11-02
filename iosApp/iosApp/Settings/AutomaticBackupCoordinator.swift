@@ -38,7 +38,10 @@ final class AutomaticBackupCoordinator {
     func appDidUnlock() {
         unlocked = true
         foreground = true
-        do { _ = try resolve() } catch { publish("自动备份服务暂不可用"); return }
+        do { _ = try resolve() } catch {
+            publish("自动备份服务暂不可用")
+            return
+        }
         trigger()
     }
 
@@ -118,18 +121,22 @@ final class AutomaticBackupCoordinator {
         return vault.hasSessionPassword(scope: plan.passwordScope) ? .session : .missing
     }
 
-    func authorizePassword(_ password: String, rememberOnDevice: Bool) throws {
+    func authorizePassword(
+        _ password: String, rememberOnDevice: Bool, configuration expected: AutomaticBackupConfiguration? = nil
+    ) throws {
         let plan = try currentConfiguration()
         guard plan.isConfigured else { throw configurationError() }
+        if let expected, !expected.matchesConfiguration(other: plan) { throw configurationError() }
         cancelOperation()
         try vault.authorize(password: password, scope: plan.passwordScope, rememberOnDevice: rememberOnDevice)
         publish(rememberOnDevice ? "备份密码已加密保存到本机" : "备份密码仅用于本次解锁会话")
         trigger()
     }
 
-    func forgetPassword() throws {
-        cancelOperation()
+    func forgetPassword(configuration expected: AutomaticBackupConfiguration? = nil) throws {
         let plan = try currentConfiguration()
+        if let expected, !expected.matchesConfiguration(other: plan) { throw configurationError() }
+        cancelOperation()
         try vault.forget(scope: plan.passwordScope)
         publish("当前备份目标的本机密码已清除")
     }
@@ -172,7 +179,10 @@ final class AutomaticBackupCoordinator {
 
     private func trigger(allowBackground: Bool = false) {
         guard unlocked, startupAllowed, foreground || allowBackground else { return }
-        guard operation == nil else { pendingTrigger = true; return }
+        guard operation == nil else {
+            pendingTrigger = true
+            return
+        }
         retry?.cancel()
         retry = nil
         do {
@@ -183,7 +193,10 @@ final class AutomaticBackupCoordinator {
                 configurationChanged()
                 return
             }
-            guard plan.isConfigured else { publish("未配置备份路径或完整的 WebDAV 目标"); return }
+            guard plan.isConfigured else {
+                publish("未配置备份路径或完整的 WebDAV 目标")
+                return
+            }
             let snapshot = try engine.schedule()
             if snapshot.outcome == .notDue || snapshot.outcome == .backingOff {
                 lastResult = snapshot
@@ -192,7 +205,10 @@ final class AutomaticBackupCoordinator {
                 return
             }
             let password = try vault.password(scope: plan.passwordScope)
-            guard let password else { publish("请在自动备份中设置备份密码"); return }
+            guard let password else {
+                publish("请在自动备份中设置备份密码")
+                return
+            }
             let id = UUID()
             operationID = id
             operation = Task { [weak self] in
@@ -202,7 +218,10 @@ final class AutomaticBackupCoordinator {
                         operation = nil
                         endBackgroundWindow()
                         publish(status)
-                        if pendingTrigger { pendingTrigger = false; trigger() }
+                        if pendingTrigger {
+                            pendingTrigger = false
+                            trigger()
+                        }
                     }
                 }
                 let writer = AutomaticBackupNativeWriter()

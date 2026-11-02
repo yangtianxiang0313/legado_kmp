@@ -3,7 +3,7 @@ import shared
 
 @MainActor
 final class CloudBackupViewController: UITableViewController {
-    private enum RestorePhase { case idle, password, preparing, confirming, committing, finishing }
+    private enum RestorePhase { case idle, uploadPassword, uploading, password, preparing, confirming, committing, finishing }
     private let screen = CloudBackupScreenAdapter()
     private var files: [CloudBackupFile] = []
     private var task: Task<Void, Never>?
@@ -12,14 +12,16 @@ final class CloudBackupViewController: UITableViewController {
     private var loading = false
     private var processing = false
     private var failure: String?
-    private var pendingMessage: String?
     private var initialRestore: CloudBackupFile?
+    private var initialConfiguration: AutomaticBackupConfiguration?
+    private var filesConfiguration: AutomaticBackupConfiguration?
+    private var context: CloudBackupScreenContext?
+    private var contextMonitor: Task<Void, Never>?
     private var previousInteractivePop: Bool?
     private weak var processingNavigationController: UINavigationController?
     private var restorePhase = RestorePhase.idle
-    private weak var restoreWindow: UIWindow?
-    private weak var restoreScene: UIWindowScene?
     private weak var restorePresentation: UIAlertController?
+    private var passwordHandle: BackupPasswordPrompt.Handle?
     private var preparedRestore: PreparedCloudBackup?
     private var restoreInvalidated = false
     private var preparationCancelledByUser = false
@@ -34,10 +36,11 @@ final class CloudBackupViewController: UITableViewController {
         }
     }
 
-    init(initialRestore: CloudBackupFile? = nil) {
+    init(initialRestore: CloudBackupFile? = nil, configuration: AutomaticBackupConfiguration? = nil) {
         self.initialRestore = initialRestore
+        initialConfiguration = configuration
         super.init(style: .plain)
-        title = "云端备份"
+        title = CloudBackupCopy.title
     }
 
     @available(*, unavailable)
@@ -45,6 +48,7 @@ final class CloudBackupViewController: UITableViewController {
 
     deinit {
         task?.cancel()
+        contextMonitor?.cancel()
         preparedRestore?.discard()
         NotificationCenter.default.removeObserver(self)
     }
@@ -60,13 +64,14 @@ final class CloudBackupViewController: UITableViewController {
         NotificationCenter.default.addObserver(
             self, selector: #selector(applyPalette), name: .androidReplicaThemeDidChange, object: nil)
         NotificationCenter.default.addObserver(
-            self, selector: #selector(becameActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+            self, selector: #selector(becameActive(_:)), name: UIApplication.didBecomeActiveNotification, object: nil)
         for name in [UIScene.didActivateNotification, UIWindow.didBecomeKeyNotification, .appLockStatusDidChange] {
-            NotificationCenter.default.addObserver(self, selector: #selector(becameActive), name: name, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(becameActive(_:)), name: name, object: nil)
         }
         for name in [
             UIApplication.willResignActiveNotification, UIScene.willDeactivateNotification,
             UIScene.didDisconnectNotification, UIWindow.didResignKeyNotification,
+            UIWindow.didBecomeHiddenNotification,
             .appLockWillCover, .appLockStatusDidChange,
         ] {
             NotificationCenter.default.addObserver(
@@ -86,27 +91,14 @@ final class CloudBackupViewController: UITableViewController {
         visible = true
         DispatchQueue.main.async { [weak self] in
             guard let self, self.canUseCloudScreen, !self.processing else { return }
-            if let message = self.pendingMessage {
-                self.pendingMessage = nil
-                self.showResult(message)
-            } else if self.task == nil {
-                self.reloadBackups()
-            }
+            if self.task == nil { self.reloadBackups() }
         }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         visible = false
-        if restorePhase != .idle {
-            cancelRestore(requestID)
-        } else if !processing {
-            requestID = UUID()
-            task?.cancel()
-            task = nil
-            loading = false
-            refreshControl?.endRefreshing()
-        }
+        invalidateContext()
     }
 
     @objc private func applyPalette() {
@@ -116,18 +108,18 @@ final class CloudBackupViewController: UITableViewController {
         tableView.reloadData()
     }
 
-    @objc private func becameActive() {
+    @objc private func becameActive(_ notification: Notification) {
+        guard belongsToContext(notification) else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, canUseCloudScreen, !processing, let message = pendingMessage else { return }
-            pendingMessage = nil
-            showResult(message)
+            guard let self, canUseCloudScreen, !processing, task == nil else { return }
+            reloadBackups()
         }
     }
 
     private func updateControls() {
         let upload = UIBarButtonItem(
             image: UIImage(systemName: "icloud.and.arrow.up"), style: .plain, target: self, action: #selector(uploadBackup))
-        upload.accessibilityLabel = "备份到云端"
+        upload.accessibilityLabel = CloudBackupCopy.uploadAction
         upload.accessibilityIdentifier = "backup.cloud.upload"
         upload.isEnabled = !loading && !processing
         let refresh = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reloadBackups))
@@ -140,7 +132,9 @@ final class CloudBackupViewController: UITableViewController {
             previousInteractivePop = navigationController?.interactivePopGestureRecognizer?.isEnabled
             navigationController?.interactivePopGestureRecognizer?.isEnabled = false
         } else if !processing, let previousInteractivePop {
-            processingNavigationController?.interactivePopGestureRecognizer?.isEnabled = previousInteractivePop
+            if processingNavigationController?.topViewController === self {
+                processingNavigationController?.interactivePopGestureRecognizer?.isEnabled = previousInteractivePop
+            }
             self.previousInteractivePop = nil
             processingNavigationController = nil
         }
@@ -148,40 +142,64 @@ final class CloudBackupViewController: UITableViewController {
     }
 
     @objc private func reloadBackups() {
-        guard visible, !processing else { refreshControl?.endRefreshing(); return }
+        guard canUseCloudScreen, !processing else {
+            refreshControl?.endRefreshing()
+            return
+        }
+        guard let context = captureContext() else {
+            refreshControl?.endRefreshing()
+            return
+        }
         task?.cancel()
         let id = UUID()
         requestID = id
+        self.context = context
+        if let filesConfiguration, !screen.matchesConfiguration(filesConfiguration) {
+            files = []
+            self.filesConfiguration = nil
+        }
+        monitorContext(id)
         loading = true
         failure = nil
         updateControls()
         tableView.reloadData()
         task = Task { [weak self] in
             guard let self else { return }
+            defer {
+                if requestID == id {
+                    task = nil
+                    loading = false
+                    refreshControl?.endRefreshing()
+                    updateControls()
+                    tableView.reloadData()
+                }
+            }
             do {
-                let loaded = try await screen.list()
-                guard visible, requestID == id, !Task.isCancelled else { return }
+                let loaded = try await screen.list(configuration: context.configuration)
+                guard currentContext(id), !Task.isCancelled else { return }
                 files = loaded
+                filesConfiguration = context.configuration
             } catch is CancellationError {
                 return
             } catch {
-                guard visible, requestID == id else { return }
+                guard currentContext(id) else { return }
                 failure = error.userFacingMessage
             }
-            task = nil
-            loading = false
-            refreshControl?.endRefreshing()
-            updateControls()
-            tableView.reloadData()
             if let selected = initialRestore, failure == nil {
                 initialRestore = nil
+                let matchesInitial = initialConfiguration.map { self.screen.matchesConfiguration($0) } ?? true
+                initialConfiguration = nil
+                guard matchesInitial else {
+                    showResult(CloudBackupCopy.configurationChanged)
+                    return
+                }
                 if let file = files.first(where: { $0.name == selected.name && $0.lastModified == selected.lastModified }) {
                     DispatchQueue.main.async { [weak self] in
-                        guard let self, self.requestID == id else { return }
+                        guard let self, self.currentContext(id) else { return }
                         self.confirmRestore(file)
                     }
                 } else {
-                    showResult("云端备份已变化，请重新选择")
+                    showResult(CloudBackupCopy.selectionChanged)
                 }
             }
         }
@@ -190,7 +208,7 @@ final class CloudBackupViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, files.count) }
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        files.isEmpty ? nil : failure.map { "刷新失败，当前保留上次列表。\n" + $0 }
+        files.isEmpty ? nil : failure.map { CloudBackupCopy.refreshFailed + "\n" + $0 }
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -203,7 +221,7 @@ final class CloudBackupViewController: UITableViewController {
         cell.textLabel?.numberOfLines = 0
         cell.detailTextLabel?.numberOfLines = 0
         guard !files.isEmpty else {
-            cell.textLabel?.text = loading ? "正在加载…" : (failure == nil ? "暂无云端备份" : "加载失败，点击重试")
+            cell.textLabel?.text = loading ? CloudBackupCopy.loading : (failure == nil ? CloudBackupCopy.empty : CloudBackupCopy.retry)
             cell.detailTextLabel?.text = failure
             cell.accessibilityIdentifier = failure == nil ? "backup.cloud.empty" : "backup.cloud.retry"
             cell.selectionStyle = failure == nil ? .none : .default
@@ -215,7 +233,7 @@ final class CloudBackupViewController: UITableViewController {
             file.lastModified > 0
             ? DateFormatter.localizedString(
                 from: Date(timeIntervalSince1970: Double(file.lastModified) / 1000), dateStyle: .medium, timeStyle: .short)
-            : "时间未知"
+            : CloudBackupCopy.unknownTime
         cell.detailTextLabel?.text = date + " · " + ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
         cell.accessoryType = .disclosureIndicator
         cell.accessibilityIdentifier = "backup.cloud.file.\(file.name)"
@@ -225,48 +243,87 @@ final class CloudBackupViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !loading, !processing else { return }
-        guard !files.isEmpty else { if failure != nil { reloadBackups() }; return }
+        guard !files.isEmpty else {
+            if failure != nil { reloadBackups() }
+            return
+        }
         confirmRestore(files[indexPath.row])
     }
 
     @objc private func uploadBackup() {
-        guard canPerformNavigationAction, task == nil, !processing else { return }
-        BackupPasswordPrompt.present(from: self, creating: true) { [weak self] password in
-            self?.performUpload(password)
+        guard canUseCloudScreen, task == nil, !processing, let context = captureContext() else { return }
+        let id = UUID()
+        requestID = id
+        self.context = context
+        restoreInvalidated = false
+        restorePhase = .uploadPassword
+        processing = true
+        updateControls()
+        passwordHandle = BackupPasswordPrompt.present(
+            from: self, creating: true,
+            onCancel: { [weak self] in
+                guard let self, self.requestID == id, self.restorePhase == .uploadPassword else { return }
+                self.cancelRestore(id, userInitiated: true)
+            },
+            onConfirm: { [weak self] password in
+                guard let self, self.requestID == id, self.restorePhase == .uploadPassword else { return }
+                self.task = Task { [weak self] in
+                    guard let self else { return }
+                    guard currentRestore(id, phase: .uploadPassword), canPerformNavigationAction else {
+                        await finishRestore(id)
+                        return
+                    }
+                    performUpload(password, id: id)
+                }
+            })
+        restorePresentation = passwordHandle?.controller
+        guard passwordHandle != nil else {
+            Task { [weak self] in await self?.finishRestore(id) }
+            return
         }
+        monitorContext(id)
     }
 
     func confirmRestore(_ file: CloudBackupFile) {
         guard canUseCloudScreen, task == nil, !loading, !processing else { return }
+        guard let filesConfiguration, screen.matchesConfiguration(filesConfiguration), let context = captureContext() else {
+            reloadBackups()
+            return
+        }
         let id = UUID()
         requestID = id
-        restoreWindow = view.window
-        restoreScene = view.window?.windowScene
+        self.context = context
         restoreInvalidated = false
         preparationCancelledByUser = false
         restorePhase = .password
         processing = true
         updateControls()
         let prompt = UIAlertController(
-            title: "恢复云端备份", message: "先下载并预检所选备份，确认内容后才会恢复。\n\(file.name)", preferredStyle: .alert)
+            title: CloudBackupCopy.restoreTitle, message: CloudBackupCopy.restoreMessage + "\n" + file.name, preferredStyle: .alert)
         prompt.view.accessibilityIdentifier = "backup.cloud.restore.confirm"
         prompt.addTextField {
-            $0.placeholder = "备份密码（未设置可留空）"
+            $0.placeholder = CloudBackupCopy.optionalPassword
             $0.isSecureTextEntry = true
             $0.autocorrectionType = .no
+            $0.autocapitalizationType = .none
             $0.textContentType = .password
             $0.accessibilityIdentifier = "backup.cloud.password.0"
         }
         prompt.addAction(
             UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self, weak prompt] _ in
-                prompt?.textFields?.forEach { $0.text = nil }
-                self?.cancelRestore(id)
+                guard let self, let prompt, self.task == nil, self.restorePresentation === prompt,
+                    self.currentRestore(id, phase: .password)
+                else { return }
+                for field in prompt.textFields ?? [] { field.text = nil }
+                self.cancelRestore(id)
             })
         prompt.addAction(
             UIAlertAction(title: L10n.Common.confirm, style: .default) { [weak self, weak prompt] _ in
-                guard let self, let prompt, self.currentRestore(id, phase: .password) else { return }
+                guard let self, let prompt, self.task == nil, self.restorePresentation === prompt,
+                    self.currentRestore(id, phase: .password)
+                else { return }
                 let password = prompt.textFields?.first?.text ?? ""
-                prompt.textFields?.forEach { $0.text = nil }
+                for field in prompt.textFields ?? [] { field.text = nil }
                 self.task = Task { [weak self] in
                     guard let self else { return }
                     await dismissRestorePresentation(prompt)
@@ -278,46 +335,61 @@ final class CloudBackupViewController: UITableViewController {
                 }
             })
         restorePresentation = prompt
+        monitorContext(id)
         present(prompt, animated: true)
     }
 
-    private func performUpload(_ password: String) {
-        guard canPerformNavigationAction, task == nil, !processing else { return }
-        processing = true
-        updateControls()
-        let hud = progressAlert("正在上传备份", cancellable: true)
+    private func performUpload(_ password: String, id: UUID) {
+        guard currentRestore(id, phase: .uploadPassword), let context else { return }
+        passwordHandle = nil
+        restorePhase = .uploading
+        let hud = progressAlert(CloudBackupCopy.uploading, cancellable: true, id: id)
+        hud.message = CloudBackupCopy.uploadCancellationNotice
+        restorePresentation = hud
         present(hud, animated: true)
         task = Task { [weak self] in
             guard let self else { return }
             let message: String
             do {
-                let result = try await screen.upload(password: password)
-                message = (["已备份到云端：\(result.file.name)"] + result.warnings).joined(separator: "\n")
+                guard currentRestore(id, phase: .uploading) else {
+                    await finishRestore(id)
+                    return
+                }
+                let result = try await screen.upload(password: password, configuration: context.configuration)
+                // A late cancellation must not replace a success claimed by shared.
+                message =
+                    ([String(format: CloudBackupCopy.uploaded, result.file.name)]
+                    + SettingsBackupPreparationClient.localizedWarnings(result.warnings)).joined(separator: "\n")
             } catch is CancellationError {
-                message = "已停止等待，请刷新确认云端状态"
+                message = CloudBackupCopy.uploadCancelled
             } catch {
                 message = error.userFacingMessage
             }
-            finish(hud: hud, message: message)
+            await finishRestore(id, message: message)
         }
     }
 
     private func prepareRestore(_ file: CloudBackupFile, password: String, id: UUID) {
-        guard currentRestore(id, phase: .password) else { return }
+        guard currentRestore(id, phase: .password), let context else { return }
         restorePhase = .preparing
         let hud = UIAlertController(
-            title: "正在下载并预检备份", message: "此阶段未恢复任何数据，可以取消。", preferredStyle: .alert)
+            title: CloudBackupCopy.preparing, message: CloudBackupCopy.preparingMessage, preferredStyle: .alert)
         hud.view.accessibilityIdentifier = "backup.cloud.preparing"
         hud.addAction(
-            UIAlertAction(title: "取消预检", style: .cancel) { [weak self] _ in
-                self?.cancelRestore(id, userInitiated: true)
+            UIAlertAction(title: CloudBackupCopy.cancelPreparation, style: .cancel) { [weak self, weak hud] _ in
+                guard let self, let hud, self.restorePresentation === hud, self.currentRestore(id, phase: .preparing) else { return }
+                self.cancelRestore(id, userInitiated: true)
             })
         restorePresentation = hud
         present(hud, animated: true)
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                let prepared = try await screen.prepareRestore(file: file, password: password)
+                guard currentRestore(id, phase: .preparing) else {
+                    await finishRestore(id)
+                    return
+                }
+                let prepared = try await screen.prepareRestore(file: file, password: password, configuration: context.configuration)
                 guard currentRestore(id, phase: .preparing) else {
                     prepared.discard()
                     await finishPreparation(id)
@@ -329,9 +401,9 @@ final class CloudBackupViewController: UITableViewController {
                     await finishPreparation(id)
                     return
                 }
-                task = nil
                 restorePhase = .confirming
                 confirmPreparedRestore(prepared, id: id)
+                task = nil
             } catch {
                 let message = restoreInvalidated || error is CancellationError ? nil : error.userFacingMessage
                 await finishPreparation(id, message: message)
@@ -346,13 +418,19 @@ final class CloudBackupViewController: UITableViewController {
             return
         }
         let alert = UIAlertController(
-            title: "确认恢复备份", message: Self.preparedSummary(prepared), preferredStyle: .alert)
+            title: CloudBackupCopy.confirmRestore, message: CloudBackupCopy.preparedSummary(prepared), preferredStyle: .alert)
         alert.view.accessibilityIdentifier = "backup.cloud.restore.prepared.confirm"
         alert.addAction(
-            UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.cancelRestore(id) })
+            UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self, weak alert] _ in
+                guard let self, let alert, self.task == nil, self.restorePresentation === alert,
+                    self.currentRestore(id, phase: .confirming)
+                else { return }
+                self.cancelRestore(id)
+            })
         alert.addAction(
-            UIAlertAction(title: "恢复", style: .destructive) { [weak self, weak alert] _ in
-                guard let self, let alert, self.currentRestore(id, phase: .confirming),
+            UIAlertAction(title: CloudBackupCopy.restoreAction, style: .destructive) { [weak self, weak alert] _ in
+                guard let self, let alert, self.task == nil, self.restorePresentation === alert,
+                    self.currentRestore(id, phase: .confirming),
                     self.preparedRestore === prepared
                 else { return }
                 self.task = Task { [weak self] in
@@ -376,12 +454,15 @@ final class CloudBackupViewController: UITableViewController {
         guard currentRestore(id, phase: .confirming) else { return }
         restorePhase = .committing
         preparedRestore = nil
-        let hud = progressAlert("正在恢复备份", cancellable: false)
-        hud.message = "正在提交恢复，请等待完成。此阶段不能取消或回滚已恢复的数据。"
+        let hud = progressAlert(CloudBackupCopy.restoring, cancellable: false, id: id)
+        hud.message = CloudBackupCopy.committingMessage
         restorePresentation = hud
         present(hud, animated: true)
         task = Task { [weak self] in
-            guard let self else { prepared.discard(); return }
+            guard let self else {
+                prepared.discard()
+                return
+            }
             defer { prepared.discard() }
             guard currentRestore(id, phase: .committing) else {
                 await finishRestore(id)
@@ -392,34 +473,36 @@ final class CloudBackupViewController: UITableViewController {
                 let restored = try await screen.restore(prepared: prepared)
                 // Do not suppress success when the Swift task was cancelled after shared committed.
                 onRestored?()
-                message = (["恢复完成", Self.restoreSummary(restored.result)] + restored.warnings).joined(separator: "\n")
+                message =
+                    ([CloudBackupCopy.restored, CloudBackupCopy.restoreSummary(restored.result)]
+                    + SettingsBackupPreparationClient.localizedWarnings(restored.warnings)).joined(separator: "\n")
             } catch is CancellationError {
-                message = "恢复请求已结束，请核对当前书架和设置；已提交的数据不会自动回滚。"
+                message = CloudBackupCopy.restoreEnded
             } catch {
-                message = error.userFacingMessage + "\n请核对当前书架和设置；已提交的数据不会自动回滚。"
+                message = error.userFacingMessage + "\n" + CloudBackupCopy.restoreCheck
             }
-            await finishRestore(id, message: message, keepMessage: true)
+            await finishRestore(id, message: message)
         }
     }
 
     private func finishPreparation(_ id: UUID, message: String? = nil) async {
         guard requestID == id else { return }
-        let result = preparationCancelledByUser ? "预检已取消，未恢复任何数据。" : message
+        let result = preparationCancelledByUser ? CloudBackupCopy.preparationCancelled : message
         await finishRestore(id, message: result)
     }
 
-    private func finishRestore(_ id: UUID, message: String? = nil, keepMessage: Bool = false) async {
+    private func finishRestore(_ id: UUID, message: String? = nil) async {
         guard requestID == id, restorePhase != .idle, restorePhase != .finishing else { return }
         restorePhase = .finishing
+        let handle = passwordHandle
+        passwordHandle = nil
+        handle?.cancel()
         preparedRestore?.discard()
         preparedRestore = nil
         if let presentation = restorePresentation { await dismissRestorePresentation(presentation) }
         guard requestID == id else { return }
-        let mayPresent = restoreIsAttached && canPerformNavigationAction
-        requestID = UUID()
+        let mayPresent = currentContext(id) && !restoreInvalidated && canPerformNavigationAction
         restorePhase = .idle
-        restoreWindow = nil
-        restoreScene = nil
         restorePresentation = nil
         restoreInvalidated = false
         preparationCancelledByUser = false
@@ -429,36 +512,70 @@ final class CloudBackupViewController: UITableViewController {
         refreshControl?.endRefreshing()
         updateControls()
         guard let message else { return }
-        if mayPresent { showResult(message) } else if keepMessage { pendingMessage = message }
+        if mayPresent { showResult(message) }
     }
 
     private func cancelRestore(_ id: UUID, userInitiated: Bool = false) {
         guard requestID == id, restorePhase != .idle else { return }
-        restoreInvalidated = true
-        preparationCancelledByUser = preparationCancelledByUser || userInitiated
+        if !userInitiated {
+            restoreInvalidated = true
+            context?.invalidated = true
+        }
+        preparationCancelledByUser = preparationCancelledByUser || (userInitiated && restorePhase == .preparing)
         task?.cancel()
-        guard restorePhase != .committing, restorePhase != .finishing else { return }
+        guard restorePhase != .committing, restorePhase != .uploading, restorePhase != .finishing else { return }
+        let handle = passwordHandle
+        passwordHandle = nil
+        handle?.cancel()
         preparedRestore?.discard()
         preparedRestore = nil
-        restorePresentation?.textFields?.forEach { $0.text = nil }
+        for field in restorePresentation?.textFields ?? [] { field.text = nil }
         if restorePhase == .preparing {
-            restorePresentation?.dismiss(animated: false)
+            if let presentation = restorePresentation {
+                Task { [weak self] in await self?.dismissRestorePresentation(presentation) }
+            }
             return
         }
         Task { [weak self] in await self?.finishRestore(id) }
     }
 
     @objc private func restoreContextChanged(_ notification: Notification) {
-        let contextWindow = restoreWindow ?? viewIfLoaded?.window
-        let contextScene = restoreScene ?? contextWindow?.windowScene
-        if let scene = notification.object as? UIScene, scene !== contextScene { return }
-        if let window = notification.object as? UIWindow, window !== contextWindow { return }
-        if notification.name == .appLockStatusDidChange, AppLockManager.shared.isUnlocked(in: contextWindow) { return }
+        guard belongsToContext(notification) else { return }
+        if notification.name == .appLockStatusDidChange,
+            AppLockManager.shared.isUnlocked(in: context?.window ?? viewIfLoaded?.window)
+        {
+            return
+        }
+        invalidateContext()
+    }
+
+    private func belongsToContext(_ notification: Notification) -> Bool {
+        let window = context?.window ?? viewIfLoaded?.window
+        if let scene = notification.object as? UIScene { return scene === (context?.scene ?? window?.windowScene) }
+        if let other = notification.object as? UIWindow { return other === window }
+        return true
+    }
+
+    private func invalidateContext() {
+        context?.invalidated = true
+        if let filesConfiguration, !screen.matchesConfiguration(filesConfiguration) {
+            files = []
+            self.filesConfiguration = nil
+            initialRestore = nil
+            initialConfiguration = nil
+            tableView.reloadData()
+        }
+        for field in restorePresentation?.textFields ?? [] { field.text = nil }
         guard restorePhase != .idle else {
             if !processing {
                 requestID = UUID()
                 task?.cancel()
                 task = nil
+                contextMonitor?.cancel()
+                if let presentation = restorePresentation {
+                    Task { [weak self] in await self?.dismissRestorePresentation(presentation) }
+                }
+                restorePresentation = nil
                 loading = false
                 refreshControl?.endRefreshing()
                 updateControls()
@@ -469,18 +586,42 @@ final class CloudBackupViewController: UITableViewController {
     }
 
     private func currentRestore(_ id: UUID, phase: RestorePhase) -> Bool {
-        requestID == id && restorePhase == phase && !restoreInvalidated && !Task.isCancelled && restoreIsAttached
+        restorePhase == phase && !restoreInvalidated && !Task.isCancelled && currentContext(id)
     }
 
-    private var restoreIsAttached: Bool {
-        guard let window = restoreWindow, let scene = restoreScene,
-            viewIfLoaded?.window === window, window.windowScene === scene,
-            visible, isVisibleInNavigationStack, !isBeingDismissed, !isMovingFromParent,
-            window.isKeyWindow, !window.isHidden, window.alpha > 0,
-            scene.activationState == .foregroundActive, UIApplication.shared.applicationState == .active,
-            AppLockManager.shared.isUnlocked(in: window)
+    private func currentContext(_ id: UUID) -> Bool {
+        guard requestID == id, visible, let context,
+            context.isAttached(to: self, allowing: restorePresentation), screen.matchesConfiguration(context.configuration)
         else { return false }
+        if task == nil, [.uploadPassword, .password, .confirming].contains(restorePhase) {
+            if restorePhase == .uploadPassword, passwordHandle?.isConsuming == true { return true }
+            guard let presentation = restorePresentation, presentation.presentingViewController != nil,
+                presentation.isBeingPresented || presentation.viewIfLoaded?.window === context.window
+            else { return false }
+        }
         return true
+    }
+
+    private func captureContext() -> CloudBackupScreenContext? {
+        do { return CloudBackupScreenContext(owner: self, configuration: try screen.configuration()) } catch {
+            failure = error.userFacingMessage
+            tableView.reloadData()
+            return nil
+        }
+    }
+
+    private func monitorContext(_ id: UUID) {
+        contextMonitor?.cancel()
+        contextMonitor = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.requestID == id else { return }
+                if !self.currentContext(id) {
+                    self.invalidateContext()
+                    return
+                }
+                do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
+            }
+        }
     }
 
     private var canUseCloudScreen: Bool {
@@ -488,14 +629,22 @@ final class CloudBackupViewController: UITableViewController {
     }
 
     private func dismissRestorePresentation(_ controller: UIViewController) async {
-        while controller.isBeingPresented { await waitForPresentationTransition() }
-        if controller.presentingViewController != nil, !controller.isBeingDismissed {
+        let presenter = controller.presentingViewController
+        while controller.isBeingPresented || controller.presentedViewController != nil {
+            if let presenter, controller.presentingViewController !== presenter { return }
+            await waitForPresentationTransition()
+        }
+        if let presenter, controller.presentingViewController !== presenter { return }
+        if let actualPresenter = controller.presentingViewController,
+            actualPresenter.presentedViewController === controller, !controller.isBeingDismissed
+        {
             await withCheckedContinuation { continuation in
                 controller.dismiss(animated: true) { continuation.resume() }
             }
         }
         // A cancellation must not let an action escape an in-flight UIKit dismissal.
         while controller.isBeingDismissed || controller.presentingViewController != nil {
+            if let presenter, let actualPresenter = controller.presentingViewController, actualPresenter !== presenter { return }
             await waitForPresentationTransition()
         }
         if restorePresentation === controller { restorePresentation = nil }
@@ -507,67 +656,104 @@ final class CloudBackupViewController: UITableViewController {
         }
     }
 
-    private static func preparedSummary(_ prepared: PreparedCloudBackup) -> String {
-        let file = prepared.file
-        let date =
-            file.lastModified > 0
-            ? DateFormatter.localizedString(
-                from: Date(timeIntervalSince1970: Double(file.lastModified) / 1000), dateStyle: .medium, timeStyle: .short)
-            : "时间未知"
-        var sections = [
-            file.name + "\n" + date + " · " + ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file),
-            "预检完成，尚未恢复任何数据。\n" + restoreSummary(prepared.summary),
-        ]
-        if !prepared.warnings.isEmpty { sections.append("说明：\n" + prepared.warnings.joined(separator: "\n")) }
-        sections.append("将合并恢复并覆盖同身份的数据，设置按恢复忽略项处理。数据库和设置分开保存，不保证跨存储同时成功；已提交的数据不会自动回滚。")
-        return sections.joined(separator: "\n\n")
-    }
-
-    private static func restoreSummary(_ result: BackupRestoreResult) -> String {
-        let counts: [(String, Int32)] = [
-            ("书架", result.bookCount), ("书源", result.bookSourceCount), ("RSS 源", result.rssSourceCount),
-            ("替换规则", result.replaceRuleCount), ("书籍分组", result.bookGroupCount), ("书签", result.bookmarkCount),
-            ("TXT 目录规则", result.txtTocRuleCount), ("词典规则", result.dictRuleCount), ("搜索历史", result.searchHistoryCount),
-            ("阅读记录", result.readRecordCount), ("RSS 收藏", result.rssStarCount), ("源订阅", result.sourceSubCount),
-            ("HTTP 朗读配置", result.httpTTSCount), ("键盘辅助", result.keyboardAssistCount), ("服务器配置", result.serverCount),
-        ]
-        let nonzero = counts.filter { $0.1 > 0 }.map { "\($0.0)：\($0.1)" }
-        return (nonzero.isEmpty ? ["15 类数据均为空"] : nonzero)
-            .joined(separator: "\n") + "\n偏好设置：" + (result.preferencesRestored ? "包含（按恢复忽略项处理）" : "不包含")
-    }
-
-    private func progressAlert(_ title: String, cancellable: Bool) -> UIAlertController {
+    private func progressAlert(_ title: String, cancellable: Bool, id: UUID) -> UIAlertController {
         let hud = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         hud.view.accessibilityIdentifier = "backup.cloud.processing"
         if cancellable {
-            hud.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.task?.cancel() })
+            hud.addAction(
+                UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self, weak hud] _ in
+                    guard let self, let hud, self.restorePresentation === hud, self.currentRestore(id, phase: .uploading) else { return }
+                    self.cancelRestore(id, userInitiated: true)
+                })
         }
         return hud
     }
 
-    private func finish(hud: UIAlertController, message: String) {
-        task = nil
-        processing = false
-        updateControls()
-        let completion = { [weak self] in
-            guard let self else { return }
-            if visible, canPerformNavigationAction, UIApplication.shared.applicationState == .active {
-                showResult(message)
-            } else {
-                pendingMessage = message
-            }
-        }
-        if hud.presentingViewController != nil { hud.dismiss(animated: true, completion: completion) } else { completion() }
-    }
-
     private func showResult(_ message: String) {
-        guard canUseCloudScreen else { pendingMessage = message; return }
-        let alert = UIAlertController(title: "云端备份", message: message, preferredStyle: .alert)
+        let id = requestID
+        guard currentContext(id), canUseCloudScreen else { return }
+        let alert = UIAlertController(title: CloudBackupCopy.title, message: message, preferredStyle: .alert)
         alert.view.accessibilityIdentifier = "backup.cloud.result"
         alert.addAction(
-            UIAlertAction(title: L10n.Common.ok, style: .default) { [weak self] _ in
-                DispatchQueue.main.async { self?.reloadBackups() }
+            UIAlertAction(title: L10n.Common.ok, style: .default) { [weak self, weak alert] _ in
+                guard let self, let alert, self.task == nil, self.restorePresentation === alert, self.currentContext(id) else { return }
+                self.task = Task { [weak self] in
+                    guard let self else { return }
+                    await dismissRestorePresentation(alert)
+                    guard currentContext(id) else { return }
+                    task = nil
+                    reloadBackups()
+                }
             })
+        restorePresentation = alert
         present(alert, animated: true)
+    }
+}
+
+@MainActor
+private final class CloudBackupScreenContext {
+    weak var owner: UIViewController?
+    weak var window: UIWindow?
+    weak var scene: UIWindowScene?
+    private weak var root: UIViewController?
+    private weak var navigation: UINavigationController?
+    private weak var top: UIViewController?
+    private weak var boundPresentation: UIViewController?
+    private weak var presenter: UIViewController?
+    let configuration: AutomaticBackupConfiguration
+    var invalidated = false
+
+    init(owner: UIViewController, configuration: AutomaticBackupConfiguration) {
+        self.owner = owner
+        window = owner.viewIfLoaded?.window
+        scene = window?.windowScene
+        root = window?.rootViewController
+        navigation = owner.navigationController
+        top = navigation?.topViewController
+        self.configuration = configuration
+    }
+
+    func isAttached(to owner: UIViewController, allowing presentation: UIViewController?) -> Bool {
+        guard !invalidated, self.owner === owner, let window, let scene, let root, let navigation, let top,
+            owner.viewIfLoaded?.window === window, window.windowScene === scene, window.rootViewController === root,
+            owner.navigationController === navigation, navigation.topViewController === top, top === owner,
+            owner.isVisibleInNavigationStack,
+            window.isKeyWindow, !window.isHidden, window.alpha > 0,
+            window.isUserInteractionEnabled, !window.accessibilityElementsHidden,
+            UIApplication.shared.applicationState == .active, scene.activationState == .foregroundActive,
+            AppLockManager.shared.isUnlocked(in: window)
+        else { return false }
+        if let presentation, let actualPresenter = presentation.presentingViewController {
+            if boundPresentation !== presentation {
+                boundPresentation = presentation
+                presenter = actualPresenter
+            }
+            guard presenter === actualPresenter, actualPresenter.presentedViewController === presentation,
+                presentation.presentedViewController == nil
+            else { return false }
+        }
+        var ownsPresentation = presentation?.presentingViewController == nil
+        var candidate: UIViewController? = owner
+        while let controller = candidate {
+            guard !controller.isBeingDismissed, !controller.isBeingPresented,
+                !controller.isMovingFromParent, !controller.isMovingToParent,
+                controller.viewIfLoaded?.window === window,
+                controller.viewIfLoaded?.isHidden == false, (controller.viewIfLoaded?.alpha ?? 0) > 0
+            else { return false }
+            if let presented = controller.presentedViewController,
+                presented !== presentation || presented.presentedViewController != nil
+            {
+                return false
+            }
+            if let transition = controller.transitionCoordinator,
+                transition.viewController(forKey: .from) !== presentation,
+                transition.viewController(forKey: .to) !== presentation
+            {
+                return false
+            }
+            if controller === presentation?.presentingViewController { ownsPresentation = true }
+            candidate = controller.parent
+        }
+        return ownsPresentation
     }
 }

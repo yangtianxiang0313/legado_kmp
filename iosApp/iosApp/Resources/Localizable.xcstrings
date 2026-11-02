@@ -1,6 +1,1502 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "backup.automatic.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消本次备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel This Backup"
+          }
+        }
+      }
+    },
+    "backup.automatic.cloud": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud Backup"
+          }
+        }
+      }
+    },
+    "backup.automatic.cloud.configured": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用已配置的 WebDAV 目标"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses the configured WebDAV destination"
+          }
+        }
+      }
+    },
+    "backup.automatic.cloud.missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未配置完整目标，不自动选择服务器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destination incomplete; no server is selected automatically"
+          }
+        }
+      }
+    },
+    "backup.automatic.configuration": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前配置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current Configuration"
+          }
+        }
+      }
+    },
+    "backup.automatic.configuration.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置或安全存储暂不可用，请解锁设备后重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuration or secure storage is unavailable. Unlock your device and try again."
+          }
+        }
+      }
+    },
+    "backup.automatic.last_success": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次成功"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last Successful Backup"
+          }
+        }
+      }
+    },
+    "backup.automatic.last_success.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚无成功记录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No successful backups yet"
+          }
+        }
+      }
+    },
+    "backup.automatic.local_path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地目录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local Directory"
+          }
+        }
+      }
+    },
+    "backup.automatic.local_path.default": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用文件 / Backups"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Files / Backups"
+          }
+        }
+      }
+    },
+    "backup.automatic.not_configured": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未配置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Configured"
+          }
+        }
+      }
+    },
+    "backup.automatic.password.apply": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用备份密码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply Backup Password"
+          }
+        }
+      }
+    },
+    "backup.automatic.password.apply_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码未应用，请解锁设备并检查备份配置后重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password not applied. Unlock your device, check the backup configuration, and try again."
+          }
+        }
+      }
+    },
+    "backup.automatic.password.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用与跨设备恢复相同的备份密码。ZIP 仅保护服务器及 WebDAV 凭据，并非整体加密。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the same backup password for cross-device restoration. The ZIP protects only server and WebDAV credentials, not the entire archive."
+          }
+        }
+      }
+    },
+    "backup.automatic.password.forget": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除当前目标密码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Current Destination Password"
+          }
+        }
+      }
+    },
+    "backup.automatic.password.forget.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      }
+    },
+    "backup.automatic.password.forget.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不会删除已有备份或 WebDAV 配置。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing backups and WebDAV settings will not be deleted."
+          }
+        }
+      }
+    },
+    "backup.automatic.password.forget.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除当前目标密码？"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Current Destination Password?"
+          }
+        }
+      }
+    },
+    "backup.automatic.password.forget_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除失败，请解锁设备后重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not clear the password. Unlock your device and try again."
+          }
+        }
+      }
+    },
+    "backup.automatic.password.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入相同的非空备份密码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter matching, nonempty backup passwords."
+          }
+        }
+      }
+    },
+    "backup.automatic.password.missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未设置，自动备份不会运行"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not set; automatic backup will not run"
+          }
+        }
+      }
+    },
+    "backup.automatic.password.saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加密保存到本机"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved encrypted on this device"
+          }
+        }
+      }
+    },
+    "backup.automatic.password.status": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码状态"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password Status"
+          }
+        }
+      }
+    },
+    "backup.automatic.retention": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地保留策略"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local Retention Policy"
+          }
+        }
+      }
+    },
+    "backup.automatic.retention.dated": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按日期及设备名保存"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save by date and device name"
+          }
+        }
+      }
+    },
+    "backup.automatic.retention.latest": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅最新 backup.zip"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest backup.zip only"
+          }
+        }
+      }
+    },
+    "backup.automatic.schedule.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "距上次成功超过 24 小时后，在解锁或保存阅读进度时尝试；后台仅使用 iOS 提供的有限执行时间，锁定后暂停，不保证每日后台运行。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attempts backup on unlock or reading progress saves when over 24 hours have passed since the last successful backup. Background work uses only the limited time provided by iOS. Pauses when locked; daily background execution is not guaranteed."
+          }
+        }
+      }
+    },
+    "backup.automatic.startup.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动时优先检查较新的云备份，检查或恢复提示尚未处理时，不会自动上传。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newer cloud backups are checked first at startup. Automatic uploads wait until the check or restore prompt is resolved."
+          }
+        }
+      }
+    },
+    "backup.automatic.status": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "执行状态"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      }
+    },
+    "backup.automatic.storage": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码保存方式"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password Storage"
+          }
+        }
+      }
+    },
+    "backup.automatic.storage.device": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密保存到本机"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save Encrypted on This Device"
+          }
+        }
+      }
+    },
+    "backup.automatic.storage.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会话密码在应用锁定或进程结束后清除。本机保存仅存 AES-GCM 密文，设备密钥由 Keychain 保护，不同步到其他设备。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session passwords are cleared when the app locks or exits. Device storage contains only AES-GCM ciphertext, with a Keychain-protected device key that does not sync."
+          }
+        }
+      }
+    },
+    "backup.automatic.storage.session": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅本次解锁会话"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Unlocked Session Only"
+          }
+        }
+      }
+    },
+    "backup.automatic.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic Backup"
+          }
+        }
+      }
+    },
+    "backup.cloud.configuration_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份目标或策略已变化，请刷新后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup destination or policy has changed. Refresh and try again."
+          }
+        }
+      }
+    },
+    "backup.cloud.data.book_groups": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍分组"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book Groups"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.book_sources": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book Sources"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.bookmarks": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书签"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmarks"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.books": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书架"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookshelf"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.dictionary_rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictionary Rules"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.http_tts": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTTP 朗读配置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTTP TTS Settings"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.keyboard_assists": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘辅助"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard Assistance"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.reading_records": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读记录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading Records"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.replace_rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replacement Rules"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.rss_favorites": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS 收藏"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS Favorites"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.rss_sources": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS 源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS Sources"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.search_history": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索历史"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search History"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.servers": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器配置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server Settings"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.source_subscriptions": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源订阅"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source Subscriptions"
+          }
+        }
+      }
+    },
+    "backup.cloud.data.txt_toc_rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TXT 目录规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TXT TOC Rules"
+          }
+        }
+      }
+    },
+    "backup.cloud.list.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无云端备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No cloud backups"
+          }
+        }
+      }
+    },
+    "backup.cloud.list.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading..."
+          }
+        }
+      }
+    },
+    "backup.cloud.list.refresh_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新失败，当前保留上次列表。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh failed. The previous list is shown."
+          }
+        }
+      }
+    },
+    "backup.cloud.list.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载失败，点击重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading failed. Tap to retry."
+          }
+        }
+      }
+    },
+    "backup.cloud.password.optional": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份密码（未设置可留空）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup password (leave blank if not set)"
+          }
+        }
+      }
+    },
+    "backup.cloud.prepare.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消预检"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Check"
+          }
+        }
+      }
+    },
+    "backup.cloud.prepare.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预检已取消，未恢复任何数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The check was cancelled. No data was restored."
+          }
+        }
+      }
+    },
+    "backup.cloud.prepare.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预检完成，尚未恢复任何数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The check is complete. No data has been restored yet."
+          }
+        }
+      }
+    },
+    "backup.cloud.prepare.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此阶段未恢复任何数据，可以取消。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data has been restored at this stage. You can cancel."
+          }
+        }
+      }
+    },
+    "backup.cloud.prepare.progress": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在下载并预检备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading and Checking Backup"
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore"
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.check": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请核对当前书架和设置；已提交的数据不会自动回滚。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your bookshelf and settings. Committed data is not rolled back automatically."
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.committing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在提交恢复，请等待完成。此阶段不能取消或回滚已恢复的数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applying the restore. Please wait. This stage cannot be cancelled, and restored data cannot be rolled back."
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复完成"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Complete"
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认恢复备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm Backup Restore"
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.ended": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复请求已结束，请核对当前书架和设置；已提交的数据不会自动回滚。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The restore request has ended. Check your bookshelf and settings. Committed data is not rolled back automatically."
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.merge_notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将合并恢复并覆盖同身份的数据，设置按恢复忽略项处理。数据库和设置分开保存，不保证跨存储同时成功；已提交的数据不会自动回滚。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoration merges data and overwrites matching records. Restore exclusions apply to settings. The database and settings are saved separately; success across both stores is not guaranteed. Committed data is not rolled back automatically."
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先下载并预检所选备份，确认内容后才会恢复。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download and check the selected backup first. Restoration starts only after you confirm its contents."
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.password_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将合并恢复所选备份，覆盖同身份的数据。\n%@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge the selected backup, replacing data with matching identities.\n%@"
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.progress": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在恢复备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring Backup"
+          }
+        }
+      }
+    },
+    "backup.cloud.restore.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复云端备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Cloud Backup"
+          }
+        }
+      }
+    },
+    "backup.cloud.selection_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端备份已变化，请重新选择"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The cloud backup has changed. Select it again."
+          }
+        }
+      }
+    },
+    "backup.cloud.service_unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份服务暂不可用，请重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup service is temporarily unavailable. Try again."
+          }
+        }
+      }
+    },
+    "backup.cloud.startup.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动云备份检查失败，请在备份与恢复中重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The startup cloud backup check failed. Try again in Backup and Restore."
+          }
+        }
+      }
+    },
+    "backup.cloud.startup.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@\n是否打开恢复？"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@\nOpen backup restore?"
+          }
+        }
+      }
+    },
+    "backup.cloud.startup.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现新的云端备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Cloud Backup Found"
+          }
+        }
+      }
+    },
+    "backup.cloud.summary.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@：%d"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %d"
+          }
+        }
+      }
+    },
+    "backup.cloud.summary.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15 类数据均为空"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All 15 data categories are empty"
+          }
+        }
+      }
+    },
+    "backup.cloud.summary.preferences_excluded": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好设置：不包含"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferences: Not included"
+          }
+        }
+      }
+    },
+    "backup.cloud.summary.preferences_included": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好设置：包含（按恢复忽略项处理）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferences: Included (subject to restore exclusions)"
+          }
+        }
+      }
+    },
+    "backup.cloud.time_unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时间未知"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown time"
+          }
+        }
+      }
+    },
+    "backup.cloud.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud Backup"
+          }
+        }
+      }
+    },
+    "backup.cloud.upload.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份到云端"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back Up to Cloud"
+          }
+        }
+      }
+    },
+    "backup.cloud.upload.cancel_notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消后仍需等待请求结束；已上传的云端文件不会自动撤销。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancellation still waits for the request to finish. Files already uploaded are not removed automatically."
+          }
+        }
+      }
+    },
+    "backup.cloud.upload.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上传请求已结束，请刷新确认云端状态；已上传的文件不会自动撤销。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The upload request has ended. Refresh to check the cloud status. Files already uploaded are not removed automatically."
+          }
+        }
+      }
+    },
+    "backup.cloud.upload.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已备份到云端：%@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backed up to cloud: %@"
+          }
+        }
+      }
+    },
+    "backup.cloud.upload.progress": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在上传备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploading Backup"
+          }
+        }
+      }
+    },
+    "backup.cloud.warnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说明："
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes:"
+          }
+        }
+      }
+    },
     "backup.notice.unsupported_preferences": {
       "extractionState": "manual",
       "localizations": {
