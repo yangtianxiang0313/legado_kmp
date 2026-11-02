@@ -26,7 +26,9 @@ final class RestoredKeyboardAccessory: UIScrollView {
         ])
         let dismiss = UIButton(type: .system)
         dismiss.setImage(UIImage(systemName: "keyboard.chevron.compact.down"), for: .normal)
-        dismiss.accessibilityLabel = "收起键盘"
+        dismiss.accessibilityLabel = NSLocalizedString(
+            "keyboard.dismiss", value: "收起键盘", comment: "Dismiss the editing keyboard")
+        dismiss.addInteraction(UIToolTipInteraction(defaultToolTip: dismiss.accessibilityLabel ?? ""))
         dismiss.addAction(UIAction { [weak textView] _ in textView?.resignFirstResponder() }, for: .touchUpInside)
         stack.addArrangedSubview(dismiss)
         Task { [weak self] in
@@ -38,11 +40,12 @@ final class RestoredKeyboardAccessory: UIScrollView {
                     let button = UIButton(type: .system)
                     button.setTitle(assist.key, for: .normal)
                     button.titleLabel?.font = .monospacedSystemFont(ofSize: 15, weight: .regular)
-                    button.addAction(UIAction { [weak textView] _ in
-                        guard let textView else { return }
-                        textView.insertText(assist.value)
-                        textView.delegate?.textViewDidChange?(textView)
-                    }, for: .touchUpInside)
+                    button.addAction(
+                        UIAction { [weak textView] _ in
+                            guard let textView else { return }
+                            textView.insertText(assist.value)
+                            textView.delegate?.textViewDidChange?(textView)
+                        }, for: .touchUpInside)
                     stack.addArrangedSubview(button)
                 }
             } catch { SharedRuntime.log("Keyboard assists: \(error.localizedDescription)") }

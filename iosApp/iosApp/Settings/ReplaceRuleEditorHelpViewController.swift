@@ -5,6 +5,7 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
     private let topBar = UIView()
     private let backButton = UIButton(type: .custom)
     private let titleLabel = UILabel()
+    private var topBarHeight: NSLayoutConstraint!
     private let webView: WKWebView = {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
@@ -18,16 +19,20 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
         backButton.setImage(ReaderMenuAndroidIcon.back.image(), for: .normal)
         backButton.tintColor = AndroidReplicaTheme.toolbarText
         backButton.accessibilityLabel = L10n.Reader.backAction
+        backButton.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.Reader.backAction))
         backButton.addAction(
             UIAction { [weak self] _ in
                 self?.dismiss(animated: true)
             }, for: .touchUpInside)
-        titleLabel.text = "正则教程"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .medium)
+        title = NSLocalizedString("replace_rule.editor.regex_help_title", value: "正则教程", comment: "Regular expression tutorial title")
+        titleLabel.text = title
+        updateTypography()
         titleLabel.textColor = AndroidReplicaTheme.toolbarText
-        titleLabel.adjustsFontSizeToFitWidth = true
-        titleLabel.minimumScaleFactor = 0.7
+        titleLabel.numberOfLines = 0
+        titleLabel.lineBreakMode = .byWordWrapping
+        titleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         titleLabel.accessibilityTraits = .header
+        webView.accessibilityIdentifier = "replaceRule.editor.regexHelp.content"
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = AndroidReplicaTheme.background
@@ -39,11 +44,12 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
             child.translatesAutoresizingMaskIntoConstraints = false
             topBar.addSubview(child)
         }
+        topBarHeight = topBar.heightAnchor.constraint(equalToConstant: 56)
         NSLayoutConstraint.activate([
             topBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             topBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topBar.heightAnchor.constraint(equalToConstant: 56),
+            topBarHeight,
             backButton.leadingAnchor.constraint(equalTo: topBar.safeAreaLayoutGuide.leadingAnchor),
             backButton.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
             backButton.widthAnchor.constraint(equalToConstant: 56),
@@ -51,6 +57,8 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
             titleLabel.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: topBar.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             titleLabel.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+            titleLabel.topAnchor.constraint(greaterThanOrEqualTo: topBar.topAnchor, constant: 10),
+            titleLabel.bottomAnchor.constraint(lessThanOrEqualTo: topBar.bottomAnchor, constant: -10),
             webView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
@@ -64,24 +72,63 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
         return true
     }
 
-    // Offline HTML generated from the unmodified regexHelp.md at Legado
-    // 5f5d31404af9957684703747ecee2b91e7161f1d (GPL-3.0) with marked.
-    private static let html = #"""
-        <!doctype html>
-        <html lang="zh-CN"><head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-        <style>
-        :root { color-scheme: light dark; }
-        body { margin: 16px; font: -apple-system-body; line-height: 1.6; overflow-wrap: anywhere; }
-        h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 18px; }
-        code, pre { font-family: ui-monospace, monospace; }
-        pre { white-space: pre-wrap; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #888; padding: 6px; text-align: start; }
-        a { color: inherit; } ul { padding-left: 24px; }
-        </style></head><body>
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard titleLabel.bounds.width > 0 else { return }
+        let height = max(
+            56,
+            ceil(
+                titleLabel.sizeThatFits(
+                    CGSize(
+                        width: titleLabel.bounds.width, height: .greatestFiniteMagnitude)
+                ).height) + 20)
+        if abs(topBarHeight.constant - height) > 0.5 { topBarHeight.constant = height }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if isViewLoaded,
+            previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory
+        {
+            updateTypography()
+        }
+    }
+
+    private func updateTypography() {
+        titleLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 20, textStyle: .headline, weight: 500, compatibleWith: traitCollection)
+    }
+
+    private static var html: String {
+        let body = NSLocalizedString(
+            "replace_rule.editor.regex_help_body_html", value: helpBodyHTML,
+            comment: "Offline regex tutorial HTML translated from Legado 5f5d314; preserve markup and regex examples")
+        let language = Bundle.main.preferredLocalizations.first ?? "zh-Hans"
+        return #"""
+            <!doctype html>
+            <html lang="\#(language)"><head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+            <style>
+            :root { color-scheme: light dark; }
+            body { margin: 16px; font: -apple-system-body; line-height: 1.6; overflow-wrap: anywhere; }
+            h1 { font-size: 1.5em; } h2 { font-size: 1.25em; } h3 { font-size: 1.125em; }
+            code, pre { font-family: ui-monospace, monospace; }
+            pre { white-space: pre-wrap; }
+            table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+            th, td { border: 1px solid #888; padding: 6px; text-align: start; vertical-align: top; }
+            th:first-child, td:first-child { width: 30%; }
+            a { color: inherit; } ul { padding-left: 24px; }
+            </style></head><body>
+            \#(body)
+            </body></html>
+            """#
+    }
+
+    // Offline HTML from regexHelp.md at Legado
+    // 5f5d31404af9957684703747ecee2b91e7161f1d (GPL-3.0), with marked.
+    private static let helpBodyHTML = #"""
         <h1>正则表达式学习</h1>
         <ul>
         <li>[基本匹配]</li>
@@ -308,7 +355,7 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
         唯一的区别是不是等号 <code>=</code>，我们使用否定符号 <code>!</code>，例如 <code>(?!...)</code>。
         我们来看看下面的正则表达式 <code>(T|t)he(?!\sfat)</code>，表示: 从输入字符串中获取全部 <code>The</code> 或者 <code>the</code> 且不匹配 <code>fat</code> 前面加上一个空格字符。<pre>"(T|t)he(?!\sfat)" => The fat cat sat on <a href="#learn-regex"><strong>the</strong></a> mat.</pre></p>
         <h3>4.3 正向后行断言</h3>
-        <p>正向后行断言是用于获取在特定模式之前的所有匹配内容。正向后行断言表示为 <code>(?&lt;=...)</code>。例如正则表达式 <code>(?&lt;=(T|t)he\s)(fat|mat)</code>，表示: 从输入字符串中获取在单词 <code>The</code> 或 <code>the</code> 之后的所有 <code>fat</code> 和 <code>mat</code> 单词。<pre>"(?<=(T|t)he\s)(fat|mat)" => The <a href="#learn-regex"><strong>fat</strong></a> cat sat on the <a href="#learn-regex"><strong>mat</strong></a>.</pre></p>
+        <p>正向后行断言是用于获取在特定模式之前的所有匹配内容。正向后行断言表示为 <code>(?&lt;=...)</code>。例如正则表达式 <code>(?&lt;=(T|t)he\s)(fat|mat)</code>，表示: 从输入字符串中获取在单词 <code>The</code> 或 <code>the</code> 之后的所有 <code>fat</code> 和 <code>mat</code> 单词。<pre>"(?&lt;=(T|t)he\s)(fat|mat)" => The <a href="#learn-regex"><strong>fat</strong></a> cat sat on the <a href="#learn-regex"><strong>mat</strong></a>.</pre></p>
         <h3>4.4 负向后行断言</h3>
         <p>负向后行断言是用于获取不在特定模式之前的所有匹配的内容。负向后行断言表示为 <code>(?&lt;!...)</code>。例如正则表达式 <code>(?&lt;!(T|t)he\s)(cat)</code>，表示: 在输入字符中获取所有不在 <code>The</code> 或 <code>the</code> 之后的所有单词 <code>cat</code>。<pre>"(?&lt;!(T|t)he\s)(cat)" => The cat sat on <a href="#learn-regex"><strong>cat</strong></a>.</pre></p>
         <h2>5. 标记</h2>
@@ -348,6 +395,5 @@ final class ReplaceRuleEditorHelpViewController: UIViewController {
         <li><strong>ps/PS</strong>: <code>(?i)ps\b.*</code></li>
         <li><strong>Html标签</strong>: <code>&lt;[^&gt;]+?&gt;</code></li>
         </ul>
-        </body></html>
         """#
 }

@@ -8,11 +8,20 @@ final class AndroidEditorTitleBar: NavigationToolbarView {
     let titleButton = UIButton(type: .custom)
     private let showsBack: Bool
     private let showsMore: Bool
+    private let wrapsTitle: Bool
+    private var barHeight: NSLayoutConstraint!
+    private var titleHeight: NSLayoutConstraint!
+    private var inlineTitleConstraints: [NSLayoutConstraint] = []
+    private var stackedTitleConstraints: [NSLayoutConstraint] = []
+    private var inlineIconConstraints: [NSLayoutConstraint] = []
+    private var stackedIconConstraints: [NSLayoutConstraint] = []
+    private var usesStackedTitle = false
     private let busyIndicator = UIActivityIndicatorView(style: .medium)
 
-    init(title: String, showsBack: Bool = true, showsMore: Bool = false) {
+    init(title: String, showsBack: Bool = true, showsMore: Bool = false, wrapsTitle: Bool = false) {
         self.showsBack = showsBack
         self.showsMore = showsMore
+        self.wrapsTitle = wrapsTitle
         super.init(frame: .zero)
         backButton.setImage(ReaderMenuAndroidIcon.back.image(), for: .normal)
         saveButton.setImage(UIImage(named: "EditorAndroidSave")?.withRenderingMode(.alwaysTemplate), for: .normal)
@@ -42,34 +51,47 @@ final class AndroidEditorTitleBar: NavigationToolbarView {
         titleButton.accessibilityLabel = title
         titleButton.accessibilityTraits = [.header, .staticText]
         titleButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        if wrapsTitle {
+            titleButton.titleLabel?.numberOfLines = 0
+            titleButton.titleLabel?.lineBreakMode = .byWordWrapping
+        }
         titleButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         busyIndicator.hidesWhenStopped = true
         busyIndicator.isUserInteractionEnabled = false
         busyIndicator.translatesAutoresizingMaskIntoConstraints = false
         saveButton.addSubview(busyIndicator)
 
-        NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 56),
-            backButton.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
-            backButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            backButton.widthAnchor.constraint(equalToConstant: showsBack ? 56 : 0),
-            backButton.heightAnchor.constraint(equalToConstant: 56),
+        barHeight = heightAnchor.constraint(equalToConstant: 56)
+        titleHeight = titleButton.heightAnchor.constraint(equalToConstant: 48)
+        inlineTitleConstraints = [
             titleButton.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: showsBack ? 20 : 16),
             titleButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            titleButton.heightAnchor.constraint(equalToConstant: 48),
-            titleButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
             titleButton.trailingAnchor.constraint(equalTo: saveButton.leadingAnchor, constant: -4),
-            saveButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            saveButton.widthAnchor.constraint(equalToConstant: 48),
-            saveButton.heightAnchor.constraint(equalToConstant: 48),
-            moreButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            moreButton.widthAnchor.constraint(equalToConstant: showsMore ? 40 : 0),
-            moreButton.heightAnchor.constraint(equalToConstant: 48),
-            moreButton.leadingAnchor.constraint(equalTo: saveButton.trailingAnchor),
-            moreButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
-            busyIndicator.centerXAnchor.constraint(equalTo: saveButton.centerXAnchor),
-            busyIndicator.centerYAnchor.constraint(equalTo: saveButton.centerYAnchor),
-        ])
+        ]
+        stackedTitleConstraints = [
+            titleButton.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            titleButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            titleButton.topAnchor.constraint(equalTo: topAnchor, constant: 56),
+        ]
+        inlineIconConstraints = [backButton, saveButton, moreButton].map { $0.centerYAnchor.constraint(equalTo: centerYAnchor) }
+        stackedIconConstraints = [backButton, saveButton, moreButton].map { $0.centerYAnchor.constraint(equalTo: topAnchor, constant: 28) }
+        NSLayoutConstraint.activate(
+            [
+                barHeight,
+                backButton.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
+                backButton.widthAnchor.constraint(equalToConstant: showsBack ? 56 : 0),
+                backButton.heightAnchor.constraint(equalToConstant: 56),
+                titleHeight,
+                titleButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
+                saveButton.widthAnchor.constraint(equalToConstant: 48),
+                saveButton.heightAnchor.constraint(equalToConstant: 48),
+                moreButton.widthAnchor.constraint(equalToConstant: showsMore ? 40 : 0),
+                moreButton.heightAnchor.constraint(equalToConstant: 48),
+                moreButton.leadingAnchor.constraint(equalTo: saveButton.trailingAnchor),
+                moreButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
+                busyIndicator.centerXAnchor.constraint(equalTo: saveButton.centerXAnchor),
+                busyIndicator.centerYAnchor.constraint(equalTo: saveButton.centerYAnchor),
+            ] + inlineTitleConstraints + inlineIconConstraints)
         applyTitleFont()
         applyPalette()
     }
@@ -94,6 +116,36 @@ final class AndroidEditorTitleBar: NavigationToolbarView {
             moreButton.contentEdgeInsets = insets
         }
         super.layoutSubviews()
+        if wrapsTitle, let label = titleButton.titleLabel, bounds.width > 0 {
+            let availableWidth = max(0, safeAreaLayoutGuide.layoutFrame.width)
+            let inlineWidth = max(0, availableWidth - (showsBack ? 76 : 16) - 48 - (showsMore ? 40 : 0) - 4)
+            let longestWord =
+                (titleButton.attributedTitle(for: .normal)?.string ?? "")
+                .split(whereSeparator: { $0.isWhitespace })
+                .map { (String($0) as NSString).size(withAttributes: [.font: label.font as Any]).width }
+                .max() ?? 0
+            let stacked = longestWord > inlineWidth + 0.5
+            if usesStackedTitle != stacked {
+                NSLayoutConstraint.deactivate(
+                    usesStackedTitle ? stackedTitleConstraints + stackedIconConstraints : inlineTitleConstraints + inlineIconConstraints)
+                usesStackedTitle = stacked
+                NSLayoutConstraint.activate(
+                    stacked ? stackedTitleConstraints + stackedIconConstraints : inlineTitleConstraints + inlineIconConstraints)
+            }
+            let titleWidth = stacked ? max(0, availableWidth - 32) : inlineWidth
+            let height = max(
+                48,
+                ceil(
+                    label.sizeThatFits(
+                        CGSize(
+                            width: titleWidth, height: .greatestFiniteMagnitude)
+                    ).height))
+            let heightOfBar = stacked ? 56 + height + 8 : max(56, height + 8)
+            if abs(titleHeight.constant - height) > 0.5 || abs(barHeight.constant - heightOfBar) > 0.5 {
+                titleHeight.constant = height
+                barHeight.constant = heightOfBar
+            }
+        }
     }
 
     func setBusy(_ busy: Bool) {

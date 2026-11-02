@@ -17,6 +17,7 @@ final class ReaderReplaceRuleCoordinator {
 
     private weak var reader: ReaderContainerViewController?
     private weak var dialog: ReaderEffectiveReplaceRulesDialogViewController?
+    private var dialogID: UUID?
     private var requestID: UUID?
     private var listTask: Task<Void, Never>?
     private var changedBookURL: String?
@@ -76,7 +77,7 @@ final class ReaderReplaceRuleCoordinator {
                 }
                 let navigation = UINavigationController(rootViewController: editor)
                 navigation.modalPresentationStyle = .fullScreen
-                navigation.overrideUserInterfaceStyle = reader.readMenu.overflowInterfaceStyle
+                // ReplaceEditActivity inherits app appearance, not the reading surface's override.
                 reader.dismissTextSelectionMenu(clearSelection: true)
                 reader.present(navigation, animated: true)
             } catch is CancellationError {
@@ -143,19 +144,28 @@ final class ReaderReplaceRuleCoordinator {
     private func present(_ rules: [ReplaceRule], in reader: ReaderContainerViewController, context: ChapterIdentity) {
         reader.setMenuVisible(false)
         reader.stopAutoPage(showMessage: false)
+        let id = UUID()
         let controller = ReaderEffectiveReplaceRulesDialogViewController(
             rules: rules, showsChineseConversion: (reader.runtimeConfig?.reader.chineseMode ?? 0) > 0,
-            onSelect: { [weak self] rule in self?.openEditor(rule, context: context) },
-            onSelectChineseConversion: { [weak self] in self?.openChineseConversion(context: context) },
+            onSelect: { [weak self] rule in
+                guard let self, self.dialogID == id else { return }
+                self.openEditor(rule, context: context)
+            },
+            onSelectChineseConversion: { [weak self] in
+                guard let self, self.dialogID == id else { return }
+                self.openChineseConversion(context: context)
+            },
             onDismiss: { [weak self] in
-                guard let self else { return }
+                guard let self, self.dialogID == id else { return }
                 self.dialog = nil
+                self.dialogID = nil
                 self.requestID = nil
                 self.listTask?.cancel()
                 self.listTask = nil
                 self.resume()
             })
-        controller.overrideUserInterfaceStyle = reader.readMenu.overflowInterfaceStyle
+        // UIKit presentation traits follow the app window, including later SYSTEM changes.
+        dialogID = id
         dialog = controller
         reader.present(controller, animated: true)
     }
@@ -169,19 +179,26 @@ final class ReaderReplaceRuleCoordinator {
             dialog.showTransientMessage(error.userFacingMessage)
             return
         }
-        let editor = ReplaceRuleEditorViewController(rule: rule, facade: facade) { [weak self] _ in
+        let editor = ReplaceRuleEditorViewController(rule: rule, facade: facade) { [weak self, weak dialog] _ in
             guard let self else { return }
             self.rulesDidChange(bookURL: context.bookURL)
-            self.refreshRules(context: context)
+            guard let dialog, self.dialog === dialog else {
+                self.resume()
+                return
+            }
+            self.refreshRules(context: context, in: dialog)
         }
         let navigation = UINavigationController(rootViewController: editor)
         navigation.modalPresentationStyle = .fullScreen
-        navigation.overrideUserInterfaceStyle = dialog.traitCollection.userInterfaceStyle
         dialog.present(navigation, animated: true)
     }
 
-    private func refreshRules(context: ChapterIdentity) {
-        guard let reader, let dialog, identity(in: reader) == context else { return }
+    private func refreshRules(
+        context: ChapterIdentity, in dialog: ReaderEffectiveReplaceRulesDialogViewController
+    ) {
+        guard let reader, self.dialog === dialog, dialog.acceptsRuleUpdates, identity(in: reader) == context else {
+            return
+        }
         listTask?.cancel()
         let id = UUID()
         requestID = id
@@ -198,11 +215,13 @@ final class ReaderReplaceRuleCoordinator {
             do {
                 let rules = try await reader.screen.getEffectiveReplaceRules()
                 try Task.checkCancellation()
-                guard self.requestID == id, self.dialog === dialog, self.identity(in: reader) == context else { return }
+                guard self.requestID == id, self.dialog === dialog, dialog.acceptsRuleUpdates,
+                    self.identity(in: reader) == context
+                else { return }
                 dialog.updateRules(rules, showsChineseConversion: (reader.runtimeConfig?.reader.chineseMode ?? 0) > 0)
             } catch is CancellationError {
             } catch {
-                guard self.requestID == id, self.dialog === dialog, self.identity(in: reader) == context else { return }
+                guard self.requestID == id, self.canEdit(in: dialog, reader: reader, context: context) else { return }
                 dialog.showTransientMessage(error.userFacingMessage)
             }
         }
@@ -229,16 +248,17 @@ final class ReaderReplaceRuleCoordinator {
                     try await reader.screen.setReaderRuntimeConfig(
                         config: config.androidCopy(chineseMode: Int32(index)))
                     self.rulesDidChange(bookURL: context.bookURL)
-                    guard self.dialog === dialog, self.identity(in: reader) == context else { return }
+                    guard self.dialog === dialog, dialog.acceptsRuleUpdates, self.identity(in: reader) == context else {
+                        return
+                    }
                     refreshing = true
-                    self.refreshRules(context: context)
+                    self.refreshRules(context: context, in: dialog)
                 } catch {
-                    guard self.dialog === dialog, self.identity(in: reader) == context else { return }
+                    guard self.canEdit(in: dialog, reader: reader, context: context) else { return }
                     dialog.showTransientMessage(error.userFacingMessage)
                 }
             }
         }
-        picker.overrideUserInterfaceStyle = dialog.traitCollection.userInterfaceStyle
         dialog.present(picker, animated: true)
     }
 
@@ -256,9 +276,12 @@ final class ReaderReplaceRuleCoordinator {
         in dialog: ReaderEffectiveReplaceRulesDialogViewController, reader: ReaderContainerViewController,
         context: ChapterIdentity
     ) -> Bool {
-        self.dialog === dialog && identity(in: reader) == context && reader.presentedViewController === dialog
+        self.dialog === dialog && dialog.acceptsRuleUpdates && identity(in: reader) == context
+            && reader.navigationController?.topViewController === reader && reader.presentedViewController === dialog
             && dialog.presentingViewController != nil && dialog.presentedViewController == nil
-            && !dialog.isBeingDismissed && !reader.isMovingFromParent && !reader.isBeingDismissed
+            && !dialog.isBeingPresented && !dialog.isBeingDismissed
+            && !reader.isMovingFromParent && !reader.isBeingDismissed
+            && dialog.viewIfLoaded?.window === reader.viewIfLoaded?.window
             && dialog.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive
     }
 }

@@ -97,9 +97,16 @@ struct ReplaceRuleEditorDraft: Equatable {
 
         var errorDescription: String? {
             switch self {
-            case .emptyPattern: return "替换规则不能为空"
-            case .invalidPattern: return "替换规则无效"
-            case .invalidTimeout: return "超时毫秒数只能包含数字 0 到 9，且不能超出整数范围"
+            case .emptyPattern:
+                return NSLocalizedString(
+                    "replace_rule.editor.empty_pattern", value: "替换规则不能为空", comment: "Empty replacement pattern validation error")
+            case .invalidPattern:
+                return NSLocalizedString(
+                    "replace_rule.editor.invalid_pattern", value: "替换规则无效", comment: "Invalid replacement pattern validation error")
+            case .invalidTimeout:
+                return NSLocalizedString(
+                    "replace_rule.editor.invalid_timeout", value: "超时毫秒数只能包含数字 0 到 9，且不能超出整数范围",
+                    comment: "Timeout must contain ASCII digits and fit in a signed 64-bit integer")
             case .invalidClipboard: return L10n.ReplaceRule.pasteRuleInvalid
             }
         }

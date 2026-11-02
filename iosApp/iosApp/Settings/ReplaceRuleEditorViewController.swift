@@ -12,7 +12,9 @@ final class ReplaceRuleEditorViewController: UIViewController,
     private let facade: ReplaceRuleFacade?
     private let newID = Int64(Date().timeIntervalSince1970 * 1000)
     private let initialDraft: ReplaceRuleEditorDraft
-    private let topBar = AndroidEditorTitleBar(title: "替换规则编辑", showsMore: true)
+    private let topBar = AndroidEditorTitleBar(
+        title: NSLocalizedString("replace_rule.editor.title", value: "替换规则编辑", comment: "Replacement rule editor title"),
+        showsMore: true, wrapsTitle: true)
     private let form = ReplaceRuleEditorFormView()
     private let toolbarBackdrop = UIView()
     private var state = State.editing
@@ -44,7 +46,7 @@ final class ReplaceRuleEditorViewController: UIViewController,
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "替换规则编辑"
+        title = NSLocalizedString("replace_rule.editor.title", value: "替换规则编辑", comment: "Replacement rule editor title")
         view.backgroundColor = AndroidReplicaTheme.background
         toolbarBackdrop.backgroundColor = AndroidReplicaTheme.toolbarBackground
         toolbarBackdrop.isUserInteractionEnabled = false
@@ -171,10 +173,13 @@ final class ReplaceRuleEditorViewController: UIViewController,
             closeEditor()
             return
         }
-        let alert = UIAlertController(title: "放弃未保存的修改？", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "继续编辑", style: .cancel))
+        let alert = UIAlertController(title: L10n.SourceEdit.unsavedTitle, message: nil, preferredStyle: .alert)
         alert.addAction(
-            UIAlertAction(title: "放弃修改", style: .destructive) { [weak self, weak alert] _ in
+            UIAlertAction(
+                title: NSLocalizedString("replace_rule.editor.keep_editing", value: "继续编辑", comment: "Keep editing an unsaved rule"),
+                style: .cancel))
+        alert.addAction(
+            UIAlertAction(title: L10n.SourceEdit.discardAction, style: .destructive) { [weak self, weak alert] _ in
                 guard let self, let alert else { return }
                 self.afterDismissing(alert) { [weak self] in
                     guard let self, self.state == .editing else { return }
@@ -190,7 +195,11 @@ final class ReplaceRuleEditorViewController: UIViewController,
         overflowMenu?.dismiss()
         view.endEditing(true)
         guard let facade else {
-            showError("规则服务不可用，尚未保存。请返回规则列表重新打开编辑器。")
+            showError(
+                NSLocalizedString(
+                    "replace_rule.editor.service_unavailable",
+                    value: "规则服务不可用，尚未保存。请返回规则列表重新打开编辑器。",
+                    comment: "Rule service unavailable; nothing has been saved"))
             return
         }
         let candidate: ReplaceRule
@@ -276,7 +285,10 @@ final class ReplaceRuleEditorViewController: UIViewController,
             UIPasteboard.general.string = try ReplaceRuleEditorClipboard.encode(candidate)
             showTransientMessage(L10n.ReplaceRule.copyRuleSuccess)
         } catch {
-            showError(error.localizedDescription, title: "复制失败")
+            showError(
+                error.localizedDescription,
+                title: NSLocalizedString(
+                    "replace_rule.editor.copy_failed", value: "复制失败", comment: "Copy rule failure title"))
         }
     }
 
@@ -291,7 +303,10 @@ final class ReplaceRuleEditorViewController: UIViewController,
             form.populate(draft)
             updateDismissalProtection()
         } catch {
-            showError(L10n.ReplaceRule.pasteRuleInvalid, title: "粘贴失败")
+            showError(
+                L10n.ReplaceRule.pasteRuleInvalid,
+                title: NSLocalizedString(
+                    "replace_rule.editor.paste_failed", value: "粘贴失败", comment: "Paste rule failure title"))
         }
     }
 
@@ -301,13 +316,15 @@ final class ReplaceRuleEditorViewController: UIViewController,
         present(ReplaceRuleEditorHelpViewController(), animated: true)
     }
 
-    private func showError(_ message: String, allowsRetry: Bool = false, title: String? = "未保存") {
+    private func showError(_ message: String, allowsRetry: Bool = false, title: String? = nil) {
         guard presentedViewController == nil else { return }
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: title ?? NSLocalizedString("replace_rule.editor.not_saved", value: "未保存", comment: "Rule not saved error title"),
+            message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .cancel))
         if allowsRetry {
             alert.addAction(
-                UIAlertAction(title: "重试", style: .default) { [weak self, weak alert] _ in
+                UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak alert] _ in
                     guard let self, let alert else { return }
                     self.afterDismissing(alert) { [weak self] in self?.handleSave() }
                 })

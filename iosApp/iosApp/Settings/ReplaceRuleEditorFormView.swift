@@ -6,16 +6,38 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
     var onHelp: (() -> Void)?
 
     private let stack = UIStackView()
-    private let nameField = ReplaceRuleEditorInput(title: "替换规则名称", identifier: "name")
-    private let groupField = ReplaceRuleEditorInput(title: "分组", identifier: "group")
-    private let patternField = ReplaceRuleEditorInput(title: "替换规则", identifier: "pattern")
-    private let replacementField = ReplaceRuleEditorInput(title: "替换为", identifier: "replacement")
-    private let scopeField = ReplaceRuleEditorInput(title: "替换范围，选填书名或者书源 URL", identifier: "scope")
-    private let excludeField = ReplaceRuleEditorInput(title: "排除范围，选填书名或者书源 URL", identifier: "excludeScope")
-    private let timeoutField = ReplaceRuleEditorInput(title: "超时毫秒数", identifier: "timeout")
-    private let regexCheck = ReplaceRuleEditorCheckBox(title: "使用正则表达式")
-    private let titleCheck = ReplaceRuleEditorCheckBox(title: "作用于标题")
-    private let contentCheck = ReplaceRuleEditorCheckBox(title: "作用于正文")
+    private let nameField = ReplaceRuleEditorInput(
+        title: NSLocalizedString("replace_rule.editor.name", value: "替换规则名称", comment: "Replacement rule name field"),
+        identifier: "name")
+    private let groupField = ReplaceRuleEditorInput(title: L10n.SourceEdit.groupTitle, identifier: "group")
+    private let patternField = ReplaceRuleEditorInput(
+        title: NSLocalizedString("replace_rule.editor.pattern", value: "替换规则", comment: "Replacement pattern field"),
+        identifier: "pattern")
+    private let replacementField = ReplaceRuleEditorInput(
+        title: NSLocalizedString("replace_rule.editor.replacement", value: "替换为", comment: "Replacement text field; empty text is valid"),
+        identifier: "replacement")
+    private let scopeField = ReplaceRuleEditorInput(
+        title: NSLocalizedString(
+            "replace_rule.editor.scope", value: "替换范围，选填书名或者书源 URL", comment: "Optional replacement scope field"),
+        identifier: "scope")
+    private let excludeField = ReplaceRuleEditorInput(
+        title: NSLocalizedString(
+            "replace_rule.editor.exclude_scope", value: "排除范围，选填书名或者书源 URL", comment: "Optional excluded replacement scope field"),
+        identifier: "excludeScope")
+    private let timeoutField = ReplaceRuleEditorInput(
+        title: NSLocalizedString("replace_rule.editor.timeout", value: "超时毫秒数", comment: "Replacement timeout in milliseconds field"),
+        identifier: "timeout")
+    private let regexCheck = ReplaceRuleEditorCheckBox(
+        title: NSLocalizedString(
+            "replace_rule.editor.use_regex", value: "使用正则表达式", comment: "Use regular expressions checkbox"))
+    private let titleCheck = ReplaceRuleEditorCheckBox(
+        title: NSLocalizedString(
+            "replace_rule.editor.scope_title", value: "作用于标题", comment: "Apply replacement to titles checkbox"))
+    private let contentCheck = ReplaceRuleEditorCheckBox(
+        title: NSLocalizedString(
+            "replace_rule.editor.scope_content", value: "作用于正文", comment: "Apply replacement to body text checkbox"))
+    private let scopeRow = UIStackView()
+    private let scopeSpacer = UIView()
     private let helpButton = UIButton(type: .custom)
     private weak var activeTextView: UITextView?
     private var lastViewportSize = CGSize.zero
@@ -61,21 +83,13 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
             stack.widthAnchor.constraint(equalTo: frameLayoutGuide.widthAnchor, constant: -20),
         ])
 
-        let keyboardBar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
-        keyboardBar.items = [
-            UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-            UIBarButtonItem(
-                image: UIImage(systemName: "keyboard.chevron.compact.down"),
-                style: .plain, target: self, action: #selector(dismissKeyboard)
-            ),
-        ]
-        keyboardBar.items?.last?.accessibilityLabel = "收起键盘"
         for field in fields {
             field.textView.delegate = self
             field.textView.inputAccessoryView = RestoredKeyboardAccessory(textView: field.textView)
         }
         timeoutField.textView.keyboardType = .numberPad
-        timeoutField.textView.accessibilityHint = "毫秒"
+        timeoutField.textView.accessibilityHint = NSLocalizedString(
+            "replace_rule.editor.milliseconds", value: "毫秒", comment: "Timeout field unit for accessibility")
         for check in [regexCheck, titleCheck, contentCheck] {
             check.addAction(UIAction { [weak self] _ in self?.onChange?() }, for: .valueChanged)
         }
@@ -84,9 +98,12 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
         contentCheck.accessibilityIdentifier = "replaceRule.editor.scopeContent"
         helpButton.setImage(ReplaceRuleEditorIcons.help, for: .normal)
         helpButton.tintColor = AndroidReplicaTheme.primaryText
-        helpButton.accessibilityLabel = "帮助"
+        helpButton.accessibilityLabel = NSLocalizedString("replace_rule.help", value: "帮助", comment: "Replacement rule help")
         helpButton.accessibilityIdentifier = "replaceRule.editor.regexHelp"
-        helpButton.addInteraction(UIToolTipInteraction(defaultToolTip: "正则教程"))
+        let helpTitle = NSLocalizedString(
+            "replace_rule.editor.regex_help_title", value: "正则教程", comment: "Regular expression tutorial title")
+        helpButton.accessibilityHint = helpTitle
+        helpButton.addInteraction(UIToolTipInteraction(defaultToolTip: helpTitle))
         helpButton.addAction(UIAction { [weak self] _ in self?.onHelp?() }, for: .touchUpInside)
         helpButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
         helpButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
@@ -96,7 +113,7 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
         regexRow.alignment = .center
         regexCheck.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let scopeRow = UIStackView(arrangedSubviews: [titleCheck, contentCheck, UIView()])
+        for child in [titleCheck, contentCheck, scopeSpacer] { scopeRow.addArrangedSubview(child) }
         scopeRow.axis = .horizontal
         scopeRow.alignment = .center
         scopeRow.spacing = 10
@@ -135,13 +152,12 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
         super.layoutSubviews()
         let width = frameLayoutGuide.layoutFrame.width - 20
         // Keep both independent checkboxes reachable at narrow widths / large text sizes.
-        if let row = titleCheck.superview as? UIStackView {
-            let required = titleCheck.intrinsicContentSize.width + contentCheck.intrinsicContentSize.width + 20
-            let axis: NSLayoutConstraint.Axis = required > width ? .vertical : .horizontal
-            if row.axis != axis {
-                row.axis = axis
-                row.alignment = axis == .vertical ? .leading : .center
-            }
+        let required = titleCheck.singleLineWidth + contentCheck.singleLineWidth + 20
+        let axis: NSLayoutConstraint.Axis = required > width ? .vertical : .horizontal
+        if scopeRow.axis != axis {
+            scopeRow.axis = axis
+            scopeRow.alignment = axis == .vertical ? .fill : .center
+            scopeSpacer.isHidden = axis == .vertical
         }
         if lastViewportSize != bounds.size {
             lastViewportSize = bounds.size
@@ -191,8 +207,6 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
         }
     }
 
-    @objc private func dismissKeyboard() { endEditing(true) }
-
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is UIControl || super.touchesShouldCancel(in: view)
     }
@@ -209,12 +223,12 @@ private final class ReplaceRuleEditorInput: UIView {
     init(title: String, identifier: String) {
         super.init(frame: .zero)
         hintLabel.text = title
-        hintLabel.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: .systemFont(ofSize: 12))
-        hintLabel.adjustsFontForContentSizeCategory = true
+        hintLabel.adjustsFontForContentSizeCategory = false
         hintLabel.numberOfLines = 0
+        hintLabel.lineBreakMode = .byWordWrapping
+        hintLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         hintLabel.isAccessibilityElement = false
-        textView.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: 16))
-        textView.adjustsFontForContentSizeCategory = true
+        textView.adjustsFontForContentSizeCategory = false
         textView.textColor = AndroidReplicaTheme.primaryText
         textView.tintColor = AndroidReplicaTheme.accent
         textView.backgroundColor = .clear
@@ -232,9 +246,11 @@ private final class ReplaceRuleEditorInput: UIView {
         textView.accessibilityLabel = title
         textView.accessibilityIdentifier = "replaceRule.editor.\(identifier)"
         placeholderLabel.text = title
-        placeholderLabel.font = textView.font
-        placeholderLabel.adjustsFontForContentSizeCategory = true
+        placeholderLabel.adjustsFontForContentSizeCategory = false
+        updateTypography()
         placeholderLabel.numberOfLines = 0
+        placeholderLabel.lineBreakMode = .byWordWrapping
+        placeholderLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         placeholderLabel.isAccessibilityElement = false
         placeholderLabel.isUserInteractionEnabled = false
         for child in [hintLabel, textView, placeholderLabel, underline] {
@@ -266,6 +282,22 @@ private final class ReplaceRuleEditorInput: UIView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            updateTypography()
+            refreshAppearance()
+        }
+    }
+
+    private func updateTypography() {
+        hintLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 12, textStyle: .caption1, compatibleWith: traitCollection)
+        textView.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 16, textStyle: .body, compatibleWith: traitCollection)
+        placeholderLabel.font = textView.font
+    }
 
     func refreshAppearance() {
         let floats = textView.isFirstResponder || !textView.text.isEmpty
@@ -312,20 +344,27 @@ private final class ReplaceRuleEditorCheckBox: UIControl {
 
     override var isSelected: Bool { didSet { refresh() } }
 
+    var singleLineWidth: CGFloat {
+        36 + label.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
+    }
+
     override var intrinsicContentSize: CGSize {
         let size = label.intrinsicContentSize
-        return CGSize(width: 32 + size.width + 4, height: max(48, size.height + 12))
+        return CGSize(width: singleLineWidth, height: max(48, size.height + 12))
     }
 
     init(title: String) {
         super.init(frame: .zero)
         setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         isAccessibilityElement = true
         accessibilityLabel = title
         label.text = title
-        label.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: 16))
-        label.adjustsFontForContentSizeCategory = true
+        updateTypography()
+        label.adjustsFontForContentSizeCategory = false
         label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+        label.setContentCompressionResistancePriority(.required, for: .vertical)
         label.textColor = AndroidReplicaTheme.primaryText
         imageView.contentMode = .center
         for child in [imageView, label] {
@@ -356,6 +395,20 @@ private final class ReplaceRuleEditorCheckBox: UIControl {
     @available(*, unavailable)
     required init?(coder _: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            updateTypography()
+            invalidateIntrinsicContentSize()
+            superview?.setNeedsLayout()
+        }
+    }
+
+    private func updateTypography() {
+        label.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 16, textStyle: .body, compatibleWith: traitCollection)
+    }
+
     override func accessibilityActivate() -> Bool {
         guard isEnabled else { return false }
         sendActions(for: .touchUpInside)
@@ -366,6 +419,6 @@ private final class ReplaceRuleEditorCheckBox: UIControl {
         imageView.image = isSelected ? ReplaceRuleEditorIcons.checked : ReplaceRuleEditorIcons.unchecked
         imageView.tintColor = isSelected ? AndroidReplicaTheme.accent : AndroidReplicaTheme.secondaryText
         accessibilityTraits = isSelected ? [.button, .selected] : .button
-        accessibilityValue = isSelected ? "已选中" : "未选中"
+        accessibilityValue = isSelected ? L10n.ReaderAppearance.optionSelected : L10n.ReaderAppearance.optionNotSelected
     }
 }

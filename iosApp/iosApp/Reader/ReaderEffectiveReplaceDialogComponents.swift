@@ -61,6 +61,7 @@ final class ReaderEffectiveReplaceScrollView: UIScrollView {
 }
 
 final class ReaderEffectiveReplaceRuleRow: UIControl {
+    var onActivate: (() -> Bool)?
     let snapshotID: UUID
     private let label = ReaderEffectiveReplaceLabel()
 
@@ -126,7 +127,6 @@ final class ReaderEffectiveReplaceRuleRow: UIControl {
 
     override func accessibilityActivate() -> Bool {
         guard isEnabled else { return false }
-        sendActions(for: .touchUpInside)
-        return true
+        return onActivate?() ?? false
     }
 }

@@ -3,8 +3,9 @@ import shared
 
 /// EffectiveReplacesDialog.kt / dialog_recycler_view.xml / item_1line_text.xml
 /// at Legado 5f5d31404af9957684703747ecee2b91e7161f1d.
-/// The caller supplies effective rules, actual conversion-mode visibility and reader traits,
-/// presents the real editor from this dialog, and refreshes the snapshot after saving.
+/// The caller supplies effective rules and actual conversion-mode visibility; app appearance
+/// is inherited from the presentation window, independently of the reading surface.
+/// The host presents the editor and refreshes this snapshot after saving.
 @MainActor
 final class ReaderEffectiveReplaceRulesDialogViewController: UIViewController {
     private enum Phase {
@@ -59,9 +60,13 @@ final class ReaderEffectiveReplaceRulesDialogViewController: UIViewController {
         preconditionFailure("init(coder:) is unavailable")
     }
 
+    var acceptsRuleUpdates: Bool {
+        phase != .closing && phase != .finished && !isLeavingPresentation
+    }
+
     /// No loading or persistence: replace the complete, caller-owned effective-rule snapshot.
     func updateRules(_ rules: [ReplaceRule], showsChineseConversion: Bool? = nil) {
-        guard phase != .closing, phase != .finished else { return }
+        guard acceptsRuleUpdates else { return }
         self.rules = rules
         if let showsChineseConversion { self.showsChineseConversion = showsChineseConversion }
         snapshotID = UUID()
@@ -295,6 +300,10 @@ final class ReaderEffectiveReplaceRulesDialogViewController: UIViewController {
                 ? "reader.effectiveReplace.rule.\(rules[index].id)"
                 : "reader.effectiveReplace.chineseConversion"
             row.addTarget(self, action: #selector(selectRow(_:)), for: .touchUpInside)
+            row.onActivate = { [weak self, weak row] in
+                guard let self, let row else { return false }
+                return self.select(row)
+            }
             contentView.addSubview(row)
             return row
         }
@@ -346,9 +355,14 @@ final class ReaderEffectiveReplaceRulesDialogViewController: UIViewController {
     }
 
     @objc private func selectRow(_ sender: ReaderEffectiveReplaceRuleRow) {
+        select(sender)
+    }
+
+    @discardableResult
+    private func select(_ sender: ReaderEffectiveReplaceRuleRow) -> Bool {
         guard canCancel, !isBusy, selectionID == nil, sender.isEnabled,
             sender.snapshotID == snapshotID, rows.indices.contains(sender.tag), rows[sender.tag] === sender
-        else { return }
+        else { return false }
         let index = sender.tag
         let id = UUID()
         selectionID = id
@@ -365,6 +379,7 @@ final class ReaderEffectiveReplaceRulesDialogViewController: UIViewController {
             self.selectionID = nil
             self.updateInteraction()
         }
+        return true
     }
 
     @objc private func cancel() {
