@@ -255,13 +255,14 @@ private final class ReadRecordDetailView: UIView {
     }
 }
 
-private final class ReadRecordClearButton: UIButton {
+private final class ReadRecordClearButton: ReaderMenuPressButton {
     private let text = ReadRecordTextLabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         configuration = nil
         automaticallyUpdatesConfiguration = false
+        showsBorderlessFeedback = false
         adjustsImageWhenHighlighted = false
         isExclusiveTouch = true
         isAccessibilityElement = true
@@ -352,8 +353,7 @@ private final class ReadRecordContentView: UIView {
     required init?(coder _: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
 
     func configure(title: String, values: [String], canClear: Bool, onClear: (() -> Void)?) {
-        clearButton.cancelTracking(with: nil)
-        clearButton.isHighlighted = false
+        clearButton.cancelPendingActivation()
         self.onClear = canClear ? onClear : nil
         titleLabel.setRawText(title, singleLine: true)
         for (detail, value) in zip(details, values) { detail.configure(value: value) }

@@ -67,7 +67,9 @@ final class ReaderRestoreProgressDialogViewController: UIViewController, UIAdapt
             UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel(_:))),
             UIKeyCommand(input: ".", modifierFlags: .command, action: #selector(cancel(_:))),
         ].map { command in
-            command.discoverabilityTitle = actionLayout == .yesNo ? "否" : "取消"
+            command.discoverabilityTitle =
+                actionLayout == .yesNo
+                ? NSLocalizedString("common.no", value: "否", comment: "Android negative confirmation action") : L10n.Common.cancel
             command.wantsPriorityOverSystemBehavior = true
             return command
         }

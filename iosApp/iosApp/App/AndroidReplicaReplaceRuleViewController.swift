@@ -45,6 +45,7 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         popup?.dismiss()
+        cancelVisibleRuleInteractions()
     }
 
     deinit {
@@ -112,7 +113,8 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
         emptyLabel.textColor = AndroidReplicaTheme.secondaryText
         emptyLabel.textAlignment = .center
         emptyLabel.numberOfLines = 0
-        emptyLabel.font = .preferredFont(forTextStyle: .body)
+        emptyLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 17, textStyle: .body, compatibleWith: traitCollection)
     }
 
     private func bindScreen() {
@@ -251,6 +253,20 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
         toggleSelection(ruleID: rule.id)
     }
 
+    func tableView(_: UITableView, didEndDisplaying cell: UITableViewCell, forRowAt _: IndexPath) {
+        (cell as? AndroidReplicaReplaceRuleCell)?.cancelPendingInteraction()
+    }
+
+    func scrollViewWillBeginDragging(_: UIScrollView) {
+        cancelVisibleRuleInteractions()
+    }
+
+    private func cancelVisibleRuleInteractions() {
+        for case let cell as AndroidReplicaReplaceRuleCell in tableView.visibleCells {
+            cell.cancelPendingInteraction()
+        }
+    }
+
     private func setRule(_ rule: ReplaceRule, enabled: Bool) {
         Task { [weak self] in
             do {
@@ -299,8 +315,18 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
                 menuItem("menu_add_replace_rule", title: L10n.ReplaceRule.newRuleAction) { $0.openEditor(rule: nil) },
                 menuItem("menu_import_local", title: L10n.ReplaceRule.importFromFile) { $0.showFileImportPicker() },
                 menuItem("menu_import_onLine", title: L10n.ReplaceRule.importFromUrl) { $0.showUrlImportSheet() },
-                menuItem("menu_import_qr", title: "二维码导入") { $0.openQRImport() },
-                menuItem("menu_help", title: "帮助") { $0.openReplaceHelp() },
+                menuItem(
+                    "menu_import_qr",
+                    title: NSLocalizedString(
+                        "replace_rule.import_from_qr", value: "二维码导入", comment: "Import replacement rules from QR code")
+                ) {
+                    $0.openQRImport()
+                },
+                menuItem(
+                    "menu_help",
+                    title: NSLocalizedString(
+                        "replace_rule.help", value: "帮助", comment: "Replacement rules help")
+                ) { $0.openReplaceHelp() },
             ], anchor: topBar.moreButton)
     }
 
@@ -377,11 +403,41 @@ final class AndroidReplicaReplaceRuleViewController: UIViewController, Navigatio
         guard !selected.isEmpty else { return }
         presentPopup(
             [
-                menuItem("menu_enable_selection", title: "启用所选") { $0.batchSetEnabled(true) },
-                menuItem("menu_disable_selection", title: "禁用所选") { $0.batchSetEnabled(false) },
-                menuItem("menu_top_sel", title: "所选置顶") { $0.batchMoveToTop() },
-                menuItem("menu_bottom_sel", title: "所选置底") { $0.batchMoveToBottom() },
-                menuItem("menu_export_selection", title: "导出所选") { $0.exportRules(selected) },
+                menuItem(
+                    "menu_enable_selection",
+                    title: NSLocalizedString(
+                        "replace_rule.enable_selection", value: "启用所选", comment: "Enable selected replacement rules")
+                ) {
+                    $0.batchSetEnabled(true)
+                },
+                menuItem(
+                    "menu_disable_selection",
+                    title: NSLocalizedString(
+                        "replace_rule.disable_selection", value: "禁用所选", comment: "Disable selected replacement rules")
+                ) {
+                    $0.batchSetEnabled(false)
+                },
+                menuItem(
+                    "menu_top_sel",
+                    title: NSLocalizedString(
+                        "replace_rule.selection_to_top", value: "所选置顶", comment: "Move selected replacement rules to top")
+                ) {
+                    $0.batchMoveToTop()
+                },
+                menuItem(
+                    "menu_bottom_sel",
+                    title: NSLocalizedString(
+                        "replace_rule.selection_to_bottom", value: "所选置底", comment: "Move selected replacement rules to bottom")
+                ) {
+                    $0.batchMoveToBottom()
+                },
+                menuItem(
+                    "menu_export_selection",
+                    title: NSLocalizedString(
+                        "replace_rule.export_selection", value: "导出所选", comment: "Export selected replacement rules")
+                ) {
+                    $0.exportRules(selected)
+                },
             ], anchor: selectionBar.moreButton)
     }
 

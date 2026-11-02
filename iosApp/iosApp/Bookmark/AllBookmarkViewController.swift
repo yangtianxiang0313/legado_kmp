@@ -52,6 +52,11 @@ final class AllBookmarkViewController: UIViewController, UITableViewDataSource, 
         tableView.verticalScrollIndicatorInsets.bottom = view.safeAreaInsets.bottom
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyErrorTypography()
+    }
+
     deinit {
         exportTask?.cancel()
         openTask?.cancel()
@@ -81,7 +86,7 @@ final class AllBookmarkViewController: UIViewController, UITableViewDataSource, 
 
         errorLabel.textAlignment = .center
         errorLabel.textColor = AndroidReplicaTheme.secondaryText
-        errorLabel.font = .systemFont(ofSize: 14)
+        applyErrorTypography()
         errorLabel.numberOfLines = 0
         errorLabel.accessibilityIdentifier = "all_bookmark_load_error"
         overflowMenu.accessibilityIdentifier = "all_bookmark_overflow_menu"
@@ -111,6 +116,11 @@ final class AllBookmarkViewController: UIViewController, UITableViewDataSource, 
         if case .failure(let error) = screen.bootstrap() {
             showLoadFailure(error)
         }
+    }
+
+    private func applyErrorTypography() {
+        errorLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
     }
 
     private func showLoadFailure(_ error: Error) {
@@ -333,7 +343,11 @@ final class AllBookmarkViewController: UIViewController, UITableViewDataSource, 
         }
         let bookmark = groups[indexPath.section].bookmarks[indexPath.row]
         return UIContextMenuConfiguration(identifier: NSNumber(value: bookmark.time), previewProvider: nil) { [weak self] _ in
-            let read = UIAction(title: "开始阅读", image: UIImage(systemName: "book")) { [weak self] _ in
+            let read = UIAction(
+                title: NSLocalizedString(
+                    "all_bookmark.android.start_read", value: "开始阅读", comment: "Android start_read"),
+                image: UIImage(systemName: "book")
+            ) { [weak self] _ in
                 self?.openForReading(bookmark)
             }
             let edit = UIAction(title: L10n.Common.edit, image: UIImage(systemName: "square.and.pencil")) { [weak self] _ in

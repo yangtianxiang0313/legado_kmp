@@ -36,20 +36,22 @@ final class ReaderRestoreProgressDialogBodyView: UIView {
     private let scrollView = ReaderRestoreProgressDialogScrollView()
     private let scrollContent = UIView()
     private let actionsView = UIView()
-    private let cancelControl = ReaderRestoreProgressDialogAction(title: "否")
+    private let cancelControl = ReaderRestoreProgressDialogAction(
+        title: NSLocalizedString("common.no", value: "否", comment: "Android negative confirmation action"))
     private let confirmControl: ReaderRestoreProgressDialogAction
     private var scrollsChrome = false
     private let accessibilityIdentifierPrefix: String
     private let actionLayout: ReaderRestoreProgressDialogViewController.ActionLayout
 
     init(
-        title: String, message: String, confirmTitle: String = "是",
+        title: String, message: String,
+        confirmTitle: String = NSLocalizedString("common.yes", value: "是", comment: "Android affirmative confirmation action"),
         accessibilityIdentifierPrefix: String = "reader.restoreProgress",
         actionLayout: ReaderRestoreProgressDialogViewController.ActionLayout = .yesNo
     ) {
         self.accessibilityIdentifierPrefix = accessibilityIdentifierPrefix
         self.actionLayout = actionLayout
-        confirmControl = ReaderRestoreProgressDialogAction(title: actionLayout == .yesNo ? confirmTitle : "重试")
+        confirmControl = ReaderRestoreProgressDialogAction(title: actionLayout == .yesNo ? confirmTitle : L10n.Common.retry)
         super.init(frame: .zero)
         // applyTint uses ThemeStore.backgroundColor / accentColor and a 3dp filletBackground.
         backgroundColor = AndroidReplicaTheme.background

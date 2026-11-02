@@ -4,14 +4,15 @@ import shared
 /// TitleBar / AppCompat Toolbar slots, without a promoted export action.
 final class AllBookmarkToolbarView: NavigationToolbarView {
     static let title = NSLocalizedString("all_bookmark.android.title", value: "所有书签", comment: "Legado all_bookmark")
-    let backButton = UIButton(type: .custom)
-    let moreButton = UIButton(type: .custom)
+    let backButton: ReaderMenuPressButton = AllBookmarkToolbarButton(type: .custom)
+    let moreButton: ReaderMenuPressButton = AllBookmarkToolbarButton(type: .custom)
     private let titleLabel = UILabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = AndroidReplicaTheme.toolbarBackground
         backButton.setImage(ReaderMenuAndroidIcon.back.image(), for: .normal)
+        backButton.feedbackRadius = 20
         moreButton.setImage(ReaderMenuAndroidIcon.more.image(), for: .normal)
         backButton.accessibilityLabel = L10n.Reader.backAction
         backButton.accessibilityIdentifier = UIIdentifiers.Common.drillDownBackButton
@@ -21,6 +22,9 @@ final class AllBookmarkToolbarView: NavigationToolbarView {
             button.configuration = nil
             button.automaticallyUpdatesConfiguration = false
             button.tintColor = AndroidReplicaTheme.toolbarText
+            button.feedbackColor = UIColor { traits in
+                ReaderMenuToolbarInteraction.feedbackColor(for: AndroidReplicaTheme.toolbarText, traits: traits)
+            }
             button.imageView?.contentMode = .center
             button.addInteraction(UIToolTipInteraction(defaultToolTip: button.accessibilityLabel ?? ""))
         }
@@ -67,17 +71,23 @@ final class AllBookmarkToolbarView: NavigationToolbarView {
     }
 
     private func applyFont() {
-        titleLabel.font = UIFontMetrics(forTextStyle: .headline).scaledFont(
-            for: .systemFont(ofSize: 20, weight: .medium), maximumPointSize: 32, compatibleWith: traitCollection)
+        let size = min(32, UIFontMetrics(forTextStyle: .headline).scaledValue(for: 20, compatibleWith: traitCollection))
+        titleLabel.font = ReaderAndroidDefaultFont.font(size: size, weight: 500) ?? .systemFont(ofSize: size, weight: .medium)
+    }
+}
+
+private final class AllBookmarkToolbarButton: ReaderMenuPressButton {
+    override var isEnabled: Bool {
+        didSet { alpha = isEnabled ? 1 : 0.38 }
     }
 }
 
 /// item_bookmark.xml: 8dp outer padding, 4dp per single-line TextView.
 final class AndroidReplicaAllBookmarkCell: UITableViewCell {
     static let reuseIdentifier = "AndroidReplicaAllBookmarkCell"
-    private let chapterLabel = UILabel()
-    private let bookTextLabel = UILabel()
-    private let noteLabel = UILabel()
+    private let chapterLabel = AndroidExploreTextLabel()
+    private let bookTextLabel = AndroidExploreTextLabel()
+    private let noteLabel = AndroidExploreTextLabel()
     private let textStack = UIStackView()
     private lazy var bookTextRow = paddedRow(for: bookTextLabel)
     private lazy var noteRow = paddedRow(for: noteLabel)
@@ -130,7 +140,8 @@ final class AndroidReplicaAllBookmarkCell: UITableViewCell {
             label.textColor = AndroidReplicaTheme.secondaryText
             label.numberOfLines = 1
             label.lineBreakMode = .byTruncatingTail
-            label.adjustsFontForContentSizeCategory = true
+            // Scale explicitly without replacing the file-backed Android font.
+            label.adjustsFontForContentSizeCategory = false
             label.isAccessibilityElement = false
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
@@ -167,16 +178,16 @@ final class AndroidReplicaAllBookmarkCell: UITableViewCell {
     }
 
     private func applyFonts() {
-        chapterLabel.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
-            for: .systemFont(ofSize: 14), compatibleWith: traitCollection)
+        chapterLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
         for label in [bookTextLabel, noteLabel] {
-            label.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(
-                for: .systemFont(ofSize: 12), compatibleWith: traitCollection)
+            label.font = ReaderAndroidDefaultFont.scaledFont(
+                size: 12, textStyle: .caption1, compatibleWith: traitCollection)
         }
     }
 
     private func singleLineText(_ text: String) -> String {
-        let line = text.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: "")
+        let line = text.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: "\u{FEFF}")
         // TextView still measures one line when chapterName is empty.
         return line.isEmpty ? " " : line
     }
@@ -216,7 +227,7 @@ final class AndroidReplicaBookmarkSectionHeader: UIView {
     }
 
     private func applyFont() {
-        label.font = UIFontMetrics(forTextStyle: .body).scaledFont(
-            for: .systemFont(ofSize: 16), compatibleWith: traitCollection)
+        label.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 16, textStyle: .body, compatibleWith: traitCollection)
     }
 }

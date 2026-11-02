@@ -67,6 +67,11 @@ final class ReadRecordViewController: UIViewController, NavigationCustomToolbarP
         menus.refreshLayout()
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyStatusTypography()
+    }
+
     deinit {
         loadTask?.cancel()
         NotificationCenter.default.removeObserver(self)
@@ -99,8 +104,7 @@ final class ReadRecordViewController: UIViewController, NavigationCustomToolbarP
         table.keyboardDismissMode = .onDrag
         table.register(ReadRecordTableViewCell.self, forCellReuseIdentifier: ReadRecordTableViewCell.reuseIdentifier)
         table.accessibilityIdentifier = "readRecord.table"
-        status.titleLabel?.font = ReaderAndroidDefaultFont.scaledFont(
-            size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
+        applyStatusTypography()
         status.titleLabel?.numberOfLines = 0
         status.setTitleColor(AndroidReplicaTheme.secondaryText, for: .normal)
         status.addTarget(self, action: #selector(retry), for: .touchUpInside)
@@ -128,6 +132,11 @@ final class ReadRecordViewController: UIViewController, NavigationCustomToolbarP
             spinner.centerYAnchor.constraint(equalTo: table.centerYAnchor),
         ])
         renderSummary()
+    }
+
+    private func applyStatusTypography() {
+        status.titleLabel?.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
     }
 
     @objc private func retry() { reload() }
@@ -194,7 +203,11 @@ final class ReadRecordViewController: UIViewController, NavigationCustomToolbarP
 
     private func showSort() {
         guard canUsePage, !loading else { return }
-        let titles = ["名称排序", "阅读时长排序", "阅读时间排序"]
+        let titles = [
+            NSLocalizedString("readRecord.sort.name", value: "名称排序", comment: "Android sort_by_name"),
+            NSLocalizedString("readRecord.sort.duration", value: "阅读时长排序", comment: "Android reading_time_sort"),
+            NSLocalizedString("readRecord.sort.lastRead", value: "阅读时间排序", comment: "Android last_read_time_sort"),
+        ]
         menus.showSort(
             anchor: toolbar.sortButton,
             items: titles.enumerated().map { index, title in
@@ -214,7 +227,12 @@ final class ReadRecordViewController: UIViewController, NavigationCustomToolbarP
         guard canUsePage, !loading else { return }
         menus.showSort(
             anchor: toolbar.moreButton,
-            items: [.init(id: "readRecord.enabled", title: "开启记录", selection: .checkbox, isSelected: recordingEnabled)]
+            items: [
+                .init(
+                    id: "readRecord.enabled",
+                    title: NSLocalizedString("readRecord.enabled", value: "开启记录", comment: "Android enable_record"),
+                    selection: .checkbox, isSelected: recordingEnabled)
+            ]
         ) { [weak self] _ in
             guard let self, let facade = self.facade else { return }
             let enabled = !self.recordingEnabled
@@ -244,7 +262,13 @@ final class ReadRecordViewController: UIViewController, NavigationCustomToolbarP
         guard canUsePage, !loading, !covered else { return }
         let id = generation
         let dialog = ReaderRestoreProgressDialogViewController(
-            title: "删除", message: bookName.map { "是否确认删除 \($0)？" } ?? "是否确认删除？",
+            title: NSLocalizedString("readRecord.delete.title", value: "删除", comment: "Android delete"),
+            message: bookName.map {
+                String(
+                    format: NSLocalizedString(
+                        "readRecord.delete.confirmNamed", value: "是否确认删除 %@？", comment: "Android sure_del_any; book name"),
+                    $0)
+            } ?? NSLocalizedString("readRecord.delete.confirm", value: "是否确认删除？", comment: "Android sure_del"),
             accessibilityIdentifierPrefix: "readRecord.delete"
         ) { [weak self] approved in
             guard approved, let self, self.generation == id, self.canUsePage, let facade = self.facade else { return }
@@ -342,11 +366,29 @@ final class ReadRecordViewController: UIViewController, NavigationCustomToolbarP
 enum ReadRecordPresentation {
     static func duration(_ milliseconds: Int64) -> String {
         let seconds = max(milliseconds, 0) / 1000
+        let secondFormat = NSLocalizedString(
+            "readRecord.duration.second", value: "%lld秒", comment: "Reading duration seconds; short unit")
         let units: [(Int64, String)] = [
-            (seconds / 86400, "天"), ((seconds % 86400) / 3600, "小时"), ((seconds % 3600) / 60, "分钟"), (seconds % 60, "秒"),
+            (
+                seconds / 86400,
+                NSLocalizedString("readRecord.duration.day", value: "%lld天", comment: "Reading duration days; short unit")
+            ),
+            (
+                (seconds % 86400) / 3600,
+                NSLocalizedString("readRecord.duration.hour", value: "%lld小时", comment: "Reading duration hours; short unit")
+            ),
+            (
+                (seconds % 3600) / 60,
+                NSLocalizedString("readRecord.duration.minute", value: "%lld分钟", comment: "Reading duration minutes; short unit")
+            ),
+            (seconds % 60, secondFormat),
         ]
-        let value = units.filter { $0.0 > 0 }.map { "\($0.0)\($0.1)" }.joined()
-        return value.isEmpty ? "0秒" : value
+        let joinFormat = NSLocalizedString(
+            "readRecord.duration.join", value: "%@%@", comment: "Join duration units; no space in Chinese, space in English")
+        let values = units.filter { $0.0 > 0 }.map { String(format: $0.1, $0.0) }
+        return values.dropFirst().reduce(values.first ?? String(format: secondFormat, Int64(0))) {
+            String(format: joinFormat, $0, $1)
+        }
     }
 
     static func date(_ milliseconds: Int64) -> String {

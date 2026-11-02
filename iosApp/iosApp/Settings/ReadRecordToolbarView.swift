@@ -2,10 +2,10 @@ import UIKit
 
 // Legado 5f5d31404: view_search.xml / book_read_record.xml.
 final class ReadRecordToolbarView: NavigationToolbarView {
-    let backButton: UIButton = ReadRecordToolbarButton(type: .custom)
+    let backButton: ReaderMenuPressButton = ReadRecordToolbarButton(type: .custom)
     let searchField: UITextField = ReadRecordSearchTextField(frame: .zero)
-    let sortButton: UIButton = ReadRecordToolbarButton(type: .custom)
-    let moreButton: UIButton = ReadRecordToolbarButton(type: .custom)
+    let sortButton: ReaderMenuPressButton = ReadRecordToolbarButton(type: .custom)
+    let moreButton: ReaderMenuPressButton = ReadRecordToolbarButton(type: .custom)
 
     var onBack: (() -> Void)?
     var onQueryChange: ((String) -> Void)?
@@ -50,6 +50,7 @@ final class ReadRecordToolbarView: NavigationToolbarView {
         configure(
             backButton, image: ReaderMenuAndroidIcon.back.image(), label: L10n.Reader.backAction,
             identifier: "readRecord.back", action: #selector(backTapped))
+        backButton.feedbackRadius = 20
         configure(
             sortButton, image: Self.sortImage, label: L10n.Bookshelf.sortMenuTitle,
             identifier: "readRecord.sort", action: #selector(sortTapped))
@@ -234,7 +235,9 @@ final class ReadRecordToolbarView: NavigationToolbarView {
         applyPalette()
     }
 
-    private func configure(_ button: UIButton, image: UIImage?, label: String, identifier: String, action: Selector) {
+    private func configure(
+        _ button: ReaderMenuPressButton, image: UIImage?, label: String, identifier: String, action: Selector
+    ) {
         button.configuration = nil
         button.adjustsImageWhenHighlighted = false
         button.adjustsImageWhenDisabled = false
@@ -262,6 +265,9 @@ final class ReadRecordToolbarView: NavigationToolbarView {
         let light = Self.isLight(primary)
         let textColor = UIColor(white: light ? 0 : 1, alpha: light ? 222.0 / 255 : 1)
         let iconColor = UIColor(white: light ? 0 : 1, alpha: light ? 138.0 / 255 : 179.0 / 255)
+        for button in [backButton, sortButton, moreButton, clearButton, submitButton] {
+            button.feedbackColor = ReaderMenuToolbarInteraction.feedbackColor(for: textColor, traits: traitCollection)
+        }
         for button in [backButton, sortButton, moreButton] { button.tintColor = iconColor }
         clearButton.tintColor = textColor
         submitButton.tintColor = textColor
@@ -379,11 +385,7 @@ final class ReadRecordToolbarView: NavigationToolbarView {
     }
 }
 
-private final class ReadRecordToolbarButton: UIButton {
-    override var isHighlighted: Bool {
-        didSet { backgroundColor = isHighlighted && isEnabled ? tintColor.withAlphaComponent(0.12) : .clear }
-    }
-
+private final class ReadRecordToolbarButton: ReaderMenuPressButton {
     override var isEnabled: Bool {
         didSet { alpha = isEnabled ? 1 : 0.38 }
     }

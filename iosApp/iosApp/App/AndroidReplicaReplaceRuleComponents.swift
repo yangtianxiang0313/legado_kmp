@@ -1,5 +1,5 @@
-import shared
 import UIKit
+import shared
 
 final class AndroidReplicaReplaceRuleCell: UITableViewCell {
     static let reuseIdentifier = "AndroidReplicaReplaceRuleCell"
@@ -11,13 +11,13 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
 
     var moreMenuAnchor: UIView? { moreButton }
 
-    private let backgroundSelectionControl = UIControl()
-    private let selectionButton = UIButton(type: .custom)
+    private let backgroundSelectionControl = ReaderMenuPressButton(frame: .zero)
+    private let selectionButton = ExploreAndroidSelectableButton(frame: .zero)
     private let selectionImageView = UIImageView()
     private let titleLabel = UILabel()
-    private let enabledSwitch = UISwitch()
-    private let editButton = UIButton(type: .system)
-    private let moreButton = UIButton(type: .system)
+    private let enabledSwitch = ReaderAndroidSwitchControl(frame: .zero)
+    private let editButton = ReaderMenuPressButton(frame: .zero)
+    private let moreButton = ReaderMenuPressButton(frame: .zero)
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -35,16 +35,38 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
         onMore = nil
         onEdit = nil
         onSelect = nil
-        cancelControlTracking()
+        cancelPendingInteraction()
         titleLabel.text = nil
+        selectionImageView.image = nil
         selectionButton.accessibilityLabel = nil
         selectionButton.accessibilityValue = nil
         selectionButton.accessibilityTraits = .button
+        for control in [selectionButton, enabledSwitch, editButton, moreButton] {
+            control.accessibilityIdentifier = nil
+            control.accessibilityLabel = nil
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // CompoundButton's control background follows its 32dp drawable, including RTL.
+        let rect = selectionImageView.frame
+        selectionButton.feedbackInsets = UIEdgeInsets(
+            top: rect.minY, left: rect.minX,
+            bottom: selectionButton.bounds.height - rect.maxY,
+            right: selectionButton.bounds.width - rect.maxX)
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        if newWindow !== window { cancelPendingInteraction() }
+        super.willMove(toWindow: newWindow)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
+        cancelPendingInteraction()
         applyFont()
+        applyFeedbackPalette()
     }
 
     private func configureViews() {
@@ -57,19 +79,20 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
 
         // Consume row-padding taps as selection too, never the caller's legacy row-edit action.
         backgroundSelectionControl.isAccessibilityElement = false
+        backgroundSelectionControl.showsBorderlessFeedback = false
         backgroundSelectionControl.addTarget(self, action: #selector(selectionTapped), for: .touchUpInside)
         selectionButton.configuration = nil
+        selectionButton.usesToolbarPalette = false
         selectionButton.isAccessibilityElement = true
         selectionButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         selectionButton.addTarget(self, action: #selector(selectionTapped), for: .touchUpInside)
 
         selectionImageView.contentMode = .scaleAspectFit
-        selectionImageView.preferredSymbolConfiguration = .init(pointSize: 22, weight: .regular)
         titleLabel.textColor = AndroidReplicaTheme.primaryText
         titleLabel.numberOfLines = 1
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.textAlignment = .natural
-        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.adjustsFontForContentSizeCategory = false
         titleLabel.adjustsFontSizeToFitWidth = false
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -86,8 +109,7 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
         enabledSwitch.addTarget(self, action: #selector(toggleChanged), for: .valueChanged)
         configureActionButton(
             editButton,
-            image: UIImage(named: "BookDetailAndroidEdit")?.withRenderingMode(.alwaysTemplate)
-                ?? UIImage(systemName: "square.and.pencil"),
+            image: UIImage(named: "BookDetailAndroidEdit")?.withRenderingMode(.alwaysTemplate),
             title: L10n.ReplaceRule.editAction, action: #selector(editTapped))
         configureActionButton(
             moreButton, image: ReaderMenuAndroidIcon.more.image(),
@@ -99,48 +121,51 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
         }
 
         // item_replace_rule.xml: 16dp horizontal / 8dp vertical padding, 36dp actions.
-        // Text yields horizontally; the checkbox, switch and action targets never shrink.
+        // Outer anchors are physical left/right; only the CheckBox's contents follow RTL.
         NSLayoutConstraint.activate([
-            backgroundSelectionControl.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            backgroundSelectionControl.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            backgroundSelectionControl.leftAnchor.constraint(equalTo: contentView.leftAnchor),
+            backgroundSelectionControl.rightAnchor.constraint(equalTo: contentView.rightAnchor),
             backgroundSelectionControl.topAnchor.constraint(equalTo: contentView.topAnchor),
             backgroundSelectionControl.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            selectionButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            selectionButton.leftAnchor.constraint(equalTo: contentView.leftAnchor, constant: 16),
             selectionButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             selectionButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
             selectionButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
-            selectionButton.trailingAnchor.constraint(equalTo: enabledSwitch.leadingAnchor, constant: -6),
+            selectionButton.rightAnchor.constraint(equalTo: enabledSwitch.leftAnchor, constant: -6),
             selectionImageView.leadingAnchor.constraint(equalTo: selectionButton.leadingAnchor),
             selectionImageView.centerYAnchor.constraint(equalTo: selectionButton.centerYAnchor),
-            selectionImageView.widthAnchor.constraint(equalToConstant: 24),
-            selectionImageView.heightAnchor.constraint(equalToConstant: 24),
-            titleLabel.leadingAnchor.constraint(equalTo: selectionImageView.trailingAnchor, constant: 8),
+            selectionImageView.widthAnchor.constraint(equalToConstant: 32),
+            selectionImageView.heightAnchor.constraint(equalToConstant: 32),
+            titleLabel.leadingAnchor.constraint(equalTo: selectionImageView.trailingAnchor),
             titleLabel.trailingAnchor.constraint(equalTo: selectionButton.trailingAnchor),
             titleLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
             titleLabel.centerYAnchor.constraint(equalTo: selectionButton.centerYAnchor),
             titleLabel.topAnchor.constraint(greaterThanOrEqualTo: selectionButton.topAnchor),
             titleLabel.bottomAnchor.constraint(lessThanOrEqualTo: selectionButton.bottomAnchor),
             enabledSwitch.centerYAnchor.constraint(equalTo: selectionButton.centerYAnchor),
+            enabledSwitch.widthAnchor.constraint(equalToConstant: 47),
+            enabledSwitch.heightAnchor.constraint(equalToConstant: 27),
             enabledSwitch.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 8),
             enabledSwitch.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8),
-            enabledSwitch.trailingAnchor.constraint(equalTo: editButton.leadingAnchor, constant: -6),
+            enabledSwitch.rightAnchor.constraint(equalTo: editButton.leftAnchor, constant: -6),
             editButton.centerYAnchor.constraint(equalTo: selectionButton.centerYAnchor),
-            editButton.trailingAnchor.constraint(equalTo: moreButton.leadingAnchor),
+            editButton.rightAnchor.constraint(equalTo: moreButton.leftAnchor),
             editButton.widthAnchor.constraint(equalToConstant: 36),
             editButton.heightAnchor.constraint(equalToConstant: 36),
             moreButton.centerYAnchor.constraint(equalTo: selectionButton.centerYAnchor),
-            moreButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            moreButton.rightAnchor.constraint(equalTo: contentView.rightAnchor, constant: -16),
             moreButton.widthAnchor.constraint(equalToConstant: 36),
             moreButton.heightAnchor.constraint(equalToConstant: 36),
         ])
         contentView.accessibilityElements = [selectionButton, enabledSwitch, editButton, moreButton]
         applyFont()
+        applyFeedbackPalette()
     }
 
     private func configureActionButton(_ button: UIButton, image: UIImage?, title: String, action: Selector) {
         button.configuration = nil
         button.setImage(image, for: .normal)
-        button.setPreferredSymbolConfiguration(.init(pointSize: 22, weight: .regular), forImageIn: .normal)
+        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 6, bottom: 6, right: 6)
         button.imageView?.contentMode = .scaleAspectFit
         button.tintColor = AndroidReplicaTheme.primaryText
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -149,13 +174,20 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
     }
 
     private func applyFont() {
-        titleLabel.font = UIFontMetrics(forTextStyle: .body).scaledFont(
-            for: .systemFont(ofSize: 14), compatibleWith: traitCollection)
+        titleLabel.font = ReaderAndroidDefaultFont.scaledFont(
+            size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
         setNeedsLayout()
     }
 
+    private func applyFeedbackPalette() {
+        let color = ReaderMenuToolbarInteraction.feedbackColor(
+            for: AndroidReplicaTheme.primaryText, traits: traitCollection)
+        editButton.feedbackColor = color
+        moreButton.feedbackColor = color
+    }
+
     func configure(rule: ReplaceRule, selected: Bool, selectionMode _: Bool) {
-        cancelControlTracking()
+        cancelPendingInteraction()
         // Match ReplaceRule.getDisplayNameGroup(); do not substitute regex/pattern text.
         let group = rule.group ?? ""
         let name =
@@ -166,7 +198,7 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
             ? NSLocalizedString("replace_rule.unnamed", value: "未命名规则", comment: "Unnamed rule accessibility label")
             : name
         titleLabel.text = name
-        selectionImageView.image = UIImage(systemName: selected ? "checkmark.square.fill" : "square")
+        selectionImageView.image = selected ? ReplaceRuleEditorIcons.checked : ReplaceRuleEditorIcons.unchecked
         selectionImageView.tintColor = selected ? AndroidReplicaTheme.accent : AndroidReplicaTheme.secondaryText
         selectionButton.accessibilityTraits = selected ? [.button, .selected] : [.button]
         selectionButton.accessibilityLabel = accessibilityName
@@ -186,10 +218,12 @@ final class AndroidReplicaReplaceRuleCell: UITableViewCell {
         applyFont()
     }
 
-    private func cancelControlTracking() {
-        for control in [backgroundSelectionControl, selectionButton, enabledSwitch, editButton, moreButton] {
-            control.cancelTracking(with: nil)
-            control.isHighlighted = false
+    func cancelPendingInteraction() {
+        backgroundSelectionControl.cancelPendingActivation()
+        selectionButton.cancelPendingActivation()
+        enabledSwitch.cancelPendingTracking()
+        for button in [editButton, moreButton] {
+            button.cancelPendingActivation()
         }
     }
 
@@ -221,7 +255,9 @@ final class AndroidReplicaTextInputSheetViewController: UIViewController, UIText
     private let cancelButton = UIButton(type: .system)
     private let confirmButton = UIButton(type: .system)
 
-    init(titleText: String, placeholder: String, initialValue: String?, keyboardType: UIKeyboardType, completion: @escaping (String) -> Void) {
+    init(
+        titleText: String, placeholder: String, initialValue: String?, keyboardType: UIKeyboardType, completion: @escaping (String) -> Void
+    ) {
         self.titleText = titleText
         self.placeholder = placeholder
         self.initialValue = initialValue
@@ -248,12 +284,15 @@ final class AndroidReplicaTextInputSheetViewController: UIViewController, UIText
 
     private func configureViews() {
         titleLabel.text = titleText
-        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        titleLabel.font =
+            ReaderAndroidDefaultFont.font(size: 18, weight: 600)
+            ?? .systemFont(ofSize: 18, weight: .semibold)
         titleLabel.textColor = AndroidReplicaTheme.primaryText
 
         textField.placeholder = placeholder
         textField.text = initialValue
         textField.keyboardType = keyboardType
+        textField.font = ReaderAndroidDefaultFont.font(size: 17) ?? .systemFont(ofSize: 17)
         textField.returnKeyType = .done
         textField.delegate = self
         textField.autocorrectionType = .no
@@ -264,8 +303,10 @@ final class AndroidReplicaTextInputSheetViewController: UIViewController, UIText
         textField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
         textField.leftViewMode = .always
 
-        configureActionButton(cancelButton, title: L10n.Common.cancel, color: AndroidReplicaTheme.secondaryText, action: #selector(cancelTapped))
-        configureActionButton(confirmButton, title: L10n.Common.confirm, color: AndroidReplicaTheme.accent, action: #selector(confirmTapped))
+        configureActionButton(
+            cancelButton, title: L10n.Common.cancel, color: AndroidReplicaTheme.secondaryText, action: #selector(cancelTapped))
+        configureActionButton(
+            confirmButton, title: L10n.Common.confirm, color: AndroidReplicaTheme.accent, action: #selector(confirmTapped))
 
         let actionStack = UIStackView(arrangedSubviews: [cancelButton, confirmButton])
         actionStack.axis = .horizontal
@@ -300,6 +341,12 @@ final class AndroidReplicaTextInputSheetViewController: UIViewController, UIText
         configuration.baseForegroundColor = color
         configuration.baseBackgroundColor = AndroidReplicaTheme.menuBackground
         configuration.cornerStyle = .medium
+        let font = ReaderAndroidDefaultFont.font(size: 17) ?? .systemFont(ofSize: 17)
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = font
+            return attributes
+        }
         button.configuration = configuration
         button.addTarget(self, action: action, for: .touchUpInside)
     }
@@ -350,30 +397,36 @@ final class AndroidReplicaReplaceRuleImportPreviewSheetViewController: UIViewCon
 
     private func configureViews() {
         titleLabel.text = L10n.ReplaceRule.importPreviewTitle
-        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        titleLabel.font =
+            ReaderAndroidDefaultFont.font(size: 18, weight: 600)
+            ?? .systemFont(ofSize: 18, weight: .semibold)
         titleLabel.textColor = AndroidReplicaTheme.primaryText
 
         summaryLabel.text = L10n.ReplaceRule.importPreviewMessage(rules.count)
-        summaryLabel.font = .systemFont(ofSize: 13)
+        summaryLabel.font = ReaderAndroidDefaultFont.font(size: 13) ?? .systemFont(ofSize: 13)
         summaryLabel.textColor = AndroidReplicaTheme.secondaryText
 
         textView.text = previewText
         textView.isEditable = false
-        textView.font = .systemFont(ofSize: 14)
+        textView.font = ReaderAndroidDefaultFont.font(size: 14) ?? .systemFont(ofSize: 14)
         textView.textColor = AndroidReplicaTheme.primaryText
         textView.backgroundColor = AndroidReplicaTheme.menuBackground
         textView.layer.cornerRadius = 12
         textView.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 12, right: 10)
 
         groupField.placeholder = L10n.ReplaceRule.importGroupPlaceholder
+        groupField.font = ReaderAndroidDefaultFont.font(size: 17) ?? .systemFont(ofSize: 17)
         groupField.backgroundColor = AndroidReplicaTheme.menuBackground
         groupField.layer.cornerRadius = 12
         groupField.clearButtonMode = .whileEditing
         groupField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
         groupField.leftViewMode = .always
 
-        configureActionButton(cancelButton, title: L10n.Common.cancel, color: AndroidReplicaTheme.secondaryText, action: #selector(cancelTapped))
-        configureActionButton(confirmButton, title: L10n.ReplaceRule.importPreviewConfirm, color: AndroidReplicaTheme.accent, action: #selector(confirmTapped))
+        configureActionButton(
+            cancelButton, title: L10n.Common.cancel, color: AndroidReplicaTheme.secondaryText, action: #selector(cancelTapped))
+        configureActionButton(
+            confirmButton, title: L10n.ReplaceRule.importPreviewConfirm, color: AndroidReplicaTheme.accent, action: #selector(confirmTapped)
+        )
 
         let actionStack = UIStackView(arrangedSubviews: [cancelButton, confirmButton])
         actionStack.axis = .horizontal
@@ -431,6 +484,12 @@ final class AndroidReplicaReplaceRuleImportPreviewSheetViewController: UIViewCon
         configuration.baseForegroundColor = color
         configuration.baseBackgroundColor = AndroidReplicaTheme.menuBackground
         configuration.cornerStyle = .medium
+        let font = ReaderAndroidDefaultFont.font(size: 17) ?? .systemFont(ofSize: 17)
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = font
+            return attributes
+        }
         button.configuration = configuration
         button.addTarget(self, action: action, for: .touchUpInside)
     }
