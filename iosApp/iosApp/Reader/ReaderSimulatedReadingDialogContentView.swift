@@ -1,5 +1,14 @@
 import UIKit
 
+enum ReaderSimulationText {
+    static var title: String { NSLocalizedString("reader.simulated_reading.title", value: "模拟追读", comment: "") }
+    static var enabled: String { NSLocalizedString("reader.simulated_reading.enabled", value: "开关", comment: "") }
+    static var startDate: String { NSLocalizedString("reader.simulated_reading.start_date", value: "开始日期", comment: "") }
+    static var startChapter: String { NSLocalizedString("reader.simulated_reading.start_chapter", value: "起始章节", comment: "") }
+    static var dailyChapters: String { NSLocalizedString("reader.simulated_reading.daily_chapters", value: "日更章数", comment: "") }
+    static var selectDate: String { NSLocalizedString("reader.simulated_reading.select_date", value: "选择日期", comment: "") }
+}
+
 struct ReaderSimulatedReadingDraft: Equatable {
     var enabled: Bool
     var startDate: String
@@ -40,9 +49,9 @@ final class ReaderSimulatedReadingDialogContentView: UIView, UITextFieldDelegate
     private let dateControl: ReaderSimulatedReadingDateControl
     private let startInput: ReaderDownloadChoiceField
     private let dailyInput: ReaderDownloadChoiceField
-    private let cancelControl = BookshelfLayoutDialogAction(title: "取消")
+    private let cancelControl = BookshelfLayoutDialogAction(title: L10n.Common.cancel)
     // AlertBuilder.okButton uses android.R.string.ok, not the app's "确认" resource.
-    private let confirmControl = BookshelfLayoutDialogAction(title: "确定")
+    private let confirmControl = BookshelfLayoutDialogAction(title: L10n.Common.ok)
     private let scrollView = ReaderSimulatedReadingScrollView()
     private let formView = UIView()
     private let footerView = UIView()
@@ -71,14 +80,15 @@ final class ReaderSimulatedReadingDialogContentView: UIView, UITextFieldDelegate
         accessibilityViewIsModal = true
         accessibilityIdentifier = "reader.simulatedReading"
         let labels = [titleLabel, enabledLabel, dateLabel, startLabel, dailyLabel]
-        let titles = ["模拟追读", "开关", "开始日期", "起始章节", "日更章数"]
+        let titles = [
+            ReaderSimulationText.title, ReaderSimulationText.enabled, ReaderSimulationText.startDate,
+            ReaderSimulationText.startChapter, ReaderSimulationText.dailyChapters,
+        ]
         for (label, text) in zip(labels, titles) {
             BookshelfLayoutDialogStyle.configure(label, text: text, color: AndroidReplicaTheme.primaryText)
-            label.lineBreakMode = .byCharWrapping
         }
         titleLabel.accessibilityTraits = .header
-        titleLabel.numberOfLines = 1
-        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.numberOfLines = 0
         titleLabel.accessibilityIdentifier = "reader.simulatedReading.title"
         // Each input exposes its original identity rather than a second spoken label beside it.
         for label in [enabledLabel, dateLabel, startLabel, dailyLabel] { label.isAccessibilityElement = false }
@@ -88,18 +98,18 @@ final class ReaderSimulatedReadingDialogContentView: UIView, UITextFieldDelegate
         statusLabel.accessibilityIdentifier = "reader.simulatedReading.status"
 
         enabledControl.setOn(draft.enabled, animated: false)
-        enabledControl.accessibilityLabel = "开关"
+        enabledControl.accessibilityLabel = ReaderSimulationText.enabled
         enabledControl.accessibilityIdentifier = "reader.simulatedReading.enabled"
         enabledControl.addTarget(self, action: #selector(changeEnabled), for: .valueChanged)
         dateControl.setDate(draft.startDate)
         dateControl.accessibilityIdentifier = "reader.simulatedReading.startDate"
         dateControl.addTarget(self, action: #selector(pickDate), for: .touchUpInside)
-        startInput.placeholder = "开始"
+        startInput.placeholder = NSLocalizedString("reader.simulated_reading.start_hint", value: "开始", comment: "")
         dailyInput.placeholder = "3"
         dailyInput.textAlignment = .center
         for (field, text, label, identifier) in [
-            (startInput, draft.startChapter, "起始章节", "startChapter"),
-            (dailyInput, draft.dailyChapters, "日更章数", "dailyChapters"),
+            (startInput, draft.startChapter, ReaderSimulationText.startChapter, "startChapter"),
+            (dailyInput, draft.dailyChapters, ReaderSimulationText.dailyChapters, "dailyChapters"),
         ] {
             // Imported defaults remain exact, including zero, leading zeroes and empty strings.
             field.text = text
@@ -395,9 +405,12 @@ final class ReaderSimulatedReadingDialogContentView: UIView, UITextFieldDelegate
     }
 
     private func numericWidth(_ field: ReaderDownloadChoiceField) -> CGFloat {
-        // Explicit XML widths win over minWidth; grow only with the user's font scale.
         let original: CGFloat = field === startInput ? 47 : 42
-        return original * max(1, (field.font?.pointSize ?? 14) / 14)
+        let font = field.font ?? .systemFont(ofSize: 14)
+        let value = field.text?.isEmpty == false ? field.text ?? "" : field.placeholder ?? ""
+        // Keep XML sizing for short values; UIKit's text rect needs 5pt on each side.
+        let contentWidth = (value as NSString).size(withAttributes: [.font: font]).width + 10
+        return max(original * max(1, font.pointSize / 14), rounded(contentWidth))
     }
 
     private func naturalWidth(_ label: UILabel) -> CGFloat {
@@ -566,7 +579,7 @@ private final class ReaderSimulatedReadingDateControl: UIControl {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        BookshelfLayoutDialogStyle.configure(label, text: "Select date", color: AndroidReplicaTheme.secondaryText)
+        BookshelfLayoutDialogStyle.configure(label, text: ReaderSimulationText.selectDate, color: AndroidReplicaTheme.secondaryText)
         label.lineBreakMode = .byCharWrapping
         label.isAccessibilityElement = false
         underline.isUserInteractionEnabled = false
@@ -574,7 +587,7 @@ private final class ReaderSimulatedReadingDateControl: UIControl {
         addSubview(label)
         addSubview(underline)
         isAccessibilityElement = true
-        accessibilityLabel = "开始日期"
+        accessibilityLabel = ReaderSimulationText.startDate
         accessibilityTraits = .button
         updateAppearance()
     }
@@ -598,9 +611,9 @@ private final class ReaderSimulatedReadingDateControl: UIControl {
 
     func setDate(_ iso: String) {
         isoDate = iso
-        label.text = iso.isEmpty ? "Select date" : iso
+        label.text = iso.isEmpty ? ReaderSimulationText.selectDate : iso
         label.textColor = iso.isEmpty ? AndroidReplicaTheme.secondaryText : AndroidReplicaTheme.primaryText
-        accessibilityValue = iso.isEmpty ? "Select date" : iso
+        accessibilityValue = iso.isEmpty ? ReaderSimulationText.selectDate : iso
         setNeedsLayout()
     }
 

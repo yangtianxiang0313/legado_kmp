@@ -62,7 +62,7 @@ final class ReaderChapterTitleDialogViewController: UIViewController,
         self.onSave = onSave
         bodyView = ReaderChapterTitleDialogBodyView(text: text)
         super.init(nibName: nil, bundle: nil)
-        title = "编辑"
+        title = L10n.Common.edit
         modalPresentationStyle = .overFullScreen
         modalTransitionStyle = .crossDissolve
         isModalInPresentation = true
@@ -76,11 +76,15 @@ final class ReaderChapterTitleDialogViewController: UIViewController,
     override var canBecomeFirstResponder: Bool { true }
 
     override var keyCommands: [UIKeyCommand]? {
-        [
-            UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(handleEscape(_:))),
-            UIKeyCommand(input: ".", modifierFlags: .command, action: #selector(cancel(_:))),
-        ].map { command in
-            command.discoverabilityTitle = "取消"
+        let escapeCommand = UIKeyCommand(
+            input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(handleEscape(_:)))
+        escapeCommand.discoverabilityTitle =
+            escapeDismissesKeyboard
+            ? NSLocalizedString("keyboard.dismiss", value: "收起键盘", comment: "Dismiss the title editor keyboard")
+            : L10n.Common.cancel
+        let cancelCommand = UIKeyCommand(input: ".", modifierFlags: .command, action: #selector(cancel(_:)))
+        cancelCommand.discoverabilityTitle = L10n.Common.cancel
+        return [escapeCommand, cancelCommand].map { command in
             command.wantsPriorityOverSystemBehavior = true
             return command
         }
@@ -489,11 +493,15 @@ final class ReaderChapterTitleDialogViewController: UIViewController,
         cancel(sender)
     }
 
+    private var escapeDismissesKeyboard: Bool {
+        guard let view = viewIfLoaded else { return false }
+        return bodyView.editor.isFirstResponder
+            && view.keyboardLayoutGuide.layoutFrame.minY < view.safeAreaLayoutGuide.layoutFrame.maxY
+    }
+
     @objc private func handleEscape(_ sender: Any?) {
         guard canCancel else { return }
-        if bodyView.editor.isFirstResponder,
-            view.keyboardLayoutGuide.layoutFrame.minY < view.safeAreaLayoutGuide.layoutFrame.maxY
-        {
+        if escapeDismissesKeyboard {
             view.endEditing(true)
             becomeFirstResponder()
             return

@@ -25,6 +25,10 @@ class ReaderBookChoiceDialogViewController: UIViewController {
     private var onSelect: ((Int) -> Void)?
     private var phase: Phase = .appearing
     private var isVisible = false
+    private var hasAppeared = false
+    private let ownership = ReaderBookDialogOwnership()
+    private var pendingSelection: Int?
+    private var deliveryRevoked = false
     private var scrollHeaderHeight: CGFloat = 0
     private let outsideControl = UIControl()
     private let dialogView = UIView()
@@ -59,7 +63,7 @@ class ReaderBookChoiceDialogViewController: UIViewController {
     override var canBecomeFirstResponder: Bool { true }
 
     override var keyCommands: [UIKeyCommand]? {
-        guard case .ready = phase else { return nil }
+        guard canInteract else { return nil }
         let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
         escape.discoverabilityTitle = L10n.Common.cancel
         escape.wantsPriorityOverSystemBehavior = true
@@ -70,27 +74,46 @@ class ReaderBookChoiceDialogViewController: UIViewController {
         super.viewDidLoad()
         configureViews()
         updateFonts()
+        for name in ReaderBookDialogOwnership.environmentNotifications {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(environmentChanged(_:)), name: name, object: nil)
+        }
         updateInteraction()
+    }
+
+    override func loadView() {
+        let root = ReaderBookChoiceRootView()
+        root.onDetach = { [weak self] in
+            DispatchQueue.main.async { [weak self] in self?.completeClose() }
+        }
+        view = root
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        guard case .appearing = phase else { return }
+        guard phase != .finished, phase != .closing else { return }
+        ownership.capture(from: self)
+        hasAppeared = true
+        // A covering child/external cancelled transition revokes only the old attempt.
+        // Its return starts a fresh ready phase with the original selection callback intact.
         phase = .ready
         isVisible = true
         updateInteraction()
-        becomeFirstResponder()
-        UIAccessibility.post(notification: .screenChanged, argument: titleLabel)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.updateInteraction()
+            guard self.canInteract else { return }
+            self.becomeFirstResponder()
+            UIAccessibility.post(notification: .screenChanged, argument: self.titleLabel)
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         isVisible = false
-        if case .closing = phase {
-            updateInteraction()
-        } else {
-            invalidateSelection()
-        }
+        if phase != .closing { invalidateSelection() }
+        updateInteraction()
+        resignFirstResponder()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -106,6 +129,10 @@ class ReaderBookChoiceDialogViewController: UIViewController {
     }
 
     override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
+        if presentedViewController != nil {
+            super.dismiss(animated: flag, completion: completion)
+            return
+        }
         invalidateSelection()
         super.dismiss(animated: flag) { [self] in
             completeClose()
@@ -114,9 +141,7 @@ class ReaderBookChoiceDialogViewController: UIViewController {
     }
 
     override func accessibilityPerformEscape() -> Bool {
-        guard canInteract else { return false }
         close(selectedIndex: nil)
-        return true
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -223,6 +248,12 @@ class ReaderBookChoiceDialogViewController: UIViewController {
             row.tag = index
             row.accessibilityIdentifier = "\(identifierPrefix).value.\(choice.accessibilityValue)"
             row.addTarget(self, action: #selector(selectRow(_:)), for: .touchUpInside)
+            row.onActivate = { [weak self, weak row] in
+                guard let self, let row, self.rows.indices.contains(row.tag), self.rows[row.tag] === row else {
+                    return false
+                }
+                return self.close(selectedIndex: row.tag)
+            }
             contentView.addSubview(row)
             return row
         }
@@ -246,33 +277,24 @@ class ReaderBookChoiceDialogViewController: UIViewController {
     private var canInteract: Bool {
         guard case .ready = phase, isVisible, !isBeingPresented, !isBeingDismissed,
             presentedViewController == nil, let presenter = presentingViewController,
-            let window = viewIfLoaded?.window, presenter.presentedViewController === self
+            let window = viewIfLoaded?.window, presenter.presentedViewController === self,
+            window === ownership.window, ownership.isCurrent(allowing: self)
         else { return false }
-        return isAvailablePresenter(presenter, in: window)
-    }
-
-    private func isAvailablePresenter(_ presenter: UIViewController, in window: UIWindow) -> Bool {
-        guard !window.isHidden, presenter.viewIfLoaded?.window === window else { return false }
-        var current: UIViewController? = presenter
-        while let controller = current {
-            guard !controller.isBeingDismissed, !controller.isMovingFromParent else { return false }
-            current = controller.parent
-        }
         return true
     }
 
     private func updateInteraction() {
-        let enabled: Bool
-        if case .ready = phase { enabled = isVisible } else { enabled = false }
+        let enabled = canInteract
         outsideControl.isEnabled = enabled
         scrollView.isUserInteractionEnabled = enabled
-        for row in rows { row.isEnabled = enabled }
+        for row in rows { row.isEnabled = enabled && ownership.matchesReaderIdentity }
     }
 
     private func invalidateSelection() {
         if case .finished = phase { return }
         phase = .cancelled
-        onSelect = nil
+        pendingSelection = nil
+        deliveryRevoked = true
         if isViewLoaded { updateInteraction() }
     }
 
@@ -285,31 +307,46 @@ class ReaderBookChoiceDialogViewController: UIViewController {
         close(selectedIndex: sender.tag)
     }
 
-    private func close(selectedIndex: Int?) {
-        guard canInteract, let presenter = presentingViewController, let window = viewIfLoaded?.window else { return }
+    @discardableResult
+    private func close(selectedIndex: Int?) -> Bool {
+        guard canInteract else { return false }
+        if let selectedIndex, !choices.indices.contains(selectedIndex) { return false }
+        if selectedIndex != nil, !ownership.matchesReaderIdentity { return false }
         phase = .closing
-        if selectedIndex == nil { onSelect = nil }
+        pendingSelection = selectedIndex
+        deliveryRevoked = false
         updateInteraction()
         resignFirstResponder()
-        super.dismiss(animated: !UIAccessibility.isReduceMotionEnabled) { [self, weak presenter, weak window] in
-            let maySelect: Bool
-            if case .closing = phase, let presenter, let window,
-                presenter.presentedViewController == nil, isAvailablePresenter(presenter, in: window)
-            {
-                maySelect = true
-            } else {
-                maySelect = false
-            }
-            completeClose(selectedIndex: maySelect ? selectedIndex : nil)
+        super.dismiss(animated: !UIAccessibility.isReduceMotionEnabled) { [self] in
+            completeClose()
         }
+        return true
     }
 
-    private func completeClose(selectedIndex: Int? = nil) {
+    @objc private func environmentChanged(_ notification: Notification) {
+        guard ownership.belongs(notification) else { return }
+        ownership.receive(notification)
+        if ReaderBookDialogOwnership.interruptionNotifications.contains(notification.name) {
+            pendingSelection = nil
+            deliveryRevoked = true
+        }
+        updateInteraction()
+        DispatchQueue.main.async { [weak self] in self?.updateInteraction() }
+    }
+
+    private func completeClose() {
         if case .finished = phase { return }
-        guard presentingViewController == nil, viewIfLoaded?.window == nil else { return }
+        guard hasAppeared, presentingViewController == nil, presentedViewController == nil, parent == nil,
+            viewIfLoaded?.window == nil, viewIfLoaded?.superview == nil
+        else { return }
+        let selectedIndex =
+            !deliveryRevoked && ownership.isCurrent() && ownership.matchesReaderIdentity
+            ? pendingSelection : nil
         let selectionCallback: ((Int) -> Void)?
         if case .closing = phase { selectionCallback = onSelect } else { selectionCallback = nil }
         phase = .finished
+        pendingSelection = nil
+        NotificationCenter.default.removeObserver(self)
         onSelect = nil
         let closeCallback = onClose
         onClose = nil
@@ -326,6 +363,7 @@ private final class ReaderBookChoiceScrollView: UIScrollView {
 }
 
 private final class ReaderBookChoiceRow: UIControl {
+    var onActivate: (() -> Bool)?
     private let label = UILabel()
 
     init(title: String) {
@@ -360,7 +398,10 @@ private final class ReaderBookChoiceRow: UIControl {
 
     override var isEnabled: Bool {
         didSet {
-            if !isEnabled { isHighlighted = false }
+            if !isEnabled {
+                cancelTracking(with: nil)
+                isHighlighted = false
+            }
             accessibilityTraits = isEnabled ? .button : [.button, .notEnabled]
         }
     }
@@ -379,12 +420,169 @@ private final class ReaderBookChoiceRow: UIControl {
 
     override func accessibilityActivate() -> Bool {
         guard isEnabled else { return false }
-        sendActions(for: .touchUpInside)
-        return true
+        return onActivate?() ?? false
     }
 
     func apply(font: UIFont) {
         label.font = font
         setNeedsLayout()
+    }
+}
+
+private final class ReaderBookChoiceRootView: UIView {
+    var onDetach: (() -> Void)?
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { onDetach?() }
+    }
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        if superview == nil { onDetach?() }
+    }
+}
+
+/// Original presenter and reader identity for the three per-book setting dialogs.
+@MainActor
+final class ReaderBookDialogOwnership {
+    static let interruptionNotifications: [Notification.Name] = [
+        UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification,
+        UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification,
+        UIWindow.didResignKeyNotification, UIWindow.didBecomeHiddenNotification,
+    ]
+    static let environmentNotifications =
+        interruptionNotifications + [
+            UIApplication.didBecomeActiveNotification, UIScene.didActivateNotification,
+            UIWindow.didBecomeKeyNotification, UIWindow.didBecomeVisibleNotification,
+        ]
+
+    private(set) weak var window: UIWindow?
+    private weak var scene: UIWindowScene?
+    private weak var presenter: UIViewController?
+    private weak var source: UIViewController?
+    private weak var root: UIViewController?
+    private var matchesReader: (() -> Bool)?
+    private var hasCaptured = false
+    private var appSuspended = false
+    private var sceneSuspended = false
+    private var keyWindowSuspended = false
+    private var windowHidden = false
+
+    func capture(from dialog: UIViewController) {
+        guard !hasCaptured, let presenter = dialog.presentingViewController,
+            let window = dialog.viewIfLoaded?.window
+        else { return }
+        hasCaptured = true
+        self.presenter = presenter
+        self.window = window
+        scene = window.windowScene
+        root = window.rootViewController
+        let source = currentSource(presenter)
+        self.source = source
+        if let reader = source as? ReaderContainerViewController {
+            let bookURL = reader.bookURL
+            let origin = reader.book?.origin
+            let index = reader.readerActionChapterIndex
+            let url = reader.readerActionChapterURL
+            matchesReader = { [weak reader] in
+                guard let reader else { return false }
+                return reader.bookURL == bookURL && reader.book?.origin == origin
+                    && reader.readerActionChapterIndex == index && reader.readerActionChapterURL == url
+            }
+        }
+    }
+
+    func belongs(_ notification: Notification) -> Bool {
+        if let changed = notification.object as? UIWindow { return changed === window }
+        if let changed = notification.object as? UIScene { return changed === scene }
+        return true
+    }
+
+    var matchesReaderIdentity: Bool { matchesReader?() ?? true }
+
+    func receive(_ notification: Notification) {
+        guard belongs(notification) else { return }
+        switch notification.name {
+        case UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification:
+            appSuspended = true
+        case UIApplication.didBecomeActiveNotification:
+            appSuspended = false
+        case UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification:
+            sceneSuspended = true
+        case UIScene.didActivateNotification:
+            sceneSuspended = false
+        case UIWindow.didResignKeyNotification:
+            keyWindowSuspended = true
+        case UIWindow.didBecomeKeyNotification:
+            keyWindowSuspended = false
+        case UIWindow.didBecomeHiddenNotification:
+            windowHidden = true
+        case UIWindow.didBecomeVisibleNotification:
+            windowHidden = false
+        default: break
+        }
+    }
+
+    var isEnvironmentAvailable: Bool {
+        guard !appSuspended, !sceneSuspended, !keyWindowSuspended, !windowHidden,
+            let window, let scene, !window.isHidden, window.alpha > 0, window.isKeyWindow,
+            window.windowScene === scene, scene.activationState == .foregroundActive,
+            UIApplication.shared.applicationState == .active, AppLockManager.shared.isUnlocked(in: window)
+        else { return false }
+        return true
+    }
+
+    func isCurrent(allowing dialog: UIViewController? = nil) -> Bool {
+        guard let window, let scene, let presenter, let source, let root,
+            isEnvironmentAvailable,
+            !window.isHidden, window.alpha > 0, window.isKeyWindow,
+            window.windowScene === scene, scene.activationState == .foregroundActive,
+            UIApplication.shared.applicationState == .active, AppLockManager.shared.isUnlocked(in: window),
+            window.rootViewController === root, currentSource(presenter) === source,
+            presenter.viewIfLoaded?.window === window, source.viewIfLoaded?.window === window
+        else { return false }
+        var current: UIViewController? = source
+        var expected: UIViewController?
+        var last: UIViewController?
+        while let controller = current {
+            guard !controller.isBeingPresented, !controller.isBeingDismissed,
+                !controller.isMovingFromParent, !controller.isMovingToParent
+            else { return false }
+            // UIKit can forward the same owned modal through its navigation container.
+            if let presented = controller.presentedViewController,
+                presented !== expected, presented !== dialog
+            {
+                return false
+            }
+            if let navigation = controller.parent as? UINavigationController,
+                navigation.topViewController !== controller
+            {
+                return false
+            }
+            if let tabs = controller.parent as? UITabBarController, tabs.selectedViewController !== controller {
+                return false
+            }
+            last = controller
+            if let parent = controller.parent {
+                expected = nil
+                current = parent
+            } else {
+                expected = controller
+                current = controller.presentingViewController
+            }
+        }
+        return last === root
+    }
+
+    private func currentSource(_ presenter: UIViewController) -> UIViewController {
+        var current = presenter
+        while true {
+            if let navigation = current as? UINavigationController, let top = navigation.topViewController {
+                current = top
+            } else if let tabs = current as? UITabBarController, let selected = tabs.selectedViewController {
+                current = selected
+            } else {
+                return current
+            }
+        }
     }
 }

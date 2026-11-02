@@ -46,7 +46,8 @@ final class ReaderBookSettingsCoordinator {
             switch self {
             case .imageStyle: return L10n.Reader.imageStyleUpdated
             case .charset: return L10n.Reader.charsetUpdated
-            case .simulation: return "模拟追读已更新"
+            case .simulation:
+                return NSLocalizedString("reader.simulation.updated", value: "模拟追读已更新", comment: "")
             }
         }
     }
@@ -233,9 +234,13 @@ final class ReaderBookSettingsCoordinator {
     }
 
     private func canUse(_ reader: ReaderContainerViewController) -> Bool {
-        !reader.isMovingFromParent && !reader.isBeingDismissed
+        guard let window = reader.viewIfLoaded?.window,
+            window.isKeyWindow, !window.isHidden,
+            window.windowScene?.activationState == .foregroundActive,
+            AppLockManager.shared.isUnlocked(in: window)
+        else { return false }
+        return !reader.isMovingFromParent && !reader.isBeingDismissed
             && reader.navigationController?.isBeingDismissed != true
             && reader.navigationController?.topViewController === reader
-            && reader.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive
     }
 }

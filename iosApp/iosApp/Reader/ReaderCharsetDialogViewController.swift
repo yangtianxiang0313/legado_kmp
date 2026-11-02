@@ -24,6 +24,7 @@ final class ReaderCharsetDialogViewController: UIViewController,
     private var hasBegunPresentation = false
     private var dismissalID: UUID?
     private var pendingConfirmation: String?
+    private let ownership = ReaderBookDialogOwnership()
 
     init(charset: String, onClose: (() -> Void)? = nil, onConfirm: @escaping (String) -> Void) {
         contentView = ReaderCharsetDialogContentView(charset: charset)
@@ -43,9 +44,9 @@ final class ReaderCharsetDialogViewController: UIViewController,
     override var canBecomeFirstResponder: Bool { true }
 
     override var keyCommands: [UIKeyCommand]? {
-        guard phase == .active else { return nil }
+        guard canInteract else { return nil }
         let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
-        escape.discoverabilityTitle = "取消"
+        escape.discoverabilityTitle = L10n.Common.cancel
         escape.wantsPriorityOverSystemBehavior = true
         return [escape]
     }
@@ -81,6 +82,10 @@ final class ReaderCharsetDialogViewController: UIViewController,
         ] {
             NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: name, object: nil)
         }
+        for name in ReaderBookDialogOwnership.environmentNotifications {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(environmentChanged(_:)), name: name, object: nil)
+        }
         updateInteraction()
     }
 
@@ -95,11 +100,17 @@ final class ReaderCharsetDialogViewController: UIViewController,
         guard phase != .finished, dismissalID == nil else { return }
         // An interactive external dismissal can be cancelled by UIKit.
         pendingConfirmation = nil
+        ownership.capture(from: self)
         phase = .active
         isVisible = true
         updateInteraction()
-        if !contentView.editor.isFirstResponder { becomeFirstResponder() }
-        UIAccessibility.post(notification: .screenChanged, argument: contentView.accessibilityHeading)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.updateInteraction()
+            guard self.canInteract else { return }
+            if !self.contentView.editor.isFirstResponder { self.becomeFirstResponder() }
+            UIAccessibility.post(notification: .screenChanged, argument: self.contentView.accessibilityHeading)
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -155,9 +166,7 @@ final class ReaderCharsetDialogViewController: UIViewController,
     }
 
     override func accessibilityPerformEscape() -> Bool {
-        guard canInteract else { return false }
         close(confirming: false)
-        return true
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -185,6 +194,8 @@ final class ReaderCharsetDialogViewController: UIViewController,
         contentView.beginEditing()
         requestCaretReveal()
     }
+
+    func textViewShouldBeginEditing(_: UITextView) -> Bool { canInteract }
 
     func textViewDidEndEditing(_: UITextView) {
         contentView.endEditing()
@@ -236,7 +247,8 @@ final class ReaderCharsetDialogViewController: UIViewController,
     private var canInteract: Bool {
         guard phase == .active, isVisible, !isBeingPresented, !isBeingDismissed,
             presentedViewController == nil, let presenter = presentingViewController,
-            presenter.presentedViewController === self, viewIfLoaded?.window != nil
+            presenter.presentedViewController === self, viewIfLoaded?.window === ownership.window,
+            ownership.isCurrent(allowing: self)
         else { return false }
         return !isPresentationBeingDismissed
     }
@@ -252,10 +264,9 @@ final class ReaderCharsetDialogViewController: UIViewController,
 
     private func updateInteraction() {
         guard isViewLoaded else { return }
-        // isBeingPresented can still be true inside viewDidAppear; handlers check it again at action time.
-        let enabled = phase == .active && isVisible && !isPresentationBeingDismissed
+        let enabled = canInteract
         outsideControl.isEnabled = enabled
-        contentView.setInteraction(enabled: enabled)
+        contentView.setInteraction(enabled: enabled, confirmEnabled: ownership.matchesReaderIdentity)
     }
 
     private func requestCaretReveal() {
@@ -277,8 +288,21 @@ final class ReaderCharsetDialogViewController: UIViewController,
         close(confirming: false)
     }
 
-    private func close(confirming: Bool) {
-        guard canInteract else { return }
+    @objc private func environmentChanged(_ notification: Notification) {
+        guard ownership.belongs(notification) else { return }
+        ownership.receive(notification)
+        if ReaderBookDialogOwnership.interruptionNotifications.contains(notification.name) {
+            pendingConfirmation = nil
+            view.endEditing(true)
+        }
+        updateInteraction()
+        DispatchQueue.main.async { [weak self] in self?.updateInteraction() }
+    }
+
+    @discardableResult
+    private func close(confirming: Bool) -> Bool {
+        guard canInteract else { return false }
+        if confirming, !ownership.matchesReaderIdentity { return false }
         let requestID = UUID()
         dismissalID = requestID
         phase = .closing
@@ -288,14 +312,17 @@ final class ReaderCharsetDialogViewController: UIViewController,
         if confirming { contentView.editor.unmarkText() }
         view.endEditing(true)
         resignFirstResponder()
-        guard dismissalID == requestID, phase == .closing else { return }
-        pendingConfirmation = confirming ? contentView.rawText : nil
+        guard dismissalID == requestID, phase == .closing else { return true }
+        pendingConfirmation =
+            confirming && ownership.isCurrent(allowing: self) && ownership.matchesReaderIdentity
+            ? contentView.rawText : nil
         super.dismiss(animated: !UIAccessibility.isReduceMotionEnabled) { [self] in
             // A later external dismiss invalidates this completion's submission.
             if dismissalID == requestID { dismissalID = nil }
             finishIfDetached()
             scheduleDetachmentCheck()
         }
+        return true
     }
 
     private func scheduleDetachmentCheck() {
@@ -304,7 +331,8 @@ final class ReaderCharsetDialogViewController: UIViewController,
 
     private func finishIfDetached() {
         guard hasBegunPresentation, phase != .finished, dismissalID == nil,
-            presentingViewController == nil, parent == nil, viewIfLoaded?.window == nil
+            presentingViewController == nil, presentedViewController == nil, parent == nil,
+            viewIfLoaded?.window == nil, viewIfLoaded?.superview == nil
         else { return }
         phase = .finished
         isVisible = false
@@ -316,7 +344,7 @@ final class ReaderCharsetDialogViewController: UIViewController,
         onConfirm = nil
         onClose = nil
         updateInteraction()
-        if let text { confirmCallback?(text) }
+        if let text, ownership.isCurrent(), ownership.matchesReaderIdentity { confirmCallback?(text) }
         closeCallback?()
     }
 }

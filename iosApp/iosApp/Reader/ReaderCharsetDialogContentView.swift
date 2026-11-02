@@ -21,9 +21,9 @@ final class ReaderCharsetDialogContentView: UIView, UIGestureRecognizerDelegate 
     private let formView = UIView()
     private let suggestionsView = UIView()
     private let footerView = UIView()
-    private let cancelControl = BookshelfLayoutDialogAction(title: "取消")
+    private let cancelControl = BookshelfLayoutDialogAction(title: L10n.Common.cancel)
     // AlertBuilder.okButton uses android.R.string.ok, not the app's "确认" resource.
-    private let confirmControl = BookshelfLayoutDialogAction(title: "确定")
+    private let confirmControl = BookshelfLayoutDialogAction(title: L10n.Common.ok)
     private let suggestionControls: [ReaderCharsetSuggestionControl]
     private var visibleIndices: [Int] = []
     private var offersSuggestions = false
@@ -38,11 +38,13 @@ final class ReaderCharsetDialogContentView: UIView, UIGestureRecognizerDelegate 
         layer.cornerRadius = 3
         clipsToBounds = true
         accessibilityViewIsModal = true
-        BookshelfLayoutDialogStyle.configure(titleLabel, text: "设置编码", color: AndroidReplicaTheme.primaryText)
-        titleLabel.lineBreakMode = .byCharWrapping
+        BookshelfLayoutDialogStyle.configure(titleLabel, text: L10n.Reader.setCharsetTitle, color: AndroidReplicaTheme.primaryText)
         titleLabel.accessibilityTraits = .header
         titleLabel.accessibilityIdentifier = "reader.charset.title"
-        BookshelfLayoutDialogStyle.configure(placeholderLabel, text: "charset", color: AndroidReplicaTheme.secondaryText)
+        BookshelfLayoutDialogStyle.configure(
+            placeholderLabel,
+            text: NSLocalizedString(
+                "reader.charset.input_hint", value: "charset", comment: "Android charset hint"), color: AndroidReplicaTheme.secondaryText)
         placeholderLabel.lineBreakMode = .byCharWrapping
         placeholderLabel.isAccessibilityElement = false
         editor.text = charset
@@ -69,7 +71,7 @@ final class ReaderCharsetDialogContentView: UIView, UIGestureRecognizerDelegate 
         editor.returnKeyType = .default
         editor.allowsEditingTextAttributes = false
         editor.dataDetectorTypes = []
-        editor.accessibilityLabel = "charset"
+        editor.accessibilityLabel = L10n.Reader.setCharsetTitle
         editor.accessibilityIdentifier = "reader.charset.input"
         let inputTap = UITapGestureRecognizer(target: self, action: #selector(showSuggestions))
         inputTap.delegate = self
@@ -128,11 +130,11 @@ final class ReaderCharsetDialogContentView: UIView, UIGestureRecognizerDelegate 
         revealCaretOnNextLayout()
     }
 
-    func setInteraction(enabled: Bool) {
+    func setInteraction(enabled: Bool, confirmEnabled: Bool = true) {
         isInteractionEnabled = enabled
         editor.isUserInteractionEnabled = enabled
         cancelControl.isEnabled = enabled
-        confirmControl.isEnabled = enabled
+        confirmControl.isEnabled = enabled && confirmEnabled
         for control in suggestionControls { control.isEnabled = enabled && editor.markedTextRange == nil }
         updateUnderline()
     }

@@ -41,14 +41,12 @@ final class ReaderChapterTitleDialogBodyView: UIView {
         layer.cornerRadius = 3
         clipsToBounds = true
         accessibilityViewIsModal = true
-        BookshelfLayoutDialogStyle.configure(titleLabel, text: "编辑", color: AndroidReplicaTheme.primaryText)
+        BookshelfLayoutDialogStyle.configure(titleLabel, text: L10n.Common.edit, color: AndroidReplicaTheme.primaryText)
         titleLabel.adjustsFontForContentSizeCategory = false
-        titleLabel.lineBreakMode = .byCharWrapping
         titleLabel.accessibilityTraits = .header
         titleLabel.accessibilityIdentifier = "reader.chapterTitleDialog.title"
         BookshelfLayoutDialogStyle.configure(errorLabel, text: "", color: .systemRed)
         errorLabel.adjustsFontForContentSizeCategory = false
-        errorLabel.lineBreakMode = .byCharWrapping
         errorLabel.isHidden = true
         errorLabel.accessibilityIdentifier = "reader.chapterTitleDialog.error"
 
@@ -76,7 +74,7 @@ final class ReaderChapterTitleDialogBodyView: UIView {
         editor.enablesReturnKeyAutomatically = false
         editor.allowsEditingTextAttributes = false
         editor.dataDetectorTypes = []
-        editor.accessibilityLabel = "编辑"
+        editor.accessibilityLabel = L10n.ReaderAppearance.tipSlotChapterTitle
         editor.accessibilityIdentifier = "reader.chapterTitleDialog.input"
         underline.isUserInteractionEnabled = false
         underline.isAccessibilityElement = false
@@ -132,7 +130,10 @@ final class ReaderChapterTitleDialogBodyView: UIView {
         let selectable = !saving
         if editor.isSelectable != selectable { editor.isSelectable = selectable }
         if confirmControl.isEnabled != confirmEnabled { confirmControl.isEnabled = confirmEnabled }
-        let saveStatus = saving ? "正在保存" : nil
+        let saveStatus =
+            saving
+            ? NSLocalizedString("source_import.preview.saving", value: "正在保存", comment: "Saving status for title confirmation")
+            : nil
         if confirmControl.accessibilityValue != saveStatus { confirmControl.accessibilityValue = saveStatus }
     }
 
@@ -279,11 +280,8 @@ private final class ReaderChapterTitleDialogConfirmControl: UIControl {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        label.text = "确定"
-        label.textColor = AndroidReplicaTheme.accent
+        BookshelfLayoutDialogStyle.configure(label, text: L10n.Common.ok, color: AndroidReplicaTheme.accent)
         label.textAlignment = .center
-        label.numberOfLines = 0
-        label.adjustsFontForContentSizeCategory = false
         label.isAccessibilityElement = false
         addSubview(label)
         isAccessibilityElement = true
@@ -298,11 +296,15 @@ private final class ReaderChapterTitleDialogConfirmControl: UIControl {
         didSet {
             label.alpha = isEnabled ? 1 : 0.38
             accessibilityTraits = isEnabled ? .button : [.button, .notEnabled]
+            if !isEnabled {
+                cancelTracking(with: nil)
+                isHighlighted = false
+            }
         }
     }
 
     override var isHighlighted: Bool {
-        didSet { backgroundColor = isHighlighted ? AndroidReplicaTheme.activeIndicator : .clear }
+        didSet { backgroundColor = isHighlighted && isEnabled ? AndroidReplicaTheme.activeIndicator : .clear }
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
