@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct SandboxFileEntry: Sendable {
@@ -61,7 +62,10 @@ final class SandboxFileReadLease: @unchecked Sendable {
 
     fileprivate func endReading(_ coordinator: NSFileCoordinator) {
         lock.lock()
-        guard reader === coordinator else { lock.unlock(); return }
+        guard reader === coordinator else {
+            lock.unlock()
+            return
+        }
         reader = nil
         closed = true
         let stop = accessing
@@ -91,7 +95,9 @@ actor SandboxFileStore {
         )
         .compactMap { url in
             let values = try url.resourceValues(forKeys: keys)
-            guard values.isSymbolicLink != true, values.isDirectory == true || values.isRegularFile == true else { return nil }
+            guard values.isSymbolicLink != true, values.isDirectory == true || values.isRegularFile == true else {
+                return nil
+            }
             return SandboxFileEntry(
                 url: url, isDirectory: values.isDirectory == true,
                 size: Int64(values.fileSize ?? 0), modified: values.contentModificationDate)
@@ -144,6 +150,18 @@ actor SandboxFileStore {
         try lease.beginReading(coordinator)
         defer { lease.endReading(coordinator) }
         guard source.isFileURL else { throw failure("无效的文件地址") }
+        try lease.checkCancellation()
+        // Coordination may open a FIFO before its accessor runs. Missing provider items must
+        // still reach coordination so the provider can materialize their regular file contents.
+        try source.withUnsafeFileSystemRepresentation { path in
+            guard let path else { throw failure("无效的文件地址") }
+            var status = stat()
+            if Darwin.lstat(path, &status) == 0 {
+                guard status.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else {
+                    throw failure("只能导入普通文件")
+                }
+            }
+        }
         try lease.checkCancellation()
         try manager.createDirectory(at: root, withIntermediateDirectories: true)
         let directory = try checked(directory)
