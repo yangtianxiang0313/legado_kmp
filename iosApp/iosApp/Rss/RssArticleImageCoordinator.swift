@@ -47,7 +47,8 @@ final class RssArticleImageCoordinator: NSObject {
         self.canUseActions = canUseActions
         super.init()
         NotificationCenter.default.addObserver(
-            self, selector: #selector(sceneEnteredBackground(_:)), name: UIScene.didEnterBackgroundNotification, object: nil)
+            self, selector: #selector(sceneEnteredBackground(_:)), name: UIScene.didEnterBackgroundNotification,
+            object: nil)
         NotificationCenter.default.addObserver(
             self, selector: #selector(applicationEnteredBackground), name: UIApplication.didEnterBackgroundNotification,
             object: nil)
@@ -93,14 +94,20 @@ final class RssArticleImageCoordinator: NSObject {
         watchVisibility(captured)
         let menu = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         let handle = makePresentation(menu, captured: captured)
-        for (title, destination) in [("保存到相册", Destination.photos), ("保存到文件", .files), ("系统分享", .share)] {
+        for (title, destination) in [
+            (L10n.RSS.imagePhotosDestination, Destination.photos),
+            (L10n.RSS.imageFilesDestination, .files),
+            (L10n.RSS.imageShareDestination, .share),
+        ] {
             menu.addAction(
                 UIAlertAction(title: title, style: .default) { [weak self, weak handle] _ in
                     guard let self, self.accepts(captured), let handle else { return }
                     handle.finish(.selected(destination))
                 })
         }
-        menu.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in self?.cancelIfCurrent(captured) })
+        menu.addAction(
+            UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.cancelIfCurrent(captured)
+            })
         show(handle, captured: captured)
     }
 
@@ -137,7 +144,7 @@ final class RssArticleImageCoordinator: NSObject {
         let captured = Operation(url: previous.url, anchor: previous.anchor)
         operation = captured
         watchVisibility(captured)
-        let busy = showBusy("正在获取图片", captured: captured)
+        let busy = showBusy(L10n.RSS.imageLoading, captured: captured)
         guard let busy else { cancelIfCurrent(captured); return }
         let prepare = prepareResource
         task = Task { @MainActor [weak self] in
@@ -187,7 +194,9 @@ final class RssArticleImageCoordinator: NSObject {
     }
 
     private func saveToPhotos(_ file: RssArticleImageFile, captured: Operation) {
-        guard let busy = showBusy("正在保存到相册", captured: captured) else { cancelIfCurrent(captured); return }
+        guard let busy = showBusy(L10n.RSS.imageSavingPhotos, captured: captured) else {
+            cancelIfCurrent(captured); return
+        }
         task = Task { @MainActor [weak self] in
             do {
                 var status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
@@ -212,7 +221,7 @@ final class RssArticleImageCoordinator: NSObject {
                 try Task.checkCancellation()
                 guard self.accepts(captured), self.presentation === busy else { self.cancelIfCurrent(captured); return }
                 self.task = nil
-                busy.finish(.completed("图片已保存到相册"))
+                busy.finish(.completed(L10n.RSS.saveImageSuccess))
             } catch {
                 guard let self else { return }
                 guard self.accepts(captured), self.presentation === busy else { self.cancelIfCurrent(captured); return }
@@ -250,14 +259,17 @@ final class RssArticleImageCoordinator: NSObject {
 
     private func showFailure(_ error: Error, destination: Destination, captured: Operation) {
         guard accepts(captured), presentation == nil, ownerCanPresent else { cancelIfCurrent(captured); return }
-        let alert = UIAlertController(title: "图片处理失败", message: error.localizedDescription, preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: L10n.RSS.imageProcessingFailed, message: error.localizedDescription, preferredStyle: .alert)
         let handle = makePresentation(alert, captured: captured)
         alert.addAction(
-            UIAlertAction(title: "重试", style: .default) { [weak self, weak handle] _ in
+            UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak handle] _ in
                 guard let self, self.accepts(captured), let handle else { return }
                 handle.finish(.selected(destination))
             })
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in self?.cancelIfCurrent(captured) })
+        alert.addAction(
+            UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.cancelIfCurrent(captured)
+            })
         show(handle, captured: captured)
     }
 
@@ -272,7 +284,9 @@ final class RssArticleImageCoordinator: NSObject {
             indicator.centerYAnchor.constraint(equalTo: alert.view.centerYAnchor, constant: -4),
         ])
         indicator.startAnimating()
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in self?.cancelIfCurrent(captured) })
+        alert.addAction(
+            UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.cancelIfCurrent(captured)
+            })
         let handle = makePresentation(alert, captured: captured)
         show(handle, captured: captured)
         return presentation === handle ? handle : nil
@@ -308,7 +322,9 @@ final class RssArticleImageCoordinator: NSObject {
         if let popover = controller.popoverPresentationController {
             let bounds = owner.view.bounds
             let requested = captured.anchor
-            let finite = [requested.origin.x, requested.origin.y, requested.width, requested.height].allSatisfy { $0.isFinite }
+            let finite = [requested.origin.x, requested.origin.y, requested.width, requested.height].allSatisfy {
+                $0.isFinite
+            }
             let clipped = finite ? requested.standardized.intersection(bounds) : .null
             popover.sourceView = owner.view
             popover.sourceRect =
@@ -342,10 +358,14 @@ final class RssArticleImageCoordinator: NSObject {
         var current: UIViewController? = owner
         while let controller = current {
             if controller.isBeingDismissed || controller.isMovingFromParent { return false }
-            if let navigation = controller.parent as? UINavigationController, navigation.topViewController !== controller {
+            if let navigation = controller.parent as? UINavigationController,
+                navigation.topViewController !== controller
+            {
                 return false
             }
-            if let tabs = controller.parent as? UITabBarController, tabs.selectedViewController !== controller { return false }
+            if let tabs = controller.parent as? UITabBarController, tabs.selectedViewController !== controller {
+                return false
+            }
             current = controller.parent
         }
         if let modal = owner.presentedViewController, modal !== presentation?.controller { return false }
@@ -428,7 +448,7 @@ final class RssArticleImageCoordinator: NSObject {
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             guard self.controller === controller else { return }
-            finish(urls.isEmpty ? .cancelled : .completed("图片已导出到文件"))
+            finish(urls.isEmpty ? .cancelled : .completed(L10n.RSS.imageExported))
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
@@ -447,13 +467,16 @@ final class RssArticleImageCoordinator: NSObject {
             // UIKit callbacks can arrive during either half of a transition. Never dismiss a successor,
             // and never unlink a leased file just because presentedViewController became nil early.
             while true {
-                if controller.isBeingPresented || controller.isBeingDismissed, let transition = controller.transitionCoordinator {
+                if controller.isBeingPresented || controller.isBeingDismissed,
+                    let transition = controller.transitionCoordinator
+                {
                     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                         let registered = transition.animate(alongsideTransition: nil) { _ in continuation.resume() }
                         if !registered { continuation.resume() }
                     }
                 }
-                if let presenter = controller.presentingViewController, presenter.presentedViewController === controller,
+                if let presenter = controller.presentingViewController,
+                    presenter.presentedViewController === controller,
                     !controller.isBeingPresented, !controller.isBeingDismissed
                 {
                     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in

@@ -47,6 +47,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     private var isFavoriteSynchronized = false
     private var isPageActive = false
     private var pageID = UUID()
+    private var moreMenuID = UUID()
     private var isFavorite = false
     private var renderedContent: String?
     private var contentErrorMessage: String?
@@ -116,7 +117,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     }
 
     private var titleText: String {
-        article.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.RSS.articleReaderTitle : article.title
+        article.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? L10n.RSS.articleReaderTitle : article.title
     }
 
     init(article: RssArticle, source: RssSource?, screen: RssScreenAdapter, favorites: [RssStar]) {
@@ -202,7 +204,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
 
     private func configureChrome() {
         refreshButton.setImage(UIImage(systemName: "arrow.clockwise"), for: .normal)
-        refreshButton.accessibilityLabel = "刷新文章"
+        refreshButton.accessibilityLabel = L10n.RSS.articleRefresh
         refreshButton.accessibilityIdentifier = "rss.article.refresh"
         refreshButton.addTarget(self, action: #selector(refreshArticle), for: .touchUpInside)
         favoriteButton.accessibilityIdentifier = UIIdentifiers.RSS.articleFavoriteButton
@@ -290,7 +292,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
             progressView.heightAnchor.constraint(equalToConstant: 2),
         ])
 
-        progressObservation = webView.observe(\.estimatedProgress, options: [.initial, .new]) { [weak self] webView, _ in
+        progressObservation = webView.observe(\.estimatedProgress, options: [.initial, .new]) {
+            [weak self] webView, _ in
             DispatchQueue.main.async {
                 guard let self, self.isPageActive, self.contentErrorMessage == nil else { return }
                 let progress = Float(webView.estimatedProgress)
@@ -301,23 +304,42 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     }
 
     private func makeMoreMenu() -> UIMenu {
+        let id = UUID(), page = pageID
+        moreMenuID = id
+        var consumed = false
+        let canSelect = { [weak self] in
+            guard let self, self.moreMenuID == id, self.pageID == page,
+                self.canUseArticleActions, !consumed
+            else { return false }
+            consumed = true
+            return true
+        }
         var actions: [UIAction] = []
         if source?.loginUrl?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             || source?.loginUi?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         {
             actions.append(
-                UIAction(title: "订阅源登录", image: UIImage(systemName: "person.crop.circle.badge.checkmark")) {
-                    [weak self] _ in self?.openSourceLogin()
+                UIAction(
+                    title: L10n.RSS.articleSourceLogin, image: UIImage(systemName: "person.crop.circle.badge.checkmark")
+                ) {
+                    [weak self] _ in
+                    guard canSelect() else { return }
+                    self?.openSourceLogin()
                 })
         }
-        if let linkURL = webView.url.flatMap({ ["http", "https"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }) ?? linkURL
+        if let linkURL = webView.url.flatMap({ ["http", "https"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil })
+            ?? linkURL
         {
             actions.append(
-                UIAction(title: L10n.RSS.shareLink, image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+                UIAction(title: L10n.RSS.shareLink, image: UIImage(systemName: "square.and.arrow.up")) {
+                    [weak self] _ in
+                    guard canSelect() else { return }
                     self?.share(url: linkURL)
                 })
             actions.append(
-                UIAction(title: externalOpenTitle(for: linkURL), image: UIImage(systemName: "arrow.up.forward.app")) { _ in
+                UIAction(title: externalOpenTitle(for: linkURL), image: UIImage(systemName: "arrow.up.forward.app")) {
+                    _ in
+                    guard canSelect() else { return }
                     UIApplication.shared.open(linkURL)
                 })
         }
@@ -351,7 +373,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     }
 
     private func externalOpenTitle(for url: URL) -> String {
-        ["http", "https"].contains(url.scheme?.lowercased() ?? "") ? L10n.RSS.openInBrowser : "在外部应用中打开"
+        ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+            ? L10n.RSS.openInBrowser : L10n.RSS.articleExternalOpen
     }
 
     private func loadContent(refresh: Bool = false) {
@@ -417,7 +440,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
                         }
                     } catch {
                         if !Task.isCancelled, self.isPageActive, self.contentRequestID == requestID {
-                            self.showTransientMessage("收藏正文保留失败，请重试")
+                            self.showTransientMessage(L10n.RSS.favoriteRetentionFailed)
                         }
                     }
                 }
@@ -443,7 +466,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         progressView.isHidden = true
         stopReadAloud()
         let actionTitle = browserURL.map { externalOpenTitle(for: $0) } ?? L10n.Common.retry
-        stateView.showMessage(title: L10n.RSS.contentFailed, message: message, actionTitle: actionTitle) { [weak self] in
+        stateView.showMessage(title: L10n.RSS.contentFailed, message: message, actionTitle: actionTitle) {
+            [weak self] in
             guard let self, self.isPageActive else { return }
             if let browserURL { UIApplication.shared.open(browserURL) } else { self.loadContent() }
         }
@@ -520,7 +544,9 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
                     if let content = self.renderedContent { self.renderHTML(content) } else { self.loadContent() }
                 }
             } catch {
-                if !Task.isCancelled, self.isPageActive, self.pageID == page { self.showContentError(error.userFacingMessage) }
+                if !Task.isCancelled, self.isPageActive, self.pageID == page {
+                    self.showContentError(error.userFacingMessage)
+                }
             }
         }
     }
@@ -553,7 +579,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     }
 
     func gestureRecognizer(
-        _ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
         gestureRecognizer === imageLongPress || otherGestureRecognizer === imageLongPress
     }
@@ -574,7 +601,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
                     star = existing
                 } else {
                     star = try await SharedAsync.value {
-                        facade.saveFavorite(article: article, title: article.title, group: article.group, completionHandler: $0)
+                        facade.saveFavorite(
+                            article: article, title: article.title, group: article.group, completionHandler: $0)
                     }
                 }
                 let groups: [String] = try await SharedAsync.value { facade.favoriteGroups(completionHandler: $0) }
@@ -622,7 +650,9 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
             favoritesSubscription = facade.watchFavorites { [weak self] favorites in
                 DispatchQueue.main.async {
                     guard let self, self.isPageActive, self.favoritesObservationID == observationID else { return }
-                    self.isFavorite = favorites.contains { $0.origin == self.article.origin && $0.link == self.article.link }
+                    self.isFavorite = favorites.contains {
+                        $0.origin == self.article.origin && $0.link == self.article.link
+                    }
                     self.hasObservedFavorites = true
                     self.isFavoriteSynchronized = true
                     self.updateFavoriteButton()
@@ -643,7 +673,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
 
     private func updateFavoriteButton() {
         favoriteButton.setImage(UIImage(systemName: isFavorite ? "star.fill" : "star"), for: .normal)
-        favoriteButton.accessibilityLabel = isFavorite ? "编辑收藏" : L10n.RSS.markFavorite
+        favoriteButton.accessibilityLabel = isFavorite ? L10n.RSS.editFavoriteTitle : L10n.RSS.markFavorite
         favoriteButton.isEnabled = isPageActive && isFavoriteSynchronized && favoriteTask == nil
     }
 
@@ -709,7 +739,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
                 try await self.browser.persist(webView: webView)
             } catch {
                 if !Task.isCancelled, self.isPageActive, self.pageID == page {
-                    self.showTransientMessage("订阅网页会话保存失败，请刷新重试")
+                    self.showTransientMessage(L10n.RSS.articleSessionSaveFailed)
                 }
             }
         }
@@ -735,7 +765,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         navigationCoordinator.cancel()
         cookiePersistenceTask?.cancel()
         browser.cancel()
-        showContentError("订阅网页已停止运行，请刷新重试")
+        showContentError(L10n.RSS.articleProcessStopped)
     }
 
     func webView(

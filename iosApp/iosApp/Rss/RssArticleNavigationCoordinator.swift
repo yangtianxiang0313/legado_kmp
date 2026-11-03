@@ -123,7 +123,8 @@ final class RssArticleNavigationCoordinator {
         var bypassHook = false
         if replacesMain {
             // A popup cannot consume the programmatic main-frame exemption, even at the same URL.
-            bypassHook = isMainFrame && action.sourceFrame.isMainFrame && action.navigationType == .other
+            bypassHook =
+                isMainFrame && action.sourceFrame.isMainFrame && action.navigationType == .other
                 && programmaticRequest?.matches(action.request) == true
             programmaticRequest = nil
             generation = UUID()
@@ -160,7 +161,8 @@ final class RssArticleNavigationCoordinator {
                     let facade = try RssArticleNavigationFacade.companion.create()
                     let result: RssArticleNavigationResult = try await SharedCancellableAsync.value { completion in
                         facade.evaluateRequest(article: article, targetUrl: url.absoluteString) { result in
-                            completion(result.isCancelled ? nil : result, result.isCancelled ? CancellationError() : nil)
+                            completion(
+                                result.isCancelled ? nil : result, result.isCancelled ? CancellationError() : nil)
                         }
                     }
                     try Task.checkCancellation()
@@ -178,7 +180,7 @@ final class RssArticleNavigationCoordinator {
                     return
                 }
                 guard self?.allowsMainDocument(url.absoluteString) == true else {
-                    messages.append("订阅源的内容规则已拦截此链接")
+                    messages.append(L10n.RSS.articleLinkBlocked)
                     self?.complete(record, outcome: .cancel, actions: actions, messages: messages)
                     return
                 }

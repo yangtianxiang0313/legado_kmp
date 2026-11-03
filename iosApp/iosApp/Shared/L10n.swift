@@ -1796,6 +1796,20 @@ enum L10n {
     }
 
     enum RSS {
+        static let articleRefresh = text("rss.article_refresh", "刷新文章")
+        static let articleSourceLogin = text("rss.article_source_login", "订阅源登录")
+        static let articleExternalOpen = text("rss.article_external_open", "在外部应用中打开")
+        static let favoriteRetentionFailed = text("rss.favorite_retention_failed", "收藏正文保留失败，请重试")
+        static let articleSessionSaveFailed = text("rss.article_session_save_failed", "订阅网页会话保存失败，请刷新重试")
+        static let articleProcessStopped = text("rss.article_process_stopped", "订阅网页已停止运行，请刷新重试")
+        static let articleLinkBlocked = text("rss.article_link_blocked", "订阅源的内容规则已拦截此链接")
+        static let imagePhotosDestination = text("rss.image_photos_destination", "保存到相册")
+        static let imageFilesDestination = text("rss.image_files_destination", "保存到文件")
+        static let imageShareDestination = text("rss.image_share_destination", "系统分享")
+        static let imageLoading = text("rss.image_loading", "正在获取图片")
+        static let imageSavingPhotos = text("rss.image_saving_photos", "正在保存到相册")
+        static let imageProcessingFailed = text("rss.image_processing_failed", "图片处理失败")
+        static let imageExported = text("rss.image_exported", "图片已导出到文件")
         static let title = text("rss.title", "RSS")
         static let loading = text("rss.loading", "正在加载 RSS 源…")
         static let unavailable = text("rss.unavailable", "RSS 暂时不可用")

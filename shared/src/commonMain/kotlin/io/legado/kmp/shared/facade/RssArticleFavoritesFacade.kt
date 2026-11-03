@@ -68,6 +68,21 @@ class RssArticleFavoritesFacade(
         }
 
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun deleteFavoriteGroup(group: String): Unit =
+        runRecoverable("RssArticleFavoritesFacade.deleteFavoriteGroup") {
+            withContext(Dispatchers.Default) {
+                repository.deleteByGroup(group)
+            }
+        }
+
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun deleteAllFavorites(): Unit = runRecoverable("RssArticleFavoritesFacade.deleteAllFavorites") {
+        withContext(Dispatchers.Default) {
+            repository.deleteAll()
+        }
+    }
+
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun favoriteGroups(): List<String> = runRecoverable("RssArticleFavoritesFacade.favoriteGroups") {
         withContext(Dispatchers.Default) {
             repository.observeGroups().first()
