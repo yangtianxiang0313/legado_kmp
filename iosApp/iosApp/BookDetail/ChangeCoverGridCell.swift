@@ -76,7 +76,8 @@ final class ChangeCoverGridCell: UICollectionViewCell {
         contentView.addSubview(coverView)
         coverView.snp.makeConstraints {
             $0.top.equalToSuperview().offset(Self.contentPadding)
-            coverHorizontalConstraint = $0.leading.trailing.equalToSuperview().inset(metrics.horizontalPadding).constraint
+            coverHorizontalConstraint =
+                $0.leading.trailing.equalToSuperview().inset(metrics.horizontalPadding).constraint
             coverHeightConstraint = $0.height.equalTo(metrics.coverHeight).constraint
         }
         coverView.addSubview(imageView)
@@ -86,11 +87,14 @@ final class ChangeCoverGridCell: UICollectionViewCell {
         nameLabel.numberOfLines = 1
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.adjustsFontSizeToFitWidth = false
+        nameLabel.clipsToBounds = true
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         nameLabel.isAccessibilityElement = false
         contentView.addSubview(nameLabel)
         nameLabel.snp.makeConstraints {
             $0.top.equalTo(coverView.snp.bottom).offset(Self.sourceSpacing)
-            sourceHorizontalConstraint = $0.leading.trailing.equalToSuperview().inset(metrics.horizontalPadding).constraint
+            sourceHorizontalConstraint =
+                $0.leading.trailing.equalToSuperview().inset(metrics.horizontalPadding).constraint
             sourceHeightConstraint = $0.height.equalTo(metrics.sourceHeight).constraint
         }
 
@@ -245,16 +249,30 @@ final class ChangeCoverGridCell: UICollectionViewCell {
 
     func configure(
         sourceName: String, image: UIImage?, isDefault: Bool, isLoading: Bool,
-        placeholder: Placeholder
+        placeholder: Placeholder, isCurrent: Bool = false
     ) {
-        nameLabel.text = sourceName
+        let source =
+            sourceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? L10n.BookDetail.unknownSource : sourceName
+        nameLabel.text = source
         imageView.image = image ?? placeholder.image ?? Self.defaultCoverImage
         let showsDefault = isDefault || image == nil
         // CoverAdapter uses CoverImageView's book-name/author fallback, not a reset icon.
         defaultTextView.configure(placeholder)
         defaultTextView.isHidden = !showsDefault
-        accessibilityLabel = sourceName
-        accessibilityValue = isLoading ? L10n.BookDetail.changeCoverLoading : nil
+        // The fixed, single-line grid may truncate visually, never in its accessible source name.
+        accessibilityLabel = isDefault ? source : String(format: L10n.BookDetail.sourceFormat, source)
+        accessibilityHint = BookDetailCoverText.selectHint
+        accessibilityUserInputLabels = [source]
+        accessibilityTraits = isCurrent ? [.button, .selected] : .button
+        var states: [String] = []
+        if isCurrent { states.append(BookDetailCoverText.currentCover) }
+        if isLoading {
+            states.append(L10n.BookDetail.changeCoverLoading)
+        } else if !isDefault, image == nil {
+            states.append(BookDetailCoverText.imageUnavailable)
+        }
+        accessibilityValue = states.isEmpty ? nil : states.joined(separator: ", ")
     }
 
     override func prepareForReuse() {
@@ -265,6 +283,9 @@ final class ChangeCoverGridCell: UICollectionViewCell {
         defaultTextView.isHidden = true
         accessibilityLabel = nil
         accessibilityValue = nil
+        accessibilityHint = nil
+        accessibilityUserInputLabels = nil
+        accessibilityTraits = .button
         contentView.backgroundColor = .clear
     }
 }
@@ -311,7 +332,8 @@ private final class ChangeCoverDefaultTextView: UIView {
                 scale: contentScaleFactor, traitCollection: traitCollection)
         } else {
             AndroidDefaultBookCoverRenderer.drawText(
-                name: placeholder.bookName, author: placeholder.bookAuthor, in: bounds, traitCollection: traitCollection,
+                name: placeholder.bookName, author: placeholder.bookAuthor, in: bounds,
+                traitCollection: traitCollection,
                 drawName: placeholder.drawBookName, drawAuthor: placeholder.drawBookAuthor)
         }
     }

@@ -7,7 +7,8 @@ protocol ChangeCoverDelegate: AnyObject {
     func changeCoverDidSelect(_ coverUrl: String)
 }
 
-final class ChangeCoverViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+final class ChangeCoverViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout
+{
     weak var delegate: ChangeCoverDelegate?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
@@ -78,6 +79,8 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
     override func viewDidLoad() {
         super.viewDidLoad()
         title = L10n.BookDetail.changeCoverSource
+        view.accessibilityViewIsModal = true
+        chromeView.setBookContext(name: bookName, author: bookAuthor)
         chromeView.onClose = { [weak self] in self?.dismissSelf() }
         chromeView.onSearchToggle = { [weak self] in self?.toggleSearch() }
 
@@ -231,7 +234,7 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
         imageTasks.removeAll()
     }
 
-    private func setStatus(_ text: String, footer: String? = nil, isError: Bool = false) {
+    private func setStatus(_ text: String, footer: String? = nil, isError: Bool = false, announce: Bool = false) {
         chromeView.setStatus(text)
         hasSearchError = isError
         statusFooterText = footer ?? text
@@ -240,6 +243,12 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
             ofKind: UICollectionView.elementKindSectionFooter)
         {
             footerView.configure(text: statusFooterText, isError: isError)
+        }
+        // Announce state transitions, not each streamed source's progress update.
+        if announce, !isClosing, view.window != nil, UIAccessibility.isVoiceOverRunning,
+            UIApplication.shared.applicationState == .active
+        {
+            UIAccessibility.post(notification: .announcement, argument: text)
         }
     }
 
@@ -253,7 +262,7 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
         coverItems = coverItems.filter { $0.isDefault }
         collectionView.reloadData()
         updateSearchState(searching: true)
-        setStatus(L10n.Search.loadingSearch)
+        setStatus(L10n.Search.loadingSearch, announce: true)
         searchRestoredCoverRule(generation: generation)
 
         let sessionFactory = sessionFactory
@@ -293,7 +302,7 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
                     guard let self, self.searchGeneration == generation, !Task.isCancelled else { return }
                     self.creationTask = nil
                     self.updateSearchState(searching: false)
-                    self.setStatus(error.localizedDescription, footer: error.localizedDescription, isError: true)
+                    self.setStatus(error.userFacingMessage, isError: true, announce: true)
                 }
             }
         }
@@ -314,7 +323,9 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
                         self.searchGeneration == generation,
                         !self.coverItems.contains(where: { $0.coverUrl == url })
                     else { return }
-                    self.handleNewCover(CoverSearchResult(coverUrl: url, sourceName: "封面规则", sourceUrl: rule.searchUrl))
+                    self.handleNewCover(
+                        CoverSearchResult(
+                            coverUrl: url, sourceName: BookDetailCoverText.ruleSource, sourceUrl: rule.searchUrl))
                     if !self.isSearching { self.handleSearchFinished() }
                 }
             } catch {
@@ -339,7 +350,8 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
         if isSearching {
             stopSearch()
             let count = coverItems.filter { !$0.isDefault }.count
-            setStatus(count == 0 ? L10n.Reader.searchStopped : L10n.Reader.searchStoppedWithResults(count))
+            setStatus(
+                count == 0 ? L10n.Reader.searchStopped : L10n.Reader.searchStoppedWithResults(count), announce: true)
         } else {
             startSearch()
         }
@@ -405,13 +417,13 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
         searchSession = nil
         let coverCount = coverItems.filter { !$0.isDefault }.count
         if coverCount == 0 {
-            setStatus(L10n.BookDetail.changeCoverEmpty, footer: L10n.BookDetail.changeCoverEmpty)
+            setStatus(L10n.BookDetail.changeCoverEmpty, announce: true)
         } else {
             setStatus(
                 String(
                     format: L10n.BookDetail.changeCoverSearchComplete,
                     coverCount
-                ))
+                ), announce: true)
         }
     }
 
@@ -421,7 +433,8 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
         coverItems.count
     }
 
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell
+    {
         let cell =
             collectionView.dequeueReusableCell(withReuseIdentifier: ChangeCoverGridCell.reuseIdentifier, for: indexPath)
             as! ChangeCoverGridCell
@@ -431,9 +444,14 @@ final class ChangeCoverViewController: UIViewController, UICollectionViewDataSou
     }
 
     private func configure(_ cell: ChangeCoverGridCell, with item: CoverItem) {
+        let original = originalCoverUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let isCurrent =
+            item.isDefault
+            ? original.isEmpty || original == "use_default_cover"
+            : item.coverUrl == originalCoverUrl
         cell.configure(
             sourceName: item.sourceName, image: item.image, isDefault: item.isDefault,
-            isLoading: item.isImageLoading, placeholder: placeholder)
+            isLoading: item.isImageLoading, placeholder: placeholder, isCurrent: isCurrent)
     }
 
     func collectionView(

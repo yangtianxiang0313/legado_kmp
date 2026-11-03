@@ -57,12 +57,14 @@ final class BookCoverPreviewViewController: UIViewController, NavigationContentC
         view.accessibilityViewIsModal = true
         closeButton.setImage(UIImage(systemName: "xmark"), for: .normal)
         closeButton.tintColor = AndroidReplicaTheme.primaryText
-        closeButton.accessibilityLabel = "关闭"
+        closeButton.accessibilityLabel = BookDetailCoverText.closePreview
+        closeButton.addInteraction(UIToolTipInteraction(defaultToolTip: BookDetailCoverText.closePreview))
         closeButton.accessibilityIdentifier = "bookDetail.coverPreview.close"
         closeButton.addTarget(self, action: #selector(closePreview), for: .touchUpInside)
         retryButton.setImage(UIImage(systemName: "arrow.clockwise"), for: .normal)
         retryButton.tintColor = AndroidReplicaTheme.primaryText
         retryButton.accessibilityLabel = L10n.Common.retry
+        retryButton.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.Common.retry))
         retryButton.accessibilityIdentifier = "bookDetail.coverPreview.retry"
         retryButton.addTarget(self, action: #selector(retryLoading), for: .touchUpInside)
         retryButton.isHidden = true
@@ -142,7 +144,8 @@ final class BookCoverPreviewViewController: UIViewController, NavigationContentC
         fullImageBottom = imageContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         statusImageBottom = imageContainer.bottomAnchor.constraint(equalTo: statusStack.topAnchor, constant: -8)
         statusHeight = statusStack.heightAnchor.constraint(equalToConstant: 60)
-        let preferredContentHeight = statusContentView.heightAnchor.constraint(equalTo: statusScrollView.frameLayoutGuide.heightAnchor)
+        let preferredContentHeight = statusContentView.heightAnchor.constraint(
+            equalTo: statusScrollView.frameLayoutGuide.heightAnchor)
         preferredContentHeight.priority = .defaultLow
         let spinnerWidth = spinner.widthAnchor.constraint(equalToConstant: 24)
         let retryWidth = retryButton.widthAnchor.constraint(equalToConstant: 44)
@@ -169,7 +172,8 @@ final class BookCoverPreviewViewController: UIViewController, NavigationContentC
             statusContentView.trailingAnchor.constraint(equalTo: statusScrollView.contentLayoutGuide.trailingAnchor),
             statusContentView.bottomAnchor.constraint(equalTo: statusScrollView.contentLayoutGuide.bottomAnchor),
             statusContentView.widthAnchor.constraint(equalTo: statusScrollView.frameLayoutGuide.widthAnchor),
-            statusContentView.heightAnchor.constraint(greaterThanOrEqualTo: statusScrollView.frameLayoutGuide.heightAnchor),
+            statusContentView.heightAnchor.constraint(
+                greaterThanOrEqualTo: statusScrollView.frameLayoutGuide.heightAnchor),
             preferredContentHeight,
             statusLabel.topAnchor.constraint(greaterThanOrEqualTo: statusContentView.topAnchor),
             statusLabel.bottomAnchor.constraint(lessThanOrEqualTo: statusContentView.bottomAnchor),
@@ -249,7 +253,8 @@ final class BookCoverPreviewViewController: UIViewController, NavigationContentC
         statusImageBottom.isActive = showsStatus
         fullImageBottom.isActive = !showsStatus
         retryButton.isHidden = loadingState != .failed
-        statusLabel.text = loadingState == .failed ? "封面加载失败" : "封面加载中"
+        statusLabel.text =
+            loadingState == .failed ? BookDetailCoverText.previewFailed : BookDetailCoverText.previewLoading
         statusScrollView.setContentOffset(.zero, animated: false)
         if loadingState == .loading {
             spinner.startAnimating()

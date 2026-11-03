@@ -100,7 +100,11 @@ final class BookDetailShelfRemovalCoordinator {
                 onRemoved(context.url, navigation)
             } catch is CancellationError {
             } catch {
-                if isVisible(context) { presenter?.showTransientMessage(error.userFacingMessage) }
+                if isVisible(context) {
+                    let message = L10n.BookDetail.shelfUpdateFailed + "\n" + error.userFacingMessage
+                    presenter?.showTransientMessage(message)
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
             }
         }
     }

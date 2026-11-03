@@ -27,6 +27,7 @@ final class ChangeCoverChromeView: UIView {
         titleLabel.textAlignment = .left
         titleLabel.numberOfLines = 1
         titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.clipsToBounds = true
         titleLabel.accessibilityTraits = .header
         titleLabel.accessibilityIdentifier = "changeCover.title"
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -34,6 +35,7 @@ final class ChangeCoverChromeView: UIView {
         // iOS callers include overFullScreen presentation, so retain their explicit dismissal entry.
         closeButton.setImage(ReaderMenuAndroidIcon.clear.image(size: 24), for: .normal)
         closeButton.accessibilityLabel = L10n.Common.cancel
+        closeButton.accessibilityHint = BookDetailCoverText.cancelHint
         closeButton.accessibilityIdentifier = "changeCover.close"
         closeButton.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.Common.cancel))
         closeButton.addAction(UIAction { [weak self] _ in self?.onClose?() }, for: .touchUpInside)
@@ -46,6 +48,8 @@ final class ChangeCoverChromeView: UIView {
         toolbar.addSubview(closeButton)
         toolbar.addSubview(titleLabel)
         toolbar.addSubview(searchToggleButton)
+        toolbar.shouldGroupAccessibilityChildren = true
+        toolbar.accessibilityElements = [titleLabel, closeButton, searchToggleButton]
         toolbar.snp.makeConstraints {
             $0.top.equalTo(safeAreaLayoutGuide.snp.top)
             $0.leading.trailing.equalToSuperview()
@@ -101,6 +105,13 @@ final class ChangeCoverChromeView: UIView {
         toolbarHeight?.update(offset: max(56, titleHeight + 8))
     }
 
+    func setBookContext(name: String, author: String) {
+        // Keep the Android toolbar title short; VoiceOver retains the unabridged book context.
+        titleLabel.accessibilityLabel = [L10n.BookDetail.changeCoverSource, name, author]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: ", ")
+    }
+
     func setStatus(_ text: String) {
         titleLabel.accessibilityValue = text
         searchToggleButton.accessibilityValue = text
@@ -112,6 +123,7 @@ final class ChangeCoverChromeView: UIView {
             searching ? Self.stopImage : ReaderMenuAndroidIcon.refresh.image(size: 24), for: .normal)
         let label = searching ? L10n.BookDetail.changeCoverStopSearch : L10n.BookDetail.changeCoverRestartSearch
         searchToggleButton.accessibilityLabel = label
+        searchToggleButton.accessibilityTraits = searching ? [.button, .updatesFrequently] : .button
         searchTooltip.defaultToolTip = label
     }
 
@@ -140,6 +152,7 @@ final class ChangeCoverLoadingBar: UIView {
         fillView.isHidden = true
         addSubview(fillView)
         accessibilityIdentifier = "changeCover.loadingBar"
+        accessibilityElementsHidden = true
         isUserInteractionEnabled = false
         NotificationCenter.default.addObserver(
             self, selector: #selector(updateAnimation), name: UIAccessibility.reduceMotionStatusDidChangeNotification,
@@ -252,5 +265,21 @@ final class ChangeCoverStatusFooterView: UICollectionReusableView {
         label.numberOfLines = 0
         label.text = text
         return ceil(label.sizeThatFits(CGSize(width: max(1, width - 24), height: .greatestFiniteMagnitude)).height + 24)
+    }
+}
+
+enum BookDetailCoverText {
+    static var closePreview: String { text("preview_close", "关闭") }
+    static var previewFailed: String { text("preview_failed", "封面加载失败") }
+    static var previewLoading: String { text("preview_loading", "封面加载中") }
+    static var ruleSource: String { text("rule_source", "封面规则") }
+    static var previewUnavailable: String { text("preview_unavailable", "暂无可预览的封面") }
+    static var currentCover: String { text("current", "当前封面") }
+    static var imageUnavailable: String { text("image_unavailable", "封面图片暂不可用") }
+    static var selectHint: String { text("select_hint", "选用此封面并返回书籍详情") }
+    static var cancelHint: String { text("cancel_hint", "返回书籍详情，不更换封面") }
+
+    private static func text(_ key: String, _ fallback: String) -> String {
+        Bundle.main.localizedString(forKey: "book_detail.cover.\(key)", value: fallback, table: nil)
     }
 }

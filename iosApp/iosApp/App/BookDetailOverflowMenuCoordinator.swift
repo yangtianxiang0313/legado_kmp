@@ -33,15 +33,15 @@ enum BookDetailOverflowAction: String {
         case .refresh: return L10n.Common.refresh
         case .login: return L10n.SourceEdit.loginAction
         case .pin: return L10n.BookDetail.pinToTop
-        case .sourceVariable: return "设置源变量"
-        case .bookVariable: return "设置书籍变量"
+        case .sourceVariable: return BookDetailDialogText.sourceVariable.value
+        case .bookVariable: return BookDetailDialogText.bookVariable.value
         case .copyBookURL: return L10n.BookDetail.copyBookUrl
         case .copyTocURL: return L10n.BookDetail.copyTocUrl
         case .canUpdate: return L10n.Bookshelf.enableUpdate
-        case .deleteAlert: return "删除提醒"
+        case .deleteAlert: return BookDetailDialogText.deleteAlert.value
         case .clearCache: return L10n.BookDetail.clearCache
         case .log: return L10n.Bookshelf.logTitle
-        case .relinkOriginalFile: return "重新选择原文件"
+        case .relinkOriginalFile: return BookDetailDialogText.relinkOriginalFile.value
         }
     }
 }
@@ -141,7 +141,9 @@ final class BookDetailOverflowMenuCoordinator {
             } catch is CancellationError {
             } catch {
                 guard self.preparationID == id, self.accepts(context) else { return }
-                presenter.showTransientMessage(error.userFacingMessage)
+                let message = BookDetailDialogText.menuLoadFailed.formatted(error.userFacingMessage)
+                presenter.showTransientMessage(message)
+                UIAccessibility.post(notification: .announcement, argument: message)
             }
         }
     }
@@ -163,6 +165,7 @@ final class BookDetailOverflowMenuCoordinator {
         }
         let popup = ReaderOverflowMenuView(
             items: items, anchorView: anchor, interfaceStyle: presenter.traitCollection.userInterfaceStyle)
+        popup.canActivateItem = { [weak self] in self?.accepts(context) == true }
         popup.onDismiss = { [weak self, weak popup] in
             if self?.menu === popup { self?.menu = nil }
         }
@@ -178,9 +181,11 @@ final class BookDetailOverflowMenuCoordinator {
         case .copyBookURL:
             UIPasteboard.general.string = book.bookUrl
             presenter.showTransientMessage(L10n.BookDetail.copied)
+            UIAccessibility.post(notification: .announcement, argument: L10n.BookDetail.copied)
         case .copyTocURL:
             UIPasteboard.general.string = book.tocUrl
             presenter.showTransientMessage(L10n.BookDetail.copied)
+            UIAccessibility.post(notification: .announcement, argument: L10n.BookDetail.copied)
         case .log:
             let controller = ReaderAppLogDialogViewController()
             controller.overrideUserInterfaceStyle = presenter.traitCollection.userInterfaceStyle
@@ -188,6 +193,11 @@ final class BookDetailOverflowMenuCoordinator {
         case .deleteAlert:
             let preferences = BookDetailRemovalPreferences()
             preferences.confirmsRemoval.toggle()
+            let message =
+                preferences.confirmsRemoval
+                ? L10n.BookDetail.deleteAlertToggleOn : L10n.BookDetail.deleteAlertToggleOff
+            presenter.showTransientMessage(message)
+            UIAccessibility.post(notification: .announcement, argument: message)
         case .pin, .canUpdate, .clearCache, .login, .sourceVariable, .bookVariable:
             perform(action, context: context)
         }
@@ -222,17 +232,24 @@ final class BookDetailOverflowMenuCoordinator {
                 case .pin:
                     let updated = try await adapter.pinToTop(expectedBookURL: context.bookURL)
                     if isSameBook(context) { onCommitted(updated) }
-                    if isVisible(context) { presenter.showTransientMessage(L10n.BookDetail.pinToTopDone) }
+                    if isVisible(context) {
+                        presenter.showTransientMessage(L10n.BookDetail.pinToTopDone)
+                        UIAccessibility.post(notification: .announcement, argument: L10n.BookDetail.pinToTopDone)
+                    }
                 case .canUpdate:
                     let updated = try await adapter.toggleCanUpdate(expectedBookURL: context.bookURL)
                     if isSameBook(context) { onCommitted(updated) }
                     if isVisible(context) {
-                        presenter.showTransientMessage(
-                            updated.canUpdate ? L10n.BookDetail.canUpdateOn : L10n.BookDetail.canUpdateOff)
+                        let message = updated.canUpdate ? L10n.BookDetail.canUpdateOn : L10n.BookDetail.canUpdateOff
+                        presenter.showTransientMessage(message)
+                        UIAccessibility.post(notification: .announcement, argument: message)
                     }
                 case .clearCache:
                     try await adapter.clearCache(expectedBookURL: context.bookURL)
-                    if isVisible(context) { presenter.showTransientMessage(L10n.BookDetail.clearCacheDone) }
+                    if isVisible(context) {
+                        presenter.showTransientMessage(L10n.BookDetail.clearCacheDone)
+                        UIAccessibility.post(notification: .announcement, argument: L10n.BookDetail.clearCacheDone)
+                    }
                 case .login:
                     let source = try await adapter.loadMenuSource(expectedBookURL: context.bookURL)
                     guard let source, source.hasManagementLoginURL,
@@ -244,7 +261,14 @@ final class BookDetailOverflowMenuCoordinator {
                 }
             } catch is CancellationError {
             } catch {
-                if isVisible(context) { presenter?.showTransientMessage(error.userFacingMessage) }
+                if isVisible(context) {
+                    let message =
+                        action == .sourceVariable || action == .bookVariable
+                        ? BookDetailDialogText.variableLoadFailed.formatted(error.userFacingMessage)
+                        : BookDetailDialogText.operationFailed.formatted(error.userFacingMessage)
+                    presenter?.showTransientMessage(message)
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
             }
         }
     }
@@ -258,14 +282,15 @@ final class BookDetailOverflowMenuCoordinator {
     ) {
         let fallback =
             forSource
-            ? "源变量可在js中通过source.getVariable()获取"
-            : "书籍变量可在js中通过book.getVariable(\"custom\")获取"
+            ? BookDetailDialogText.sourceVariableHelp.value
+            : BookDetailDialogText.bookVariableHelp.value
         let comment =
             snapshot.comment.flatMap {
                 $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 + "\n" + fallback
             } ?? fallback
         let editor = BookDetailVariableDialogViewController(
-            title: forSource ? BookDetailOverflowAction.sourceVariable.title : BookDetailOverflowAction.bookVariable.title,
+            title: forSource
+                ? BookDetailOverflowAction.sourceVariable.title : BookDetailOverflowAction.bookVariable.title,
             variable: snapshot.variable, comment: comment
         ) { [self] value in
             guard isVisible(context), operationTask == nil else { throw CancellationError() }

@@ -147,6 +147,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
         resultList.onVisibleCountChange = { [weak self] count in
             guard let self else { return }
             self.panel.setEmptyStateVisible(count == 0)
+            self.panel.setResultCount(count)
             self.panel.reloadFastScroller()
         }
         resultList.canInteract = { [weak self] in
@@ -170,6 +171,13 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
         }
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(candidateLongPressed(_:)))
         tableView.addGestureRecognizer(longPress)
+        resultList.onMenu = { [weak self] candidate, anchor in
+            guard let self, self.canInteract, self.chapterTocView.isHidden, !self.menuCoordinator.isVisible,
+                !self.isApplyingAction, !self.isReplacingChapter, !self.isSelectingBook
+            else { return }
+            self.view.endEditing(true)
+            self.menuCoordinator.show(candidate: candidate, anchor: anchor, host: self.view)
+        }
         menuCoordinator.onAction = { [weak self] action in self?.handleMenuAction(action) }
         menuCoordinator.onDismiss = { [weak self] in
             DispatchQueue.main.async { [weak self] in self?.updatePresentationActivity() }
@@ -285,7 +293,8 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
         searchGeneration == generation && isSearching && !isLeavingPresentation && !isClosing
     }
 
-    private func startSearch(refreshCandidates: [BookSourceChangeCandidate]? = nil, onlyMissingWordCount: Bool = false) {
+    private func startSearch(refreshCandidates: [BookSourceChangeCandidate]? = nil, onlyMissingWordCount: Bool = false)
+    {
         stopSearch()
         guard !isLeavingPresentation else { return }
         resultList.beginNewGeneration()
@@ -409,8 +418,7 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
 
     private func handleSearchFinished() {
         stopSearch()
-        panel.currentSourceButton.accessibilityValue = String(
-            format: L10n.BookDetail.changeSourceSearchComplete, resultCount)
+        panel.setSearchComplete(resultCount: resultCount)
         if offersAllGroupsOnFinish, resultCount == 0, let group = screenState?.config.searchGroup {
             menuCoordinator.offerAllGroupsAfterEmptySearch(group: group)
             updatePresentationActivity()
@@ -591,27 +599,23 @@ final class ChangeSourceViewController: UIViewController, UITableViewDelegate, U
     }
 
     private func confirmDelete(_ candidate: BookSourceChangeCandidate) {
-        let alert = UIAlertController(title: "删除", message: "确定删除？\n\(candidate.sourceName)", preferredStyle: .alert)
-        alert.view.accessibilityIdentifier = "changeSource.deleteConfirmation"
-        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.confirm, style: .destructive) { [weak self] _ in
-                guard let self else { return }
-                self.stopSearch()
-                self.hideChapterToc()
-                self.performAction { [self] in
-                    try await self.screen.delete(candidate)
-                    self.ratingStore.removeSource(candidate.sourceUrl)
-                    self.resultList.noteScoreChanged()
-                    self.candidates.removeAll { $0.sourceUrl == candidate.sourceUrl }
-                    self.applyFilter()
-                    if candidate.sourceUrl == self.currentSourceUrl,
-                        let onDeletedCurrentSource = self.onDeletedCurrentSource
-                    {
-                        self.closePicker(onClose: onDeletedCurrentSource)
-                    }
+        let alert = menuCoordinator.deleteConfirmation(candidate: candidate) { [weak self] in
+            guard let self else { return }
+            self.stopSearch()
+            self.hideChapterToc()
+            self.performAction { [self] in
+                try await self.screen.delete(candidate)
+                self.ratingStore.removeSource(candidate.sourceUrl)
+                self.resultList.noteScoreChanged()
+                self.candidates.removeAll { $0.sourceUrl == candidate.sourceUrl }
+                self.applyFilter()
+                if candidate.sourceUrl == self.currentSourceUrl,
+                    let onDeletedCurrentSource = self.onDeletedCurrentSource
+                {
+                    self.closePicker(onClose: onDeletedCurrentSource)
                 }
-            })
+            }
+        }
         present(alert, animated: true)
     }
 

@@ -35,7 +35,7 @@ final class SourceChangeWaitDialogViewController: UIViewController, UIAdaptivePr
     override var keyCommands: [UIKeyCommand]? {
         // Consume Escape even while writes disable cancellation.
         let command = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
-        command.discoverabilityTitle = "取消"
+        command.discoverabilityTitle = L10n.Common.cancel
         command.wantsPriorityOverSystemBehavior = true
         return [command]
     }
@@ -121,6 +121,10 @@ final class SourceChangeWaitDialogViewController: UIViewController, UIAdaptivePr
 
     private func updateInteraction() {
         contentView.cancelControl.isEnabled = cancellationEnabled && lifecycle.canInteract
+        contentView.cancelControl.accessibilityHint =
+            cancellationEnabled
+            ? SourceChangeText.cancelLoading.value : SourceChangeText.cannotCancel.value
+        contentView.messageLabel.accessibilityValue = cancellationEnabled ? nil : SourceChangeText.cannotCancel.value
     }
 
     private func dismissDialog(animated: Bool, completion: @escaping () -> Void) {
@@ -144,8 +148,10 @@ private final class SourceChangeWaitDialogContentView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        BookshelfLayoutDialogStyle.configure(messageLabel, text: "加载目录", color: AndroidReplicaTheme.primaryText)
+        BookshelfLayoutDialogStyle.configure(
+            messageLabel, text: SourceChangeText.loadToc.value, color: AndroidReplicaTheme.primaryText)
         messageLabel.textAlignment = .center
+        messageLabel.accessibilityTraits = [.staticText, .updatesFrequently]
         messageLabel.accessibilityIdentifier = "sourceChange.waitDialog.message"
         progress.color = AndroidReplicaTheme.accent
         progress.isAccessibilityElement = false
@@ -183,8 +189,12 @@ private final class SourceChangeWaitDialogContentView: UIView {
     private func arrange(width: CGFloat, applyFrames: Bool) -> CGFloat {
         let inset = min(20, max(0, (width - 30) / 2))
         let innerWidth = max(1, width - inset * 2)
-        let stacked = innerWidth < 30 + 12 + (messageLabel.font?.pointSize ?? 14)
-        let textWidth = max(1, innerWidth - 12 - (stacked ? 0 : 30))
+        let font = messageLabel.font ?? .systemFont(ofSize: 14)
+        let longestWord =
+            (messageLabel.text ?? "").components(separatedBy: .whitespacesAndNewlines)
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? font.pointSize
+        let stacked = innerWidth < 30 + 12 + ceil(longestWord)
+        let textWidth = max(1, stacked ? innerWidth : innerWidth - 12 - 30)
         let textHeight = ceil(
             messageLabel.sizeThatFits(
                 CGSize(width: textWidth, height: .greatestFiniteMagnitude)
@@ -204,7 +214,7 @@ private final class SourceChangeWaitDialogContentView: UIView {
                 scaleX: 30 / max(1, nativeSize.width), y: 30 / max(1, nativeSize.height))
             progress.center = CGPoint(x: progressX + 15, y: inset + (stacked ? 15 : rowHeight / 2))
             messageLabel.frame = CGRect(
-                x: inset + 6 + (stacked || rtl ? 0 : 30),
+                x: inset + (stacked ? 0 : 6 + (rtl ? 0 : 30)),
                 y: inset + (stacked ? 36 : (rowHeight - textHeight) / 2),
                 width: textWidth, height: textHeight)
             cancelControl.frame = CGRect(
@@ -228,12 +238,12 @@ private final class SourceChangeWaitCancelControl: UIControl {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        BookshelfLayoutDialogStyle.configure(label, text: "取消", color: AndroidReplicaTheme.accent)
+        BookshelfLayoutDialogStyle.configure(label, text: L10n.Common.cancel, color: AndroidReplicaTheme.accent)
         label.textAlignment = .center
         label.isAccessibilityElement = false
         addSubview(label)
         isAccessibilityElement = true
-        accessibilityLabel = "取消"
+        accessibilityLabel = L10n.Common.cancel
         accessibilityTraits = .button
     }
 

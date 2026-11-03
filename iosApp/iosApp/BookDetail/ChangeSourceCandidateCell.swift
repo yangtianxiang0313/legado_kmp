@@ -8,6 +8,15 @@ final class ChangeSourceCandidateCell: UITableViewCell {
     var onScore: ((Int) -> Void)? {
         didSet { updateRatingControls() }
     }
+    var onMenu: (() -> Bool)? {
+        didSet {
+            menuRevision &+= 1
+            updateRatingControls()
+        }
+    }
+    var isSelectionEnabled = false {
+        didSet { updateRatingControls() }
+    }
 
     private let ratingColumn = UIControl()
     private let ratingStack = UIStackView()
@@ -30,6 +39,8 @@ final class ChangeSourceCandidateCell: UITableViewCell {
     private var score = 0
     private var scoreInteractionEnabled = false
     private var candidateIdentity: [String]?
+    private var menuRevision: UInt64 = 0
+    private var ratingSourceName = ""
     private lazy var candidateAccessibilityElement: ChangeSourceCandidateAccessibilityElement = {
         let element = ChangeSourceCandidateAccessibilityElement(accessibilityContainer: self)
         element.accessibilityIdentifier = "changeSource.candidate"
@@ -55,16 +66,22 @@ final class ChangeSourceCandidateCell: UITableViewCell {
         isScoreEnabled: Bool = true
     ) {
         let identity = [candidate.sourceUrl, candidate.bookUrl, candidate.displayName, candidate.author]
-        if let candidateIdentity, candidateIdentity != identity { onScore = nil }
+        if let candidateIdentity, candidateIdentity != identity {
+            onScore = nil
+            onMenu = nil
+        }
         candidateIdentity = identity
         self.score = min(1, max(-1, score))
         scoreInteractionEnabled = isScoreEnabled
         let source = Self.nonempty(candidate.sourceName)
+        ratingSourceName = source ?? candidate.sourceUrl
         let author = Self.nonempty(candidate.author)
         let bookName = Self.nonempty(candidate.displayName)
         let latest = Self.nonempty(candidate.latestChapterTitle)
         let wordCount = loadWordCount ? Self.nonempty(candidate.chapterWordCountText) : nil
-        let responseTime = loadWordCount && candidate.respondTime >= 0 ? "响应时间：\(candidate.respondTime) ms" : nil
+        let responseTime =
+            loadWordCount && candidate.respondTime >= 0
+            ? SourceChangeText.responseTime.format(candidate.respondTime) : nil
 
         sourceLabel.text = source
         authorLabel.text = author
@@ -79,19 +96,19 @@ final class ChangeSourceCandidateCell: UITableViewCell {
         isCurrentSource = isCurrent
         currentSourceImageView.isHidden = !isCurrent
 
-        accessibilityLabel = [
-            source.map { "书源：\($0)" },
-            author.map { "作者：\($0)" },
-            bookName.map { "书名：\($0)" },
-            latest.map { "最新章节：\($0)" },
-            wordCount.map { "章节字数：\($0)" },
+        accessibilityLabel = SourceChangeText.joined([
+            source.map { SourceChangeText.source.format($0) },
+            author.map { SourceChangeText.author.format($0) },
+            bookName.map { SourceChangeText.bookName.format($0) },
+            latest.map { String(format: L10n.BookDetail.latestChapterFormat, locale: Locale.current, $0) },
+            wordCount.map { SourceChangeText.wordCount.format($0) },
             responseTime,
-        ].compactMap { $0 }.joined(separator: "，")
-        accessibilityValue = isCurrent ? "当前书源" : "非当前书源"
-        accessibilityHint = [
-            Self.nonempty(candidate.sourceUrl).map { "书源地址：\($0)" },
-            Self.nonempty(candidate.bookUrl).map { "书籍地址：\($0)" },
-        ].compactMap { $0 }.joined(separator: "，")
+        ])
+        accessibilityValue = isCurrent ? SourceChangeText.currentSource.value : SourceChangeText.otherSource.value
+        accessibilityHint = SourceChangeText.joined([
+            Self.nonempty(candidate.sourceUrl).map { SourceChangeText.sourceAddress.format($0) },
+            Self.nonempty(candidate.bookUrl).map { SourceChangeText.bookAddress.format($0) },
+        ])
         accessibilityTraits = isCurrent ? [.button, .selected] : .button
         applyAppearance()
     }
@@ -99,9 +116,12 @@ final class ChangeSourceCandidateCell: UITableViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         candidateIdentity = nil
+        ratingSourceName = ""
+        isSelectionEnabled = false
         score = 0
         scoreInteractionEnabled = false
         onScore = nil
+        onMenu = nil
         isCurrentSource = false
         for label in [sourceLabel, authorLabel, latestLabel, wordCountLabel, responseTimeLabel] {
             label.text = nil
@@ -133,7 +153,7 @@ final class ChangeSourceCandidateCell: UITableViewCell {
         super.setSelected(selected, animated: animated)
         // The selected trait identifies the current source, not a transient row selection.
         accessibilityTraits = isCurrentSource ? [.button, .selected] : .button
-        candidateAccessibilityElement.accessibilityTraits = accessibilityTraits
+        updateCandidateAccessibilityTraits()
     }
 
     override func didMoveToWindow() {
@@ -170,8 +190,8 @@ final class ChangeSourceCandidateCell: UITableViewCell {
         goodButton.setImage(ChangeSourcePraiseIcon.good, for: .normal)
         badButton.setImage(ChangeSourcePraiseIcon.bad, for: .normal)
         for (button, title, identifier) in [
-            (goodButton, "赞", "changeSource.score.good"),
-            (badButton, "踩", "changeSource.score.bad"),
+            (goodButton, SourceChangeText.like.value, "changeSource.score.good"),
+            (badButton, SourceChangeText.dislike.value, "changeSource.score.bad"),
         ] {
             button.isExclusiveTouch = true
             button.adjustsImageWhenHighlighted = false
@@ -189,6 +209,7 @@ final class ChangeSourceCandidateCell: UITableViewCell {
 
         for label in [sourceLabel, authorLabel, latestLabel, wordCountLabel, responseTimeLabel] {
             label.adjustsFontForContentSizeCategory = false
+            label.adjustsFontSizeToFitWidth = false
             label.isAccessibilityElement = false
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             label.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
@@ -286,6 +307,13 @@ final class ChangeSourceCandidateCell: UITableViewCell {
             label.font = ReaderAndroidDefaultFont.scaledFont(
                 size: 14, textStyle: .subheadline, compatibleWith: traitCollection)
         }
+        let wraps = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        for label in [sourceLabel, authorLabel, latestLabel] {
+            label.numberOfLines = wraps ? 0 : 1
+            label.lineBreakMode = wraps ? .byWordWrapping : .byTruncatingTail
+        }
+        headingStack.axis = wraps ? .vertical : .horizontal
+        authorLabel.textAlignment = wraps ? .natural : .right
         sourceLineHeight.constant = sourceLabel.intrinsicContentSize.height
         latestLineHeight.constant = latestLabel.intrinsicContentSize.height
         selectedBackgroundView?.backgroundColor = palette.selectionBackground
@@ -306,7 +334,7 @@ final class ChangeSourceCandidateCell: UITableViewCell {
     }
 
     private func activateCandidateForAccessibility() -> Bool {
-        guard candidateIdentity != nil, isUserInteractionEnabled else { return false }
+        guard candidateIdentity != nil, isSelectionEnabled, isUserInteractionEnabled else { return false }
         var ancestor = superview
         while let view = ancestor {
             if let tableView = view as? UITableView {
@@ -345,17 +373,46 @@ final class ChangeSourceCandidateCell: UITableViewCell {
             goodButton.accessibilityTraits.insert(.notEnabled)
             badButton.accessibilityTraits.insert(.notEnabled)
         }
-        goodButton.accessibilityValue = score > 0 ? "已赞" : "未赞"
-        badButton.accessibilityValue = score < 0 ? "已踩" : "未踩"
-        goodButton.accessibilityHint = enabled ? (score > 0 ? "点按取消赞" : "为此书源点赞") : "评分不可用"
-        badButton.accessibilityHint = enabled ? (score < 0 ? "点按取消踩" : "为此书源点踩") : "评分不可用"
+        goodButton.accessibilityLabel = SourceChangeText.namedLike.format(ratingSourceName)
+        badButton.accessibilityLabel = SourceChangeText.namedDislike.format(ratingSourceName)
+        goodButton.accessibilityValue = score > 0 ? SourceChangeText.liked.value : SourceChangeText.notLiked.value
+        badButton.accessibilityValue = score < 0 ? SourceChangeText.disliked.value : SourceChangeText.notDisliked.value
+        goodButton.accessibilityHint =
+            enabled
+            ? (score > 0 ? SourceChangeText.unlikeHint.value : SourceChangeText.likeHint.value)
+            : SourceChangeText.ratingUnavailable.value
+        badButton.accessibilityHint =
+            enabled
+            ? (score < 0 ? SourceChangeText.undislikeHint.value : SourceChangeText.dislikeHint.value)
+            : SourceChangeText.ratingUnavailable.value
+        for button in [goodButton, badButton] {
+            for tooltip in button.interactions.compactMap({ $0 as? UIToolTipInteraction }) {
+                tooltip.defaultToolTip = button.accessibilityHint
+            }
+        }
         let element = candidateAccessibilityElement
         element.accessibilityLabel = accessibilityLabel
-        element.accessibilityValue = [
-            accessibilityValue, score > 0 ? "已赞" : score < 0 ? "已踩" : "未评分",
-        ].compactMap { $0 }.joined(separator: "，")
+        element.accessibilityValue = SourceChangeText.joined([
+            accessibilityValue,
+            score > 0
+                ? SourceChangeText.liked.value
+                : score < 0 ? SourceChangeText.disliked.value : SourceChangeText.unrated.value,
+        ])
         element.accessibilityHint = accessibilityHint
-        element.accessibilityTraits = isCurrentSource ? [.button, .selected] : .button
+        updateCandidateAccessibilityTraits()
+        let revision = menuRevision
+        let identity = candidateIdentity
+        element.accessibilityCustomActions =
+            onMenu == nil
+            ? nil
+            : [
+                UIAccessibilityCustomAction(name: SourceChangeText.moreOptions.value) { [weak self] _ in
+                    guard let self, self.menuRevision == revision, self.candidateIdentity == identity,
+                        self.isSelectionEnabled
+                    else { return false }
+                    return self.onMenu?() ?? false
+                }
+            ]
         guard candidateIdentity != nil else {
             accessibilityElements = []
             return
@@ -365,6 +422,12 @@ final class ChangeSourceCandidateCell: UITableViewCell {
         if !badButton.isHidden { elements.append(badButton) }
         elements.append(element)
         accessibilityElements = elements
+    }
+
+    private func updateCandidateAccessibilityTraits() {
+        var traits: UIAccessibilityTraits = isCurrentSource ? [.button, .selected] : .button
+        if !isSelectionEnabled { traits.insert(.notEnabled) }
+        candidateAccessibilityElement.accessibilityTraits = traits
     }
 
     // Legado 5f5d314 colors_material_design.xml: A200 for active, 100 for unscored.

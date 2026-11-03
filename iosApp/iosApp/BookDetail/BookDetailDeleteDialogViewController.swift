@@ -53,7 +53,7 @@ final class BookDetailDeleteDialogViewController: UIViewController, UIAdaptivePr
         guard case .active = phase else { return nil }
         let command = UIKeyCommand(
             input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
-        command.discoverabilityTitle = "否"
+        command.discoverabilityTitle = BookDetailDialogText.no.value
         command.wantsPriorityOverSystemBehavior = true
         return [command]
     }

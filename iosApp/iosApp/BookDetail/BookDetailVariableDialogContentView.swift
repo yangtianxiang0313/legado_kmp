@@ -30,8 +30,8 @@ final class BookDetailVariableDialogContentView: UIView {
         toolbar.backgroundColor = AndroidReplicaTheme.toolbarBackground
         titleLabel.text = title
         titleLabel.textColor = AndroidReplicaTheme.toolbarText
-        titleLabel.numberOfLines = 1
-        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.numberOfLines = 0
+        titleLabel.lineBreakMode = .byWordWrapping
         titleLabel.adjustsFontForContentSizeCategory = false
         titleLabel.accessibilityTraits = .header
         titleLabel.accessibilityIdentifier = "bookDetail.variableDialog.title"
@@ -43,9 +43,10 @@ final class BookDetailVariableDialogContentView: UIView {
         saveButton.tintColor = AndroidReplicaTheme.toolbarText
         saveButton.imageView?.contentMode = .center
         saveButton.contentEdgeInsets = .zero
-        saveButton.accessibilityLabel = "保存"
+        saveButton.accessibilityLabel = L10n.Common.save
+        saveButton.accessibilityHint = BookDetailDialogText.saveHint.value
         saveButton.accessibilityIdentifier = "bookDetail.variableDialog.save"
-        saveButton.addInteraction(UIToolTipInteraction(defaultToolTip: "保存"))
+        saveButton.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.Common.save))
         saveButton.addTarget(self, action: #selector(save), for: .touchUpInside)
         busyIndicator.color = AndroidReplicaTheme.toolbarText
         busyIndicator.hidesWhenStopped = true
@@ -56,7 +57,8 @@ final class BookDetailVariableDialogContentView: UIView {
         toolbar.addSubview(saveButton)
 
         configureLabel(variableLabel, text: "variable", color: AndroidReplicaTheme.accent)
-        configureLabel(commentLabel, text: "变量说明(variableComment)", color: AndroidReplicaTheme.accent)
+        configureLabel(
+            commentLabel, text: BookDetailDialogText.variableComment.value, color: AndroidReplicaTheme.accent)
         variableLabel.accessibilityIdentifier = "bookDetail.variableDialog.variableLabel"
         commentLabel.accessibilityIdentifier = "bookDetail.variableDialog.commentLabel"
         configureTextView(variableEditor)
@@ -74,7 +76,8 @@ final class BookDetailVariableDialogContentView: UIView {
         variableEditor.returnKeyType = .default
         variableEditor.enablesReturnKeyAutomatically = false
         variableEditor.allowsEditingTextAttributes = false
-        variableEditor.accessibilityLabel = "variable"
+        variableEditor.accessibilityLabel = BookDetailDialogText.variable.value
+        variableEditor.accessibilityHint = BookDetailDialogText.variableHint.value
         variableEditor.accessibilityIdentifier = "bookDetail.variableDialog.variable"
         editorUnderline.backgroundColor = AndroidReplicaTheme.secondaryText
         editorUnderline.isUserInteractionEnabled = false
@@ -88,6 +91,7 @@ final class BookDetailVariableDialogContentView: UIView {
         commentView.text = comment
         commentView.textColor = AndroidReplicaTheme.secondaryText
         commentView.tintColor = AndroidReplicaTheme.accent
+        commentView.accessibilityLabel = BookDetailDialogText.variableComment.value
         commentView.accessibilityIdentifier = "bookDetail.variableDialog.comment"
         commentScrollView.contentInsetAdjustmentBehavior = .never
         commentScrollView.alwaysBounceVertical = false
@@ -101,7 +105,9 @@ final class BookDetailVariableDialogContentView: UIView {
         for child in [toolbar, variableLabel, variableEditor, editorUnderline, errorLabel, commentScrollView] {
             addSubview(child)
         }
-        accessibilityElements = [titleLabel, saveButton, variableLabel, variableEditor, errorLabel, commentLabel, commentView]
+        accessibilityElements = [
+            titleLabel, saveButton, variableLabel, variableEditor, errorLabel, commentLabel, commentView,
+        ]
         applyFonts(traits: traitCollection)
     }
 
@@ -131,7 +137,7 @@ final class BookDetailVariableDialogContentView: UIView {
         variableEditor.isUserInteractionEnabled = editable
         saveButton.isEnabled = saveEnabled
         saveButton.imageView?.isHidden = saving
-        saveButton.accessibilityValue = saving ? "正在保存" : nil
+        saveButton.accessibilityValue = saving ? BookDetailDialogText.saving.value : nil
         saving ? busyIndicator.startAnimating() : busyIndicator.stopAnimating()
         updateEditorFocus()
     }
@@ -178,7 +184,7 @@ final class BookDetailVariableDialogContentView: UIView {
         label.text = text
         label.textColor = color
         label.numberOfLines = 0
-        label.lineBreakMode = .byCharWrapping
+        label.lineBreakMode = .byWordWrapping
         label.adjustsFontForContentSizeCategory = false
     }
 
@@ -274,7 +280,7 @@ final class BookDetailVariableDialogContentView: UIView {
                 x: isRTL ? min(width, saveWidth + 4) : inset,
                 y: (height - titleHeight) / 2, width: titleWidth, height: titleHeight)
             saveButton.frame = CGRect(
-                x: isRTL ? 0 : width - saveWidth, y: 4,
+                x: isRTL ? 0 : width - saveWidth, y: (height - 48) / 2,
                 width: saveWidth, height: 48)
         }
         return height
@@ -293,5 +299,69 @@ final class BookDetailVariableDialogContentView: UIView {
     @objc private func save() {
         guard saveButton.isEnabled else { return }
         onSave?()
+    }
+}
+
+enum BookDetailDialogText: String {
+    case sourceVariable = "book_detail.dialog.source_variable"
+    case bookVariable = "book_detail.dialog.book_variable"
+    case deleteAlert = "book_detail.dialog.delete_alert"
+    case relinkOriginalFile = "book_detail.dialog.relink_original_file"
+    case sourceVariableHelp = "book_detail.dialog.source_variable_help"
+    case bookVariableHelp = "book_detail.dialog.book_variable_help"
+    case variable = "book_detail.dialog.variable"
+    case variableHint = "book_detail.dialog.variable_hint"
+    case variableComment = "book_detail.dialog.variable_comment"
+    case saveHint = "book_detail.dialog.save_hint"
+    case saving = "book_detail.dialog.saving"
+    case variableSaveFailed = "book_detail.dialog.variable_save_failed"
+    case variableLoadFailed = "book_detail.dialog.variable_load_failed"
+    case menuLoadFailed = "book_detail.dialog.menu_load_failed"
+    case operationFailed = "book_detail.dialog.operation_failed"
+    case removalTitle = "book_detail.dialog.removal_title"
+    case removalMessage = "book_detail.dialog.removal_message"
+    case no = "book_detail.dialog.no"
+    case yes = "book_detail.dialog.yes"
+    case deleteOriginalFile = "book_detail.dialog.delete_original_file"
+    case deleteOriginalFileHint = "book_detail.dialog.delete_original_file_hint"
+    case removalCancelHint = "book_detail.dialog.removal_cancel_hint"
+    case removalOnlyHint = "book_detail.dialog.removal_only_hint"
+    case removalWithFileHint = "book_detail.dialog.removal_with_file_hint"
+
+    var value: String {
+        Bundle.main.localizedString(forKey: rawValue, value: fallback, table: nil)
+    }
+
+    func formatted(_ detail: String) -> String {
+        String(format: value, locale: Locale.current, detail)
+    }
+
+    private var fallback: String {
+        switch self {
+        case .sourceVariable: return "设置源变量"
+        case .bookVariable: return "设置书籍变量"
+        case .deleteAlert: return "删除提醒"
+        case .relinkOriginalFile: return "重新选择原文件"
+        case .sourceVariableHelp: return "源变量可在js中通过source.getVariable()获取"
+        case .bookVariableHelp: return "书籍变量可在js中通过book.getVariable(\"custom\")获取"
+        case .variable: return "变量"
+        case .variableHint: return "编辑变量原文，保留空格和换行。"
+        case .variableComment: return "变量说明(variableComment)"
+        case .saveHint: return "保存当前变量。"
+        case .saving: return "正在保存"
+        case .variableSaveFailed: return "变量保存失败：%@"
+        case .variableLoadFailed: return "变量加载失败：%@"
+        case .menuLoadFailed: return "菜单加载失败：%@"
+        case .operationFailed: return "操作失败：%@"
+        case .removalTitle: return "提醒"
+        case .removalMessage: return "是否确认删除？"
+        case .no: return "否"
+        case .yes: return "是"
+        case .deleteOriginalFile: return "删除源文件"
+        case .deleteOriginalFileHint: return "仅在确认删除时同时删除本地原文件。"
+        case .removalCancelHint: return "保留书籍和原文件，不作更改。"
+        case .removalOnlyHint: return "将本书移出书架，保留原文件。"
+        case .removalWithFileHint: return "将本书移出书架，并删除本地原文件。"
+        }
     }
 }

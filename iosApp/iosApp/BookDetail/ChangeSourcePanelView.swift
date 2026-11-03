@@ -63,8 +63,8 @@ final class ChangeSourcePanelView: UIView {
         toolbar.configure(title: book?.name.nilIfEmpty ?? title, author: book?.author.nilIfEmpty)
         summaryLabel.lineBreakMode = .byTruncatingTail
         currentSourceName = sourceName
-        currentSourceButton.accessibilityLabel = "当前书源：\(sourceName)"
-        currentSourceButton.accessibilityHint = "定位当前书源"
+        currentSourceButton.accessibilityLabel = SourceChangeText.namedCurrentSource.format(sourceName)
+        currentSourceButton.accessibilityHint = SourceChangeText.locateCurrentSource.value
         updateFonts()
         setSummary(sourceName)
     }
@@ -121,7 +121,7 @@ final class ChangeSourcePanelView: UIView {
     func setSummary(_ text: String) {
         let changed = summaryLabel.text != text
         summaryLabel.attributedText = NSAttributedString(string: text, attributes: [.kern: 0])
-        currentSourceButton.accessibilityValue = text
+        currentSourceButton.accessibilityValue = text == currentSourceName ? nil : text
         if changed, !isSearching, !isChapterTocVisible, !isHidden, window != nil,
             text != currentSourceName, UIAccessibility.isVoiceOverRunning
         {
@@ -132,7 +132,7 @@ final class ChangeSourcePanelView: UIView {
     func setSearching(_ searching: Bool) {
         isSearching = searching
         progressView.progress = 0
-        progressView.accessibilityValue = searching ? "正在搜索" : nil
+        progressView.accessibilityValue = searching ? SourceChangeText.searching.value : nil
         toolbar.setSearching(searching)
         updateProgressAppearance()
     }
@@ -144,16 +144,25 @@ final class ChangeSourcePanelView: UIView {
             total > 0 ? min(1, Float(searched) / Float(total)) : 0,
             animated: !UIAccessibility.isReduceMotionEnabled
         )
-        progressView.accessibilityValue = "已搜索 \(searched) / \(total)，结果 \(resultCount)"
+        progressView.accessibilityValue = SourceChangeText.progressValue.format(searched, total, resultCount)
         // Only ChangeBookSourceDialog collects changeSourceProgress into tv_dur.
         if !isChapterMode {
-            setSummary("结果 \(resultCount), 当前进度 \(searched) / \(total): \(progress.currentSourceName)")
+            setSummary(SourceChangeText.progress.format(resultCount, searched, total, progress.currentSourceName))
         }
         updateProgressAppearance()
     }
 
     func setFilterExpanded(_ expanded: Bool) {
         toolbar.setFilterExpanded(expanded)
+    }
+
+    func setResultCount(_ count: Int) {
+        tableView.accessibilityValue = SourceChangeText.resultCount.format(count)
+    }
+
+    func setSearchComplete(resultCount: Int) {
+        let text = String(format: L10n.BookDetail.changeSourceSearchComplete, locale: Locale.current, resultCount)
+        currentSourceButton.accessibilityValue = text
     }
 
     func setFilterHasQuery(_ hasQuery: Bool) {
@@ -241,7 +250,8 @@ final class ChangeSourcePanelView: UIView {
         configureTransparentButton(currentSourceButton)
         currentSourceButton.isAccessibilityElement = true
         currentSourceButton.accessibilityIdentifier = "changeSource.currentSource"
-        currentSourceButton.addInteraction(UIToolTipInteraction(defaultToolTip: "定位当前书源"))
+        currentSourceButton.addInteraction(
+            UIToolTipInteraction(defaultToolTip: SourceChangeText.locateCurrentSource.value))
         currentSourceButton.addAction(
             UIAction { [weak self] _ in
                 guard let self, !self.isChapterTocVisible else { return }
@@ -300,16 +310,17 @@ final class ChangeSourcePanelView: UIView {
         tableView.keyboardDismissMode = .onDrag
         tableView.showsVerticalScrollIndicator = false
         tableView.accessibilityIdentifier = "changeSource.table"
+        tableView.accessibilityLabel = SourceChangeText.resultList.value
         fastScroller.accessibilityIdentifier = "changeSource.fastScroll"
         fastScroller.onScrubbingChanged = { [weak self] in self?.onFastScrollingChange?($0) }
         progressView.isHidden = true
         progressView.isAccessibilityElement = true
-        progressView.accessibilityLabel = "书源搜索进度"
+        progressView.accessibilityLabel = SourceChangeText.searchProgress.value
         progressView.accessibilityTraits = .updatesFrequently
         loadingIndicator.isHidden = true
         loadingIndicator.isUserInteractionEnabled = false
         loadingIndicator.isAccessibilityElement = true
-        loadingIndicator.accessibilityLabel = "正在搜索书源"
+        loadingIndicator.accessibilityLabel = SourceChangeText.searching.value
         loadingIndicator.accessibilityTraits = .updatesFrequently
         keyboardLayoutGuide.followsUndockedKeyboard = false
         emptyLabel.attributedText = NSAttributedString(

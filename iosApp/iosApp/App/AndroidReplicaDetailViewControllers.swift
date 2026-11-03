@@ -613,25 +613,14 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
             let current = try await adapter.prepareBookEditor()
             guard owner.acceptsNavigation(generation, interaction: interaction), owner.bookURL == expectedBookURL
             else { return }
-            let editor = BookInfoEditViewController(
+            let navigation = BookDetailNavigationActions.bookEditor(
                 book: current,
-                saveEditedBook: { name, author, cover, intro, type in
-                    try await adapter.saveEditedBookInfo(
-                        expectedBookURL: expectedBookURL, name: name, author: author, coverURL: cover,
-                        intro: intro, bookType: type)
-                },
-                createCoverSearchSession: { result, progress, finished in
-                    try await adapter.createCoverSearchSession(
-                        expectedBookURL: expectedBookURL, onResult: result, onProgress: progress,
-                        onFinished: finished)
-                },
+                adapter: adapter, expectedBookURL: expectedBookURL,
                 onSave: { [weak owner] updated in
                     guard let owner, owner.bookURL == updated.bookUrl else { return }
                     owner.book = updated
                     owner.renderBook()
                 })
-            let navigation = UINavigationController(rootViewController: editor)
-            navigation.modalPresentationStyle = .fullScreen
             owner.present(navigation, animated: true)
         }
     }

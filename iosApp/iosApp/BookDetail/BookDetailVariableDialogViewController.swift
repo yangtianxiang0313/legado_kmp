@@ -66,7 +66,7 @@ final class BookDetailVariableDialogViewController: UIViewController,
     override var keyCommands: [UIKeyCommand]? {
         let command = UIKeyCommand(
             input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
-        command.discoverabilityTitle = "取消"
+        command.discoverabilityTitle = L10n.Common.cancel
         command.wantsPriorityOverSystemBehavior = true
         return [command]
     }
@@ -249,6 +249,11 @@ final class BookDetailVariableDialogViewController: UIViewController,
         scrollView.accessibilityIdentifier = "bookDetail.variableDialog.content"
         contentView.variableEditor.delegate = self
         contentView.onSave = { [weak self] in self?.save() }
+        contentView.accessibilityHeading.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(name: L10n.Common.cancel) { [weak self] _ in
+                self?.accessibilityPerformEscape() ?? false
+            }
+        ]
         view.addSubview(outsideControl)
         view.addSubview(dialogView)
         dialogView.addSubview(scrollView)
@@ -422,12 +427,16 @@ final class BookDetailVariableDialogViewController: UIViewController,
             }
             contentView.showError(nil)
             view.setNeedsLayout()
+            UIAccessibility.post(notification: .announcement, argument: BookDetailDialogText.saving.value)
             // Deliberately not cancellable by dismissal: a started write must settle.
             do {
                 try await onSave(draft)
                 hasSaved = true
+            } catch is CancellationError {
             } catch {
-                if phase != .detached { pendingError = error.localizedDescription }
+                if phase != .detached {
+                    pendingError = BookDetailDialogText.variableSaveFailed.formatted(error.userFacingMessage)
+                }
             }
             isWriting = false
             refreshPresentation()

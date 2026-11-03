@@ -175,7 +175,7 @@ final class BookDetailCoverActions {
         else { return }
         let key = CoverKey(book)
         guard Self.hasRealCover(key.coverURL) else {
-            presenter.showTransientMessage("暂无可预览的封面")
+            presenter.showTransientMessage(BookDetailCoverText.previewUnavailable)
             return
         }
         cancelInteractions()

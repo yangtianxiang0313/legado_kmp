@@ -50,7 +50,8 @@ final class ChangeSourceMenuCoordinator {
         guard !isVisible, host.canPerformNavigationAction else { return }
         let id = emptySearchRequestID
         let alert = UIAlertController(
-            title: "搜索结果为空", message: "\(group)分组搜索结果为空,是否切换到全部分组", preferredStyle: .alert)
+            title: SourceChangeText.emptyGroupTitle.value,
+            message: SourceChangeText.emptyGroupMessage.format(group), preferredStyle: .alert)
         alert.view.accessibilityIdentifier = "changeSource.emptyGroupConfirmation"
         alert.overrideUserInterfaceStyle = host.traitCollection.userInterfaceStyle
         emptySearchGroup = nil
@@ -81,17 +82,22 @@ final class ChangeSourceMenuCoordinator {
             dismiss()
             return
         }
-        var items = [item("manage", "书源管理", .manage), item("refresh", "刷新列表", .refresh)]
+        var items = [
+            item("manage", L10n.SourceManagement.title, .manage),
+            item("refresh", SourceChangeText.refreshList.value, .refresh),
+        ]
         items += ChangeSourceOption.allCases.map { option in
             item(option.rawValue, option.title, .option(option), checked: option.value(in: state.config))
         }
-        let title = state.config.searchGroup.isEmpty ? "分组" : "分组(\(state.config.searchGroup))"
+        let title =
+            state.config.searchGroup.isEmpty
+            ? L10n.SourceManagement.groupFilter : SourceChangeText.selectedGroup.format(state.config.searchGroup)
         items.append(
             .init(identifier: "changeSource.menu.group", title: title) { [weak self, weak anchor, weak host] in
                 guard let self, let anchor, let host else { return }
                 self.showGroups(state: state, anchor: anchor, host: host)
             })
-        items.append(item("close", "关闭", .close))
+        items.append(item("close", SourceChangeText.close.value, .close))
         present(items, anchor: anchor, host: host)
     }
 
@@ -99,9 +105,11 @@ final class ChangeSourceMenuCoordinator {
         dismiss()
         present(
             [
-                item("top", "置顶书源", .top(candidate)), item("bottom", "置底书源", .bottom(candidate)),
-                item("edit", "编辑书源", .edit(candidate)), item("disable", "禁用书源", .disable(candidate)),
-                item("delete", "删除书源", .delete(candidate)),
+                item("top", L10n.SourceManagement.moveToTopAction, .top(candidate)),
+                item("bottom", L10n.SourceManagement.moveToBottomAction, .bottom(candidate)),
+                item("edit", SourceChangeText.editSource.value, .edit(candidate)),
+                item("disable", SourceChangeText.disableSource.value, .disable(candidate)),
+                item("delete", L10n.Discovery.deleteSource, .delete(candidate)),
             ], anchor: anchor, host: host)
     }
 
@@ -116,7 +124,7 @@ final class ChangeSourceMenuCoordinator {
         let selected = state.groups.contains(state.config.searchGroup) ? state.config.searchGroup : ""
         let items = groups.enumerated().map { index, group in
             SearchOverflowMenuView.Item(
-                id: String(index), title: group.isEmpty ? "全部书源" : group, selection: .radio,
+                id: String(index), title: group.isEmpty ? SourceChangeText.allSources.value : group, selection: .radio,
                 isSelected: group == selected)
         }
         groupPopup.show(in: host, anchor: anchor, items: items) { [weak self] id in
@@ -131,6 +139,17 @@ final class ChangeSourceMenuCoordinator {
         .init(identifier: "changeSource.menu." + id, title: title, isChecked: checked) { [weak self] in
             self?.onAction?(action)
         }
+    }
+
+    func deleteConfirmation(candidate: BookSourceChangeCandidate, onConfirm: @escaping () -> Void) -> UIAlertController
+    {
+        let alert = UIAlertController(
+            title: L10n.Discovery.deleteSourceTitle,
+            message: SourceChangeText.deleteMessage.format(candidate.sourceName), preferredStyle: .alert)
+        alert.view.accessibilityIdentifier = "changeSource.deleteConfirmation"
+        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: L10n.Common.confirm, style: .destructive) { _ in onConfirm() })
+        return alert
     }
 
     private func present(_ items: [ReaderOverflowMenuView.Item], anchor: UIView, host: UIView) {

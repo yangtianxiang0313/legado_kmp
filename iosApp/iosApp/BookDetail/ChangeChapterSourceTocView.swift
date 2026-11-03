@@ -42,16 +42,22 @@ final class ChangeChapterSourceTocView: UIView, UITableViewDataSource, UITableVi
             clearChapters()
         }
         state = .loading(canClose: canClose)
-        loadingView.accessibilityLabel = canClose ? "正在加载目录" : "正在替换正文"
+        loadingView.accessibilityLabel =
+            canClose
+            ? SourceChangeText.loadingToc.value : SourceChangeText.replacingContent.value
         updatePresentation()
+        focusPresentation(loadingView)
         setNeedsLayout()
     }
 
     func showReplacementLoading(canClose: Bool) {
         cancelSuggestedScroll()
         state = .loading(canClose: canClose)
-        loadingView.accessibilityLabel = canClose ? "正在加载正文" : "正在替换正文"
+        loadingView.accessibilityLabel =
+            canClose
+            ? SourceChangeText.loadingContent.value : SourceChangeText.replacingContent.value
         updatePresentation()
+        focusPresentation(loadingView)
         setNeedsLayout()
     }
 
@@ -65,6 +71,7 @@ final class ChangeChapterSourceTocView: UIView, UITableViewDataSource, UITableVi
         tableView.reloadData()
         tableView.setContentOffset(.zero, animated: false)
         updatePresentation()
+        focusPresentation(closeButton)
         setNeedsLayout()
     }
 
@@ -179,9 +186,9 @@ final class ChangeChapterSourceTocView: UIView, UITableViewDataSource, UITableVi
         closeButton.contentHorizontalAlignment = .center
         closeButton.contentVerticalAlignment = .center
         closeButton.imageView?.contentMode = .center
-        closeButton.accessibilityLabel = "关闭目录"
+        closeButton.accessibilityLabel = SourceChangeText.closeToc.value
         closeButton.accessibilityIdentifier = "changeSource.chapterToc.close"
-        closeButton.addInteraction(UIToolTipInteraction(defaultToolTip: "关闭目录"))
+        closeButton.addInteraction(UIToolTipInteraction(defaultToolTip: SourceChangeText.closeToc.value))
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
 
         tableView.dataSource = self
@@ -198,6 +205,7 @@ final class ChangeChapterSourceTocView: UIView, UITableViewDataSource, UITableVi
         tableView.estimatedSectionFooterHeight = 0
         tableView.contentInsetAdjustmentBehavior = .never
         tableView.accessibilityIdentifier = "changeSource.chapterToc.table"
+        tableView.accessibilityLabel = SourceChangeText.chapterList.value
         loadingView.accessibilityIdentifier = "changeSource.chapterToc.loading"
 
         for view in [tableView, closeButton, loadingView] {
@@ -229,12 +237,26 @@ final class ChangeChapterSourceTocView: UIView, UITableViewDataSource, UITableVi
             isHidden = false
         }
         closeButton.isEnabled = canClose
+        accessibilityViewIsModal = !isHidden
+        accessibilityElementsHidden = isHidden
+        loadingView.accessibilityHint = canClose ? nil : SourceChangeText.cannotCancel.value
         tableView.allowsSelection = canSelect
         tableView.isUserInteractionEnabled = canSelect
         tableView.accessibilityElementsHidden = !canSelect
         let isLoading: Bool
         if case .loading = state { isLoading = true } else { isLoading = false }
         loadingView.setLoading(isLoading)
+    }
+
+    private func focusPresentation(_ target: UIView) {
+        let revision = presentationRevision
+        DispatchQueue.main.async { [weak self, weak target] in
+            guard let self, let target, self.presentationRevision == revision, !self.isHidden,
+                !target.isHidden, self.window?.windowScene?.activationState == .foregroundActive,
+                UIAccessibility.isVoiceOverRunning
+            else { return }
+            UIAccessibility.post(notification: .layoutChanged, argument: target)
+        }
     }
 
     private func applyAppearance() {

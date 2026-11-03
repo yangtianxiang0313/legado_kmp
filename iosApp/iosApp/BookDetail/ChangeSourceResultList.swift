@@ -77,6 +77,7 @@ final class ChangeSourceResultList {
     var canInteract: (() -> Bool)?
     var onVisibleCountChange: ((Int) -> Void)?
     var onScore: ((BookSourceChangeCandidate, Int) -> Void)?
+    var onMenu: ((BookSourceChangeCandidate, UIView) -> Void)?
     var loadWordCount = false { didSet { if oldValue != loadWordCount { presentationRevision &+= 1 } } }
     var isScoreEnabled = true {
         didSet {
@@ -237,7 +238,9 @@ final class ChangeSourceResultList {
             guard let identity = dataSource.itemIdentifier(for: indexPath),
                 let binding = cellBindings[identity], binding.cell === cell
             else {
+                cell.isSelectionEnabled = false
                 cell.onScore = nil
+                cell.onMenu = nil
                 continue
             }
             bindScore(cell, identity: identity, binding: binding)
@@ -251,6 +254,20 @@ final class ChangeSourceResultList {
     }
 
     private func bindScore(_ cell: ChangeSourceCandidateCell, identity: Identity, binding: CellBinding) {
+        cell.isSelectionEnabled = isContentInteractive && binding.generation == appliedGeneration
+        cell.onMenu = nil
+        if isContentInteractive, binding.generation == appliedGeneration {
+            cell.onMenu = { [weak self, weak cell] in
+                guard let self, let cell, self.cellBindings[identity] === binding,
+                    let indexPath = self.tableView.indexPath(for: cell),
+                    self.tableView.cellForRow(at: indexPath) === cell,
+                    self.dataSource.itemIdentifier(for: indexPath) == identity,
+                    let candidate = self.candidate(at: indexPath), let onMenu = self.onMenu
+                else { return false }
+                onMenu(candidate, cell)
+                return true
+            }
+        }
         guard isContentInteractive, isScoreEnabled, binding.generation == appliedGeneration else {
             cell.onScore = nil
             return

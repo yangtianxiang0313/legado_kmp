@@ -3,6 +3,28 @@ import UIKit
 
 @MainActor
 enum BookDetailNavigationActions {
+    static func bookEditor(
+        book: Book, adapter: AndroidReplicaBookDetailAdapter, expectedBookURL: String,
+        onSave: @escaping (Book) -> Void
+    ) -> UINavigationController {
+        let editor = BookInfoEditViewController(
+            book: book,
+            saveEditedBook: { name, author, cover, intro, type in
+                try await adapter.saveEditedBookInfo(
+                    expectedBookURL: expectedBookURL, name: name, author: author, coverURL: cover,
+                    intro: intro, bookType: type)
+            },
+            createCoverSearchSession: { result, progress, finished in
+                try await adapter.createCoverSearchSession(
+                    expectedBookURL: expectedBookURL, onResult: result, onProgress: progress,
+                    onFinished: finished)
+            },
+            onSave: onSave)
+        let navigation = UINavigationController(rootViewController: editor)
+        navigation.modalPresentationStyle = .fullScreen
+        return navigation
+    }
+
     static func closeRemovedBook(_ url: String, in navigation: UINavigationController) {
         let remaining = navigation.viewControllers.filter { controller in
             if let reader = controller as? ReaderContainerViewController { return reader.bookURL != url }

@@ -52,7 +52,8 @@ final class ChangeSourceToolbarView: UIView {
         let titleHeight =
             nameLabel.intrinsicContentSize.height
             + (authorLabel.isHidden ? 0 : authorLabel.intrinsicContentSize.height) + 8
-        return CGSize(width: UIView.noIntrinsicMetric, height: max(56, isFilterExpanded ? inputHeight + 12 : ceil(titleHeight)))
+        return CGSize(
+            width: UIView.noIntrinsicMetric, height: max(56, isFilterExpanded ? inputHeight + 12 : ceil(titleHeight)))
     }
 
     private var inputHeight: CGFloat {
@@ -117,7 +118,10 @@ final class ChangeSourceToolbarView: UIView {
 
     func setFilterHasQuery(_ hasQuery: Bool) {
         let hasText = hasQuery || !(searchField.text ?? "").isEmpty
-        let title = isFilterExpanded ? (hasText ? "清空筛选" : "关闭筛选") : L10n.Reader.menuSearch
+        let title =
+            isFilterExpanded
+            ? (hasText ? SourceChangeText.clearFilter.value : SourceChangeText.closeFilter.value)
+            : SourceChangeText.filter.value
         updateButtonDescription(filterButton, title: title)
         searchHintIcon.isHidden = !isFilterExpanded || hasText
         searchField.accessibilityValue = searchField.text
@@ -144,6 +148,7 @@ final class ChangeSourceToolbarView: UIView {
         for label in [nameLabel, authorLabel] {
             label.numberOfLines = 1
             label.lineBreakMode = .byTruncatingTail
+            label.adjustsFontSizeToFitWidth = false
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
         nameLabel.accessibilityTraits = .header
@@ -173,10 +178,11 @@ final class ChangeSourceToolbarView: UIView {
         searchPlate.addSubview(searchUnderline)
         searchUnderline.isUserInteractionEnabled = false
         configureButton(
-            backButton, title: "返回", image: ReaderMenuAndroidIcon.back.image(), identifier: "changeSource.back"
+            backButton, title: L10n.Reader.backAction, image: ReaderMenuAndroidIcon.back.image(),
+            identifier: "changeSource.back"
         ) { [weak self] in self?.onBack?() }
         configureButton(
-            filterButton, title: L10n.Reader.menuSearch, image: searchIcon, identifier: "changeSource.filter"
+            filterButton, title: SourceChangeText.filter.value, image: searchIcon, identifier: "changeSource.filter"
         ) { [weak self] in
             guard let self else { return }
             if self.isFilterExpanded, (self.searchField.text ?? "").isEmpty,
@@ -193,7 +199,8 @@ final class ChangeSourceToolbarView: UIView {
             identifier: "changeSource.searchToggle"
         ) { [weak self] in self?.onSearchToggle?() }
         configureButton(
-            moreButton, title: "更多选项", image: ReaderMenuAndroidIcon.more.image(), identifier: "changeSource.more"
+            moreButton, title: SourceChangeText.moreOptions.value,
+            image: ReaderMenuAndroidIcon.more.image(), identifier: "changeSource.more"
         ) { [weak self] in self?.onMore?() }
     }
 

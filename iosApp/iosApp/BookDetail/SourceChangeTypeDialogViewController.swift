@@ -35,7 +35,7 @@ final class SourceChangeTypeDialogViewController: UIViewController, UIAdaptivePr
 
     override var keyCommands: [UIKeyCommand]? {
         let command = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
-        command.discoverabilityTitle = "取消"
+        command.discoverabilityTitle = L10n.Common.cancel
         command.wantsPriorityOverSystemBehavior = true
         return [command]
     }
@@ -147,14 +147,16 @@ final class SourceChangeTypeDialogViewController: UIViewController, UIAdaptivePr
 @MainActor
 private final class SourceChangeTypeDialogContentView: UIView {
     let titleLabel = UILabel()
-    let cancelControl = BookshelfLayoutDialogAction(title: "取消")
-    let confirmControl = BookshelfLayoutDialogAction(title: "确定")
+    let cancelControl = BookshelfLayoutDialogAction(title: L10n.Common.cancel)
+    let confirmControl = BookshelfLayoutDialogAction(title: L10n.Common.ok)
     private let messageLabel = UILabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        BookshelfLayoutDialogStyle.configure(titleLabel, text: "书籍类型不一样", color: AndroidReplicaTheme.primaryText)
-        BookshelfLayoutDialogStyle.configure(messageLabel, text: "是否确认换源", color: AndroidReplicaTheme.primaryText)
+        BookshelfLayoutDialogStyle.configure(
+            titleLabel, text: SourceChangeText.typeTitle.value, color: AndroidReplicaTheme.primaryText)
+        BookshelfLayoutDialogStyle.configure(
+            messageLabel, text: SourceChangeText.typeMessage.value, color: AndroidReplicaTheme.primaryText)
         titleLabel.accessibilityTraits = .header
         titleLabel.accessibilityIdentifier = "sourceChange.typeDialog.title"
         messageLabel.accessibilityIdentifier = "sourceChange.typeDialog.message"
@@ -214,10 +216,12 @@ private final class SourceChangeTypeDialogContentView: UIView {
             return y + height + 8
         }
         let cancelHeight = cancelControl.sizeThatFits(CGSize(width: available, height: .greatestFiniteMagnitude)).height
-        let confirmHeight = confirmControl.sizeThatFits(CGSize(width: available, height: .greatestFiniteMagnitude)).height
+        let confirmHeight = confirmControl.sizeThatFits(CGSize(width: available, height: .greatestFiniteMagnitude))
+            .height
         if applyFrames {
             cancelControl.frame = CGRect(x: actionInset, y: y, width: available, height: cancelHeight)
-            confirmControl.frame = CGRect(x: actionInset, y: y + cancelHeight + 8, width: available, height: confirmHeight)
+            confirmControl.frame = CGRect(
+                x: actionInset, y: y + cancelHeight + 8, width: available, height: confirmHeight)
         }
         return y + cancelHeight + 8 + confirmHeight + 8
     }

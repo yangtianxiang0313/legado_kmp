@@ -38,8 +38,9 @@ final class ChangeChapterSourceTocCell: UITableViewCell {
         tagLabel.isHidden = tag == nil
         checkImageView.isHidden = !isSuggested
         accessibilityIdentifier = "changeSource.chapterToc.chapterCell.\(chapter.index)"
-        accessibilityLabel = [chapter.title, tag].compactMap { $0 }.joined(separator: ", ")
-        accessibilityValue = isSuggested ? "当前建议章节" : nil
+        accessibilityLabel = SourceChangeText.joined([chapter.title, tag])
+        accessibilityValue = isSuggested ? SourceChangeText.suggestedChapter.value : nil
+        accessibilityHint = SourceChangeText.replaceChapterHint.value
         updateAccessibilityTraits()
         applyAppearance()
     }
@@ -90,6 +91,7 @@ final class ChangeChapterSourceTocCell: UITableViewCell {
             label.numberOfLines = 1
             label.lineBreakMode = .byTruncatingTail
             label.adjustsFontForContentSizeCategory = false
+            label.adjustsFontSizeToFitWidth = false
             label.isAccessibilityElement = false
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             label.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
@@ -151,6 +153,11 @@ final class ChangeChapterSourceTocCell: UITableViewCell {
         tagLabel.textColor = palette.secondaryText
         tagLabel.highlightedTextColor = palette.secondaryText
         checkImageView.tintColor = palette.secondaryText
+        let wraps = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        for label in [titleLabel, tagLabel] {
+            label.numberOfLines = wraps ? 0 : 1
+            label.lineBreakMode = wraps ? .byWordWrapping : .byTruncatingTail
+        }
         titleLabel.font = ReaderAndroidDefaultFont.scaledFont(
             size: 14, textStyle: .body, compatibleWith: traitCollection)
         tagLabel.font = ReaderAndroidDefaultFont.scaledFont(

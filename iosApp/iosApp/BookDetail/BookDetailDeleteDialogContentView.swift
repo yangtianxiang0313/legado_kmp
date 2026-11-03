@@ -21,22 +21,26 @@ final class BookDetailDeleteDialogContentView: UIView {
     private let titleLabel = UILabel()
     private let messageLabel = UILabel()
     private let fileControl = BookDetailDeleteDialogFileControl()
-    private let cancelControl = BookshelfLayoutDialogAction(title: "否")
-    private let confirmControl = BookshelfLayoutDialogAction(title: "是")
+    private let cancelControl = BookshelfLayoutDialogAction(title: BookDetailDialogText.no.value)
+    private let confirmControl = BookshelfLayoutDialogAction(title: BookDetailDialogText.yes.value)
 
     init(showsFileOption: Bool, deleteOriginal: Bool) {
         self.showsFileOption = showsFileOption
         super.init(frame: .zero)
         // Fixed revision values-zh: draw / sure_del / delete_book_file / no / yes.
-        BookshelfLayoutDialogStyle.configure(titleLabel, text: "提醒", color: AndroidReplicaTheme.primaryText)
-        BookshelfLayoutDialogStyle.configure(messageLabel, text: "是否确认删除？", color: AndroidReplicaTheme.primaryText)
+        BookshelfLayoutDialogStyle.configure(
+            titleLabel, text: BookDetailDialogText.removalTitle.value, color: AndroidReplicaTheme.primaryText)
+        BookshelfLayoutDialogStyle.configure(
+            messageLabel, text: BookDetailDialogText.removalMessage.value, color: AndroidReplicaTheme.primaryText)
         titleLabel.accessibilityTraits = .header
         titleLabel.accessibilityIdentifier = "bookDetail.deleteDialog.title"
         messageLabel.accessibilityIdentifier = "bookDetail.deleteDialog.message"
         fileControl.isSelected = deleteOriginal
         fileControl.accessibilityIdentifier = "bookDetail.deleteDialog.deleteOriginal"
         cancelControl.accessibilityIdentifier = "bookDetail.deleteDialog.cancel"
+        cancelControl.accessibilityHint = BookDetailDialogText.removalCancelHint.value
         confirmControl.accessibilityIdentifier = "bookDetail.deleteDialog.confirm"
+        updateConfirmationHint()
         fileControl.addTarget(self, action: #selector(toggleFile), for: .touchUpInside)
         cancelControl.addTarget(self, action: #selector(cancel), for: .touchUpInside)
         confirmControl.addTarget(self, action: #selector(confirm), for: .touchUpInside)
@@ -131,6 +135,13 @@ final class BookDetailDeleteDialogContentView: UIView {
     @objc private func toggleFile() {
         guard isEditingEnabled, showsFileOption else { return }
         fileControl.isSelected.toggle()
+        updateConfirmationHint()
+    }
+
+    private func updateConfirmationHint() {
+        confirmControl.accessibilityHint =
+            showsFileOption && fileControl.isSelected
+            ? BookDetailDialogText.removalWithFileHint.value : BookDetailDialogText.removalOnlyHint.value
     }
 
     @objc private func cancel() {
@@ -150,7 +161,8 @@ private final class BookDetailDeleteDialogFileControl: UIControl {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        BookshelfLayoutDialogStyle.configure(label, text: "删除源文件", color: AndroidReplicaTheme.primaryText)
+        BookshelfLayoutDialogStyle.configure(
+            label, text: BookDetailDialogText.deleteOriginalFile.value, color: AndroidReplicaTheme.primaryText)
         label.isAccessibilityElement = false
         indicator.isAccessibilityElement = false
         indicator.isUserInteractionEnabled = false
@@ -158,7 +170,8 @@ private final class BookDetailDeleteDialogFileControl: UIControl {
         addSubview(indicator)
         addSubview(label)
         isAccessibilityElement = true
-        accessibilityLabel = "删除源文件"
+        accessibilityLabel = BookDetailDialogText.deleteOriginalFile.value
+        accessibilityHint = BookDetailDialogText.deleteOriginalFileHint.value
         updateSelection()
     }
 
@@ -226,6 +239,7 @@ private final class BookDetailDeleteDialogFileControl: UIControl {
         if isSelected { traits.insert(.selected) }
         if !isEnabled { traits.insert(.notEnabled) }
         accessibilityTraits = traits
-        accessibilityValue = isSelected ? "已选中" : "未选中"
+        accessibilityValue =
+            isSelected ? L10n.ReaderAppearance.optionSelected : L10n.ReaderAppearance.optionNotSelected
     }
 }
