@@ -366,7 +366,8 @@ final class LocalBookImportCoordinator {
             try await ownership?.waitUntilReady()
             let controller = try activeProgress()
             controller.setFileName(url.lastPathComponent)
-            controller.setStatus("文件 \(batch.processedFiles + 1) / \(batch.totalFiles)\n\(BookshelfLocalImportText.preparing)")
+            controller.setStatus(
+                BookshelfLocalImportText.preparingFile(batch.processedFiles + 1, total: batch.totalFiles))
             let input = try await LocalBookImportService.prepare(from: url)
             prepared = input
             try Task.checkCancellation()
@@ -380,7 +381,8 @@ final class LocalBookImportCoordinator {
                 let fileName = entryPath.map { "\(input.fileName) / \($0)" } ?? input.fileName
                 controller.setFileName(fileName)
                 controller.setStatus(
-                    "文件 \(batch.processedFiles + 1) / \(batch.totalFiles)，条目 \(entryIndex + 1) / \(paths.count)\n\(BookshelfLocalImportText.importing)"
+                    BookshelfLocalImportText.importingEntry(
+                        batch.processedFiles + 1, total: batch.totalFiles, entry: entryIndex + 1, entries: paths.count)
                 )
                 do {
                     let book = try await LocalBookImportService.importBook(
@@ -399,7 +401,8 @@ final class LocalBookImportCoordinator {
         } catch is CancellationError {
             batch.isCancelled = true
         } catch {
-            batch.failures.append(LocalBookImportIssue(fileName: url.lastPathComponent, message: error.userFacingMessage))
+            batch.failures.append(
+                LocalBookImportIssue(fileName: url.lastPathComponent, message: error.userFacingMessage))
             if Task.isCancelled { batch.isCancelled = true }
         }
         if let prepared { await LocalBookImportService.discard(prepared) }
@@ -555,7 +558,8 @@ final class LocalBookImportCoordinator {
     private func checkInteraction() {
         guard task != nil, !isFinishing else { return }
         if let progress, let host = progressPresenter,
-            progress.presentingViewController !== host || host.presentedViewController !== progress || progress.isBeingDismissed
+            progress.presentingViewController !== host || host.presentedViewController !== progress
+                || progress.isBeingDismissed
         {
             cancel()
         }
@@ -587,8 +591,8 @@ final class LocalBookImportCoordinator {
         guard let presenter, ownership?.canPresent == true
         else { return }
         let message = failures.map { "\($0.fileName)：\($0.message)" }.joined(separator: "\n")
-        let alert = UIAlertController(title: "导入失败", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        let alert = UIAlertController(title: LocalBookImportResultText.failed, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
         presenter.present(alert, animated: true)
     }
 

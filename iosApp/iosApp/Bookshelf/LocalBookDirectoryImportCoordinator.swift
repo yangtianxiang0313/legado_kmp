@@ -48,7 +48,7 @@ final class LocalBookDirectoryImportCoordinator {
                         guard let self, self.ownership?.id == id, self.task?.isCancelled == false, !self.isFinishing,
                             let progress = self.progress, self.ownership?.canUse(progress) == true
                         else { return }
-                        self.progress?.setStatus("已扫描 \(visited) 项，找到 \(found) 个文件")
+                        self.progress?.setStatus(BookshelfLocalImportText.scanned(visited, found: found))
                     }
                 }
                 try Task.checkCancellation()
@@ -64,7 +64,8 @@ final class LocalBookDirectoryImportCoordinator {
                     let terminal: (LocalBookImportSummary?, Bool) = await withTaskCancellationHandler {
                         await withCheckedContinuation { terminal in
                             importer.onFinished = { [weak importer] in
-                                terminal.resume(returning: (importer?.completedSummary, importer?.canDeliverResult == true))
+                                terminal.resume(
+                                    returning: (importer?.completedSummary, importer?.canDeliverResult == true))
                             }
                             // The directory task stays busy until the child's true terminal callback.
                             guard ownership?.canPresent == true else {
@@ -153,7 +154,7 @@ final class LocalBookDirectoryImportCoordinator {
         try ownership.acknowledgePresentation(controller)
         try await ownership.waitUntilReady()
         guard ownership.canUse(controller) else { throw CancellationError() }
-        controller.setStatus("正在扫描文件夹…")
+        controller.setStatus(BookshelfLocalImportText.scanning)
         try Task.checkCancellation()
     }
 
@@ -233,12 +234,14 @@ final class LocalBookDirectoryImportCoordinator {
     private func checkInteraction() {
         guard task != nil, !isFinishing, importer == nil else { return }
         if let progress, let host = progressPresenter,
-            progress.presentingViewController !== host || host.presentedViewController !== progress || progress.isBeingDismissed
+            progress.presentingViewController !== host || host.presentedViewController !== progress
+                || progress.isBeingDismissed
         {
             cancel()
         }
         if continuation != nil, let navigation = selectionNavigation,
-            navigation.topViewController !== selection || navigation.presentingViewController == nil || navigation.isBeingDismissed
+            navigation.topViewController !== selection || navigation.presentingViewController == nil
+                || navigation.isBeingDismissed
         {
             cancel()
         }

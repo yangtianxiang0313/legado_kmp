@@ -3,12 +3,12 @@ import shared
 
 final class AndroidReplicaBookDetailViewController: UIViewController, NavigationContentChromeProviding {
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
-
     private(set) var bookURL: String
     private var seed: BookDetailPreviewSeed?
     private let adapter: AndroidReplicaBookDetailAdapter
     private lazy var topBar = AndroidReplicaDetailBar(
-        title: "书籍信息", target: self, backAction: #selector(handleBack), appearance: .coverOverlay)
+        title: BookInfoEditText.detail.value, target: self, backAction: #selector(handleBack), appearance: .coverOverlay
+    )
     private let editButton = UIButton(type: .custom)
     private let shareButton = UIButton(type: .custom)
     private let moreButton = UIButton(type: .custom)
@@ -185,7 +185,8 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
             || webFiles.isBusy
     }
 
-    private func canInteract(allowing operation: DetailOperation? = nil, in ownedModal: UIViewController? = nil) -> Bool {
+    private func canInteract(allowing operation: DetailOperation? = nil, in ownedModal: UIViewController? = nil) -> Bool
+    {
         guard isDetailActive, isSceneActive, !isBusy(except: operation) else { return false }
         return BookDetailInteractionOwner.canInteract(owner: self, scene: detailScene, ownedModal: ownedModal)
     }
@@ -516,7 +517,8 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         shelfButton.configuration = shelfConfig
         let canAct = !isBusy()
         shelfButton.isEnabled = book != nil && canAct
-        readButton.isEnabled = book != nil && canAct && (isInBookshelf || displayedChapterCount > 0 || book?.isWebFile == true)
+        readButton.isEnabled =
+            book != nil && canAct && (isInBookshelf || displayedChapterCount > 0 || book?.isWebFile == true)
         editButton.isHidden = !isInBookshelf
         editButton.isEnabled = isInBookshelf && book != nil && canAct
         shareButton.isEnabled = book != nil && canAct

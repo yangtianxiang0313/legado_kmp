@@ -26,7 +26,7 @@ final class LocalBookImportResultViewController: UITableViewController {
         if !summary.failures.isEmpty { sections.append(.failures) }
         self.sections = sections
         super.init(style: .insetGrouped)
-        title = "导入结果"
+        title = LocalBookImportResultText.title
     }
 
     @available(*, unavailable)
@@ -68,6 +68,7 @@ final class LocalBookImportResultViewController: UITableViewController {
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(closeResult)
         )
+        navigationItem.rightBarButtonItem?.accessibilityLabel = LocalBookImportResultText.done
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int { sections.count }
@@ -84,8 +85,8 @@ final class LocalBookImportResultViewController: UITableViewController {
         switch sections[section] {
         case .summary: return nil
         case .books:
-            return summary.isCancelled ? "已保留的书籍（\(summary.books.count)）" : "已加入书架（\(summary.books.count)）"
-        case .failures: return "导入失败（\(summary.failures.count)）"
+            return LocalBookImportResultText.booksHeader(summary.books.count, retained: summary.isCancelled)
+        case .failures: return LocalBookImportResultText.failuresHeader(summary.failures.count)
         }
     }
 
@@ -98,31 +99,35 @@ final class LocalBookImportResultViewController: UITableViewController {
         content.textProperties.adjustsFontForContentSizeCategory = true
         content.textProperties.color = AndroidReplicaTheme.primaryText
         content.textProperties.numberOfLines = 0
-        content.textProperties.lineBreakMode = .byCharWrapping
+        content.textProperties.lineBreakMode = .byWordWrapping
         content.secondaryTextProperties.font = .preferredFont(forTextStyle: .subheadline)
         content.secondaryTextProperties.adjustsFontForContentSizeCategory = true
         content.secondaryTextProperties.color = AndroidReplicaTheme.secondaryText
         content.secondaryTextProperties.numberOfLines = 0
-        content.secondaryTextProperties.lineBreakMode = .byCharWrapping
+        content.secondaryTextProperties.lineBreakMode = .byWordWrapping
         cell.accessoryType = .none
         cell.selectionStyle = .none
         cell.accessibilityTraits = .staticText
+        cell.accessibilityHint = nil
         switch sections[indexPath.section] {
         case .summary:
             content.text = resultTitle
             content.secondaryText = resultMessage
             content.image = UIImage(systemName: resultSymbol)
         case .books:
+            content.textProperties.lineBreakMode = .byCharWrapping
             let book = summary.books[indexPath.row]
             let name = book.name.trimmingCharacters(in: .whitespacesAndNewlines)
             let author = book.author.trimmingCharacters(in: .whitespacesAndNewlines)
-            content.text = name.isEmpty ? "未命名书籍" : name
+            content.text = name.isEmpty ? LocalBookImportResultText.unnamedBook : name
             content.secondaryText = author.isEmpty ? nil : author
             content.image = UIImage(systemName: "book.closed")
             cell.accessoryType = .disclosureIndicator
             cell.selectionStyle = .default
             cell.accessibilityTraits = .button
+            cell.accessibilityHint = LocalBookImportResultText.openBookHint
         case .failures:
+            content.textProperties.lineBreakMode = .byCharWrapping
             let issue = summary.failures[indexPath.row]
             content.text = Self.displayFileName(issue.fileName)
             content.secondaryText = Self.displayIssueMessage(issue)
@@ -181,7 +186,9 @@ final class LocalBookImportResultViewController: UITableViewController {
             AppLockManager.shared.isUnlocked(in: window)
         else { return false }
         if let ownedSheet {
-            guard ownedSheet.viewIfLoaded?.window === window, ownedSheet.presentedViewController == nil else { return false }
+            guard ownedSheet.viewIfLoaded?.window === window, ownedSheet.presentedViewController == nil else {
+                return false
+            }
         }
         var ancestor: UIViewController? = owner
         var foundNavigation = false
@@ -193,7 +200,9 @@ final class LocalBookImportResultViewController: UITableViewController {
                 controller.viewIfLoaded?.isHidden == false, (controller.viewIfLoaded?.alpha ?? 0) > 0
             else { return false }
             if let presented = controller.presentedViewController, presented !== ownedSheet { return false }
-            if let tabs = controller.parent as? UITabBarController, tabs.selectedViewController !== controller { return false }
+            if let tabs = controller.parent as? UITabBarController, tabs.selectedViewController !== controller {
+                return false
+            }
             if controller === navigation { foundNavigation = true }
             if controller === root { return foundNavigation }
             ancestor = controller.parent
@@ -202,10 +211,12 @@ final class LocalBookImportResultViewController: UITableViewController {
     }
 
     private var resultTitle: String {
-        if summary.isCancelled { return "导入已取消" }
-        if !summary.failures.isEmpty { return summary.books.isEmpty ? "导入失败" : "部分导入成功" }
-        if summary.processedFiles < summary.totalFiles { return "导入未全部完成" }
-        return summary.books.isEmpty ? "未导入书籍" : "导入完成"
+        if summary.isCancelled { return LocalBookImportResultText.cancelled }
+        if !summary.failures.isEmpty {
+            return summary.books.isEmpty ? LocalBookImportResultText.failed : LocalBookImportResultText.partialSuccess
+        }
+        if summary.processedFiles < summary.totalFiles { return LocalBookImportResultText.incomplete }
+        return summary.books.isEmpty ? LocalBookImportResultText.noBooks : LocalBookImportResultText.completed
     }
 
     private var resultSymbol: String {
@@ -218,29 +229,37 @@ final class LocalBookImportResultViewController: UITableViewController {
 
     private var resultMessage: String {
         var lines = [
-            "已处理 \(summary.processedFiles) / \(summary.totalFiles) 个文件，成功 \(summary.books.count) 本，失败 \(summary.failures.count) 项。"
+            LocalBookImportResultText.statistics(
+                processed: summary.processedFiles, total: summary.totalFiles,
+                books: summary.books.count, failures: summary.failures.count)
         ]
         if summary.isCancelled {
-            lines.append(summary.books.isEmpty ? "已停止后续导入，本次没有成功加入书架的书籍。" : "已停止后续导入，已成功处理的书籍全部保留在书架中。")
+            lines.append(
+                summary.books.isEmpty
+                    ? LocalBookImportResultText.cancelledWithoutBooks : LocalBookImportResultText.cancelledWithBooks)
         } else if summary.books.isEmpty {
-            lines.append(summary.totalFiles == 0 && summary.failures.isEmpty ? "没有需要导入的文件。" : "本次没有成功加入书架的书籍。")
+            lines.append(
+                summary.totalFiles == 0 && summary.failures.isEmpty
+                    ? LocalBookImportResultText.noFiles : LocalBookImportResultText.noneAdded)
         } else if !summary.failures.isEmpty {
-            lines.append("已成功导入的书籍已保留在书架中，其余失败原因见下方。")
+            lines.append(LocalBookImportResultText.successfulBooksRetained)
         }
         if !summary.isCancelled, summary.processedFiles < summary.totalFiles {
-            lines.append("尚有 \(summary.totalFiles - summary.processedFiles) 个文件未完成处理。")
+            lines.append(LocalBookImportResultText.remainingFiles(summary.totalFiles - summary.processedFiles))
         }
         return lines.joined(separator: "\n")
     }
 
     private static func displayFileName(_ fileName: String) -> String {
         let decoded = fileName.removingPercentEncoding ?? fileName
-        let normalized = decoded.replacingOccurrences(of: "\\", with: "/").trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = decoded.replacingOccurrences(of: "\\", with: "/").trimmingCharacters(
+            in: .whitespacesAndNewlines)
         let name = (normalized as NSString).lastPathComponent
-        return name.isEmpty || name == "/" || name == "." || name == ".." ? "未命名文件" : name
+        return name.isEmpty || name == "/" || name == "." || name == ".." ? LocalBookImportResultText.unnamedFile : name
     }
 
     private static func displayIssueMessage(_ issue: LocalBookImportIssue) -> String {
+        if let owned = LocalBookImportResultText.ownedIssue(issue.message) { return owned }
         var message = issue.message.removingPercentEncoding ?? issue.message
         message = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = displayFileName(issue.fileName)
@@ -250,9 +269,80 @@ final class LocalBookImportResultViewController: UITableViewController {
         }
         // Error descriptions can include sandbox or security-scoped locations.
         let quotedPathPattern = #"[\"'“‘](?i:file://|[a-z]:[\\/]|~/|/)[^\"'”’\r\n]*[\"'”’]"#
-        message = message.replacingOccurrences(of: quotedPathPattern, with: "[文件路径]", options: .regularExpression)
+        message = message.replacingOccurrences(
+            of: quotedPathPattern, with: LocalBookImportResultText.filePath, options: .regularExpression)
         let pathPattern = #"(?i)(?<![a-z0-9_])(?:file://|[a-z]:[\\/]|~/|/)[^\s\"'<>，。；：！？（）【】]+"#
-        message = message.replacingOccurrences(of: pathPattern, with: "[文件路径]", options: .regularExpression)
-        return message.isEmpty ? "无法导入此文件，未提供具体原因。" : message
+        message = message.replacingOccurrences(
+            of: pathPattern, with: LocalBookImportResultText.filePath, options: .regularExpression)
+        return message.isEmpty ? LocalBookImportResultText.unknownFailure : message
+    }
+}
+
+enum LocalBookImportResultText {
+    static let title = text("title", "导入结果")
+    static let done = text("done", "完成")
+    static let cancelled = text("cancelled", "导入已取消")
+    static let failed = text("failed", "导入失败")
+    static let partialSuccess = text("partial_success", "部分导入成功")
+    static let incomplete = text("incomplete", "导入未全部完成")
+    static let noBooks = text("no_books", "未导入书籍")
+    static let completed = text("completed", "导入完成")
+    static let cancelledWithoutBooks = text("cancelled_without_books", "已停止后续导入，本次没有成功加入书架的书籍。")
+    static let cancelledWithBooks = text("cancelled_with_books", "已停止后续导入，已成功处理的书籍全部保留在书架中。")
+    static let noFiles = text("no_files", "没有需要导入的文件。")
+    static let noneAdded = text("none_added", "本次没有成功加入书架的书籍。")
+    static let successfulBooksRetained = text("successful_books_retained", "已成功导入的书籍已保留在书架中，其余失败原因见下方。")
+    static let unnamedBook = text("unnamed_book", "未命名书籍")
+    static let unnamedFile = text("unnamed_file", "未命名文件")
+    static let filePath = text("file_path", "[文件路径]")
+    static let unknownFailure = text("unknown_failure", "无法导入此文件，未提供具体原因。")
+    static let openBookHint = text("open_book_hint", "打开书籍阅读")
+
+    static func booksHeader(_ count: Int, retained: Bool) -> String {
+        retained
+            ? format("retained_books_header", "已保留的书籍（%d）", count)
+            : format("added_books_header", "已加入书架（%d）", count)
+    }
+
+    static func failuresHeader(_ count: Int) -> String {
+        format("failures_header", "导入失败（%d）", count)
+    }
+
+    static func statistics(processed: Int, total: Int, books: Int, failures: Int) -> String {
+        format("statistics", "已处理 %1$d / %2$d 个文件，成功 %3$d 本，失败 %4$d 项。", processed, total, books, failures)
+    }
+
+    static func remainingFiles(_ count: Int) -> String {
+        format("remaining_files", "尚有 %d 个文件未完成处理。", count)
+    }
+
+    static func ownedIssue(_ raw: String) -> String? {
+        if raw == LocalBookFormats.unsupportedMessage {
+            return text("error.unsupported_type", LocalBookFormats.unsupportedMessage)
+        }
+        // Match only complete messages emitted by the app, never arbitrary error fragments.
+        let keys = [
+            "压缩包超过 16 GiB，无法导入": "archive_too_large",
+            "请选择有效的常规文件": "invalid_file",
+            "不能导入空文件": "empty_file",
+            "本地书籍目录异常，无法导入": "invalid_storage",
+            "无法创建本地书籍文件": "cannot_create_file",
+            "本地文件导入失败，请重试": "file_import_failed",
+            "压缩包导入失败": "archive_import_failed",
+            "压缩包中没有可导入的书籍": "archive_empty",
+            "请选择压缩包内需要导入的书籍": "select_archive_books",
+            "请选择压缩包内需要导入的一本书": "select_archive_book",
+            "本地导入文件已失效": "expired_file",
+        ]
+        guard let key = keys[raw] else { return nil }
+        return text("error." + key, raw)
+    }
+
+    private static func text(_ key: String, _ fallback: String) -> String {
+        Bundle.main.localizedString(forKey: "consumer.import_result." + key, value: fallback, table: nil)
+    }
+
+    private static func format(_ key: String, _ fallback: String, _ arguments: CVarArg...) -> String {
+        String(format: text(key, fallback), locale: Locale.current, arguments: arguments)
     }
 }

@@ -3,16 +3,40 @@ import UniformTypeIdentifiers
 import shared
 
 enum BookshelfLocalImportText {
-    static let title = "导入本地书籍"
-    static let preparing = "正在准备文件…"
-    static let importing = "正在解析并加入书架…"
-    static let cancelling = "正在取消，等待当前操作结束…"
-    static let cancelled = "已取消导入"
-    static let unsupported = LocalBookFormats.unsupportedMessage
-    static let cancel = "取消"
+    static let title = text("title", "导入本地书籍")
+    static let preparing = text("preparing", "正在准备文件…")
+    static let importing = text("importing", "正在解析并加入书架…")
+    static let cancelling = text("cancelling", "正在取消，等待当前操作结束…")
+    static let cancelled = text("cancelled", "已取消导入")
+    static let unsupported = text("unsupported", LocalBookFormats.unsupportedMessage)
+    static let cancel = L10n.Common.cancel
+    static let chooseFiles = text("choose_files", "选择文件")
+    static let scanFolder = text("scan_folder", "扫描文件夹")
+    static let fileNameRules = text("file_name_rules", "导入文件名规则")
+    static let scanning = text("scanning", "正在扫描文件夹…")
 
     static func success(_ name: String) -> String {
-        "已导入《\(name)》"
+        format("success", "已导入《%@》", name)
+    }
+
+    static func scanned(_ visited: Int, found: Int) -> String {
+        format("scanned", "已扫描 %1$d 项，找到 %2$d 个文件", visited, found)
+    }
+
+    static func preparingFile(_ current: Int, total: Int) -> String {
+        format("preparing_file", "文件 %1$d / %2$d\n%3$@", current, total, preparing)
+    }
+
+    static func importingEntry(_ current: Int, total: Int, entry: Int, entries: Int) -> String {
+        format("importing_entry", "文件 %1$d / %2$d，条目 %3$d / %4$d\n%5$@", current, total, entry, entries, importing)
+    }
+
+    private static func text(_ key: String, _ fallback: String) -> String {
+        Bundle.main.localizedString(forKey: "consumer.local_import." + key, value: fallback, table: nil)
+    }
+
+    private static func format(_ key: String, _ fallback: String, _ arguments: CVarArg...) -> String {
+        String(format: text(key, fallback), locale: Locale.current, arguments: arguments)
     }
 }
 @MainActor
@@ -65,15 +89,15 @@ final class BookshelfLocalImport: NSObject, UIDocumentPickerDelegate, UIAdaptive
         self.menu = menu
         request.bind(menu)
         menu.addAction(
-            UIAlertAction(title: "选择文件", style: .default) { [weak self, weak menu] _ in
+            UIAlertAction(title: BookshelfLocalImportText.chooseFiles, style: .default) { [weak self, weak menu] _ in
                 self?.afterMenu(menu, id: id) { [weak self] in self?.chooseFiles(directory: false, id: id) }
             })
         menu.addAction(
-            UIAlertAction(title: "扫描文件夹", style: .default) { [weak self, weak menu] _ in
+            UIAlertAction(title: BookshelfLocalImportText.scanFolder, style: .default) { [weak self, weak menu] _ in
                 self?.afterMenu(menu, id: id) { [weak self] in self?.chooseFiles(directory: true, id: id) }
             })
         menu.addAction(
-            UIAlertAction(title: "导入文件名规则", style: .default) { [weak self, weak menu] _ in
+            UIAlertAction(title: BookshelfLocalImportText.fileNameRules, style: .default) { [weak self, weak menu] _ in
                 self?.afterMenu(menu, id: id) { [weak self] in
                     guard let self, self.request?.id == id, self.request?.canPresent == true,
                         let presenter = self.presenter
@@ -134,7 +158,9 @@ final class BookshelfLocalImport: NSObject, UIDocumentPickerDelegate, UIAdaptive
         present(picker, from: presenter, request: request)
     }
 
-    private func present(_ controller: UIViewController, from presenter: UIViewController, request: LocalBookImportOwnership) {
+    private func present(
+        _ controller: UIViewController, from presenter: UIViewController, request: LocalBookImportOwnership
+    ) {
         let id = request.id
         transitionTask = Task { @MainActor [self] in
             do {
@@ -209,7 +235,9 @@ final class BookshelfLocalImport: NSObject, UIDocumentPickerDelegate, UIAdaptive
                     let coordinator = LocalBookDirectoryImportCoordinator(presenter: presenter)
                     coordinator.onBatchCompleted = { [weak self] summary in self?.receive(summary, id: id) }
                     coordinator.onFinished = { [weak self, weak coordinator] in
-                        guard let self, self.request?.id == id, self.directoryCoordinator === coordinator else { return }
+                        guard let self, self.request?.id == id, self.directoryCoordinator === coordinator else {
+                            return
+                        }
                         let summary = coordinator?.completedSummary ?? self.pendingSummary
                         let canDeliver = coordinator?.canDeliverResult == true
                         self.directoryCoordinator = nil

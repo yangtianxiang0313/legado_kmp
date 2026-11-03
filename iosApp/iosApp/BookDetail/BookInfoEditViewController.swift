@@ -33,7 +33,7 @@ final class BookInfoEditViewController: UIViewController, UITextFieldDelegate, U
     private var previousDismissalLocks: (editor: Bool, navigation: Bool)?
 
     private let form = BookInfoEditFormView()
-    private let topBar = AndroidEditorTitleBar(title: "书籍信息编辑")
+    private let topBar = AndroidEditorTitleBar(title: BookInfoEditText.editTitle.value, wrapsTitle: true)
     private var previousNavigationBarHidden: Bool?
     private lazy var coverPreview = BookInfoEditCoverPreview(
         imageView: form.coverImageView, spinner: form.coverSpinner, placeholder: form.defaultCoverView)
@@ -175,7 +175,7 @@ final class BookInfoEditViewController: UIViewController, UITextFieldDelegate, U
     }
 
     private func configureNavigation() {
-        title = "书籍信息编辑"
+        title = BookInfoEditText.editTitle.value
         navigationItem.largeTitleDisplayMode = .never
         topBar.backButton.accessibilityIdentifier = "bookInfoEdit.back"
         topBar.saveButton.accessibilityIdentifier = "bookInfoEdit.save"
@@ -296,7 +296,11 @@ final class BookInfoEditViewController: UIViewController, UITextFieldDelegate, U
                 self.coverUrlTextView.text = url.path
                 self.refreshCoverPreview()
             case .failure(let error):
-                self.showError(title: "选择封面失败", message: error.userFacingMessage)
+                let fileError = error as NSError
+                let message =
+                    fileError.domain == "BookInfoEditCover" && fileError.code == 1
+                    ? BookInfoEditText.unreadableImage.value : error.userFacingMessage
+                self.showError(title: BookInfoEditText.selectCoverFailed.value, message: message)
             }
         }
     }
@@ -339,7 +343,9 @@ final class BookInfoEditViewController: UIViewController, UITextFieldDelegate, U
             onFailure: reportFailure
                 ? { [weak self] in
                     guard let self, self.canEdit, self.presentedViewController == nil else { return }
-                    self.showError(title: "封面加载失败", message: "无法加载当前封面，请检查封面地址后重试。")
+                    self.showError(
+                        title: BookInfoEditText.coverLoadFailed.value,
+                        message: BookInfoEditText.coverLoadFailedMessage.value)
                 } : nil)
     }
 

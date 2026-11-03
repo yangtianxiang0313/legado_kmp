@@ -2,7 +2,12 @@ import UIKit
 
 @MainActor
 final class BookInfoEditTypeButton: UIButton {
-    fileprivate static let titles = ["文本", "音频", "图片", "文件"]
+    fileprivate static var titles: [String] {
+        [
+            BookInfoEditText.text.value, BookInfoEditText.audio.value, BookInfoEditText.image.value,
+            BookInfoEditText.file.value,
+        ]
+    }
 
     var selectedIndex: Int {
         get { selection }
@@ -30,7 +35,7 @@ final class BookInfoEditTypeButton: UIButton {
         titleLabel?.adjustsFontSizeToFitWidth = false
         titleLabel?.isAccessibilityElement = false
         isAccessibilityElement = true
-        accessibilityLabel = "类型"
+        accessibilityLabel = BookInfoEditText.type.value
         accessibilityIdentifier = "bookInfoEdit.type"
         addTarget(self, action: #selector(togglePopup), for: .touchUpInside)
         updateSelection()
@@ -286,6 +291,7 @@ private final class BookInfoEditTypePopup: UIView {
         panel.layer.shadowOffset = CGSize(width: 0, height: 3)
         addSubview(panel)
         scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.isDirectionalLockEnabled = true
         scrollView.bounces = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.delaysContentTouches = false
@@ -404,11 +410,13 @@ private final class BookInfoEditTypePopup: UIView {
         }
         let safeBounds = bounds.inset(by: geometry.safeInsets)
         let anchorRect = geometry.anchorRect
-        let width = min(safeBounds.width, max(anchorRect.width, rows.map(\.preferredWidth).max() ?? 0))
+        let preferredWidth = max(anchorRect.width, rows.map(\.preferredWidth).max() ?? 0)
+        let width = min(safeBounds.width, preferredWidth)
+        let contentWidth = max(width, preferredWidth)
         var contentHeight: CGFloat = 0
         for row in rows {
-            let height = row.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)).height
-            row.frame = CGRect(x: 0, y: contentHeight, width: width, height: height)
+            let height = row.sizeThatFits(CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude)).height
+            row.frame = CGRect(x: 0, y: contentHeight, width: contentWidth, height: height)
             contentHeight += height
         }
         let belowY = min(max(anchorRect.maxY, safeBounds.minY), safeBounds.maxY)
@@ -431,12 +439,17 @@ private final class BookInfoEditTypePopup: UIView {
             width: width, height: height)
         panel.layer.shadowPath = UIBezierPath(roundedRect: panel.bounds, cornerRadius: 2).cgPath
         scrollView.frame = panel.bounds
-        scrollView.contentSize = CGSize(width: width, height: contentHeight)
-        scrollView.isScrollEnabled = contentHeight > height
-        scrollView.showsVerticalScrollIndicator = scrollView.isScrollEnabled
+        scrollView.contentSize = CGSize(width: contentWidth, height: contentHeight)
+        scrollView.isScrollEnabled = contentHeight > height || contentWidth > width
+        scrollView.showsVerticalScrollIndicator = contentHeight > height
         if !didRevealSelection {
             didRevealSelection = true
-            scrollView.scrollRectToVisible(rows[selectedIndex].frame, animated: false)
+            let selectedFrame = rows[selectedIndex].frame
+            scrollView.scrollRectToVisible(
+                CGRect(
+                    x: geometry.direction == .rightToLeft ? contentWidth - width : 0,
+                    y: selectedFrame.minY, width: width, height: selectedFrame.height),
+                animated: false)
         }
     }
 

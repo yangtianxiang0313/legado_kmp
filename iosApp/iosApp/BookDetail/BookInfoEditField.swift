@@ -26,11 +26,13 @@ final class BookInfoEditField: UIView {
     let editor: UIView
     var onMetricsChange: (() -> Void)?
 
+    private let hintScrollView = UIScrollView()
     private let hintLabel = UILabel()
     private let underline = UIView()
     private var expandedFont = UIFont.systemFont(ofSize: 18)
     private var collapsedFont = UIFont.systemFont(ofSize: 12)
     private var isHintCollapsed = false
+    private var lastHintDirection: UIUserInterfaceLayoutDirection?
 
     init(title: String, editor: UIView) {
         self.editor = editor
@@ -40,8 +42,18 @@ final class BookInfoEditField: UIView {
         hintLabel.adjustsFontSizeToFitWidth = false
         hintLabel.isAccessibilityElement = false
         hintLabel.isUserInteractionEnabled = false
+        hintScrollView.contentInsetAdjustmentBehavior = .never
+        hintScrollView.isDirectionalLockEnabled = true
+        hintScrollView.scrollsToTop = false
+        hintScrollView.bounces = false
+        hintScrollView.showsHorizontalScrollIndicator = false
+        hintScrollView.showsVerticalScrollIndicator = false
+        hintScrollView.accessibilityElementsHidden = true
+        hintScrollView.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(focusEditorFromHint)))
         addSubview(editor)
-        addSubview(hintLabel)
+        addSubview(hintScrollView)
+        hintScrollView.addSubview(hintLabel)
         addSubview(underline)
         underline.isUserInteractionEnabled = false
 
@@ -142,9 +154,26 @@ final class BookInfoEditField: UIView {
         } else {
             expandedHintY = hintMargin + insets.top
         }
-        hintLabel.frame = CGRect(
+        let direction = effectiveUserInterfaceLayoutDirection
+        let isRTL = direction == .rightToLeft
+        let oldRange = max(0, hintScrollView.contentSize.width - hintScrollView.bounds.width)
+        let oldLeadingOffset = isRTL ? oldRange - hintScrollView.contentOffset.x : hintScrollView.contentOffset.x
+        let textWidth = ceil(
+            hintLabel.sizeThatFits(CGSize(width: .greatestFiniteMagnitude, height: font.lineHeight)).width)
+        let contentWidth = max(width, textWidth)
+        hintScrollView.frame = CGRect(
             x: insets.left, y: isHintCollapsed ? 0 : expandedHintY,
             width: width, height: font.lineHeight)
+        hintLabel.frame = CGRect(x: 0, y: 0, width: contentWidth, height: font.lineHeight)
+        hintLabel.textAlignment = isRTL ? .right : .left
+        hintScrollView.contentSize = CGSize(width: contentWidth, height: font.lineHeight)
+        let range = max(0, contentWidth - width)
+        hintScrollView.isScrollEnabled = range > 0
+        hintScrollView.isUserInteractionEnabled = hintScrollView.isScrollEnabled
+        let leadingOffset = lastHintDirection == direction ? min(range, max(0, oldLeadingOffset)) : 0
+        let offset = CGPoint(x: isRTL ? range - leadingOffset : leadingOffset, y: 0)
+        if hintScrollView.contentOffset != offset { hintScrollView.setContentOffset(offset, animated: false) }
+        lastHintDirection = direction
         let focused = editor.isFirstResponder && editorIsEnabled
         let thickness: CGFloat = focused ? BookInfoEditInputMetrics.underlineHeight : 1
         underline.frame = CGRect(
@@ -204,6 +233,11 @@ final class BookInfoEditField: UIView {
             ? (editor.isFirstResponder ? 1 : 222 / 255)
             : (222 / 255) * (isNight ? 0.30 : 0.26)
         setNeedsLayout()
+    }
+
+    @objc private func focusEditorFromHint() {
+        guard editor.isUserInteractionEnabled, editorIsEnabled else { return }
+        editor.becomeFirstResponder()
     }
 
     @objc private func editorChanged() {

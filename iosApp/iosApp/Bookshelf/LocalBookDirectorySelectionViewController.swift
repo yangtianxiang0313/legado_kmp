@@ -43,10 +43,10 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
     ) {
         rows = files.map(DirectorySelectionRow.init)
         self.isTruncated = isTruncated
-        scanNotice = DirectorySelectionNotice.summary(issues: issues, isTruncated: isTruncated, count: files.count)
+        scanNotice = DirectorySelectionText.summary(issues: issues, isTruncated: isTruncated, count: files.count)
         self.onSelection = onSelection
         super.init(style: .insetGrouped)
-        title = "选择书籍"
+        title = DirectorySelectionText.title
     }
 
     @available(*, unavailable)
@@ -69,13 +69,15 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
         tableView.accessibilityIdentifier = "local-book.directory-selection"
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .cancel, target: self, action: #selector(cancelFromUI))
+        navigationItem.leftBarButtonItem?.accessibilityLabel = L10n.Common.cancel
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "确认", style: .done, target: self, action: #selector(confirmSelection))
+            title: L10n.Common.confirm, style: .done, target: self, action: #selector(confirmSelection))
         search.searchResultsUpdater = self
         search.delegate = self
         search.obscuresBackgroundDuringPresentation = false
         search.hidesNavigationBarDuringPresentation = false
-        search.searchBar.placeholder = "按文件名或路径筛选"
+        search.searchBar.placeholder = DirectorySelectionText.searchPlaceholder
+        search.searchBar.accessibilityLabel = DirectorySelectionText.searchPlaceholder
         search.searchBar.accessibilityIdentifier = "local-book.directory-selection.search"
         navigationItem.searchController = search
         navigationItem.hidesSearchBarWhenScrolling = false
@@ -156,7 +158,7 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
 
     override var keyCommands: [UIKeyCommand]? {
         let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancelFromUI))
-        escape.discoverabilityTitle = "取消"
+        escape.discoverabilityTitle = L10n.Common.cancel
         escape.wantsPriorityOverSystemBehavior = true
         return [escape]
     }
@@ -195,13 +197,13 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        section == 1 ? "文件（\(matchingIndices.count)）" : nil
+        section == 1 ? DirectorySelectionText.filesHeader(matchingIndices.count) : nil
     }
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         guard section == 1, !isUpdating, matchingIndices.isEmpty else { return nil }
-        if !query.isEmpty { return "没有文件名或路径匹配的文件" }
-        return scanNotice == nil ? "没有可导入的文件" : "本次扫描未找到可导入的文件"
+        if !query.isEmpty { return DirectorySelectionText.noMatches }
+        return scanNotice == nil ? DirectorySelectionText.noFiles : DirectorySelectionText.scanEmpty
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -229,14 +231,14 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
         cell.accessibilityValue = nil
         cell.accessibilityIdentifier = nil
         if indexPath.section == 0 {
-            content.text = isTruncated ? "仅显示部分扫描结果" : "部分项目未能扫描"
+            content.text = isTruncated ? DirectorySelectionText.truncatedTitle : DirectorySelectionText.scanIssueTitle
             content.secondaryText = scanNotice
             content.image = UIImage(systemName: "exclamationmark.triangle")
             cell.selectionStyle = .none
             cell.accessibilityTraits = .staticText
         } else if indexPath.row == displayedCount {
-            content.text = "继续显示"
-            content.secondaryText = "已显示 \(displayedCount) / \(matchingIndices.count) 项"
+            content.text = DirectorySelectionText.showMore
+            content.secondaryText = DirectorySelectionText.shown(displayedCount, total: matchingIndices.count)
             content.image = UIImage(systemName: "chevron.down")
             cell.selectionStyle = .default
             cell.accessibilityTraits = .button
@@ -248,13 +250,14 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
             content.text = row.name
             var details = [row.directory, row.metadata]
             if let modifiedAt = row.candidate.modifiedAt {
-                details.append("修改于 " + modifiedAt.formatted(date: .abbreviated, time: .shortened))
+                details.append(
+                    DirectorySelectionText.modified(modifiedAt.formatted(date: .abbreviated, time: .shortened)))
             }
             content.secondaryText = details.joined(separator: "\n")
             content.image = UIImage(systemName: selected ? "checkmark.square.fill" : "square")
             cell.selectionStyle = .default
             cell.accessibilityTraits = selected ? [.button, .selected] : [.button]
-            cell.accessibilityValue = selected ? "已选择" : "未选择"
+            cell.accessibilityValue = selected ? DirectorySelectionText.selected : DirectorySelectionText.unselected
             cell.accessibilityIdentifier = "local-book.directory-selection.file.\(index)"
         }
         cell.contentConfiguration = content
@@ -295,8 +298,9 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
     private func configureControls() {
         for label in [countLabel, scopeLabel] {
             label.numberOfLines = 0
-            label.lineBreakMode = .byCharWrapping
+            label.lineBreakMode = .byWordWrapping
             label.adjustsFontForContentSizeCategory = true
+            label.setContentCompressionResistancePriority(.required, for: .vertical)
         }
         countLabel.font = .preferredFont(forTextStyle: .headline)
         countLabel.textColor = AndroidReplicaTheme.primaryText
@@ -354,7 +358,7 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
 
     private func updateSortMenu() {
         sortButton.menu = UIMenu(
-            title: "排序",
+            title: DirectorySelectionText.sortTitle,
             children: DirectorySelectionSort.allCases.map { option in
                 UIAction(title: option.title, state: option == sort ? .on : .off) { [weak self] _ in
                     guard let self, canInteract, option != sort else { return }
@@ -363,7 +367,7 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
                     refreshResults(debounced: false)
                 }
             })
-        sortButton.accessibilityLabel = "排序：\(sort.title)"
+        sortButton.accessibilityLabel = DirectorySelectionText.sortLabel(sort.title)
         sortButton.toolTip = sortButton.accessibilityLabel
     }
 
@@ -371,20 +375,21 @@ final class LocalBookDirectorySelectionViewController: UITableViewController,
         guard isViewLoaded else { return }
         let active = canInteract
         let canChoose = active && !isUpdating
-        countLabel.text = "已选 \(selectedIndices.count) 项，共 \(rows.count) 项"
+        countLabel.text = DirectorySelectionText.selectionCount(selectedIndices.count, total: rows.count)
         if isUpdating {
-            scopeLabel.text = query.isEmpty ? "正在整理文件…" : "正在筛选…"
+            scopeLabel.text = query.isEmpty ? DirectorySelectionText.organizing : DirectorySelectionText.filtering
         } else if query.isEmpty {
-            scopeLabel.text = "已显示 \(displayedCount) / \(matchingIndices.count) 项"
+            scopeLabel.text = DirectorySelectionText.shown(displayedCount, total: matchingIndices.count)
         } else {
-            scopeLabel.text = "匹配 \(matchingIndices.count) 项，已选 \(matchingSelectionCount) 项"
+            scopeLabel.text = DirectorySelectionText.matchingCount(
+                matchingIndices.count, selected: matchingSelectionCount)
         }
         let allSelected = !matchingIndices.isEmpty && matchingSelectionCount == matchingIndices.count
-        let scope = query.isEmpty ? "全部结果" : "筛选结果"
         selectAllButton.setImage(UIImage(systemName: allSelected ? "minus.square" : "checkmark.square"), for: .normal)
-        selectAllButton.accessibilityLabel = (allSelected ? "取消选择" : "全选") + scope
+        selectAllButton.accessibilityLabel = DirectorySelectionText.selectAllAction(
+            deselect: allSelected, filtered: !query.isEmpty)
         selectAllButton.toolTip = selectAllButton.accessibilityLabel
-        invertButton.accessibilityLabel = "反选" + scope
+        invertButton.accessibilityLabel = DirectorySelectionText.invertAction(filtered: !query.isEmpty)
         invertButton.toolTip = invertButton.accessibilityLabel
         selectAllButton.isEnabled = canChoose && !matchingIndices.isEmpty
         invertButton.isEnabled = canChoose && !matchingIndices.isEmpty
@@ -538,9 +543,9 @@ private enum DirectorySelectionSort: CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .name: return "名称（自然路径升序）"
-        case .size: return "大小（从大到小）"
-        case .modifiedAt: return "修改时间（从新到旧）"
+        case .name: return DirectorySelectionText.sortName
+        case .size: return DirectorySelectionText.sortSize
+        case .modifiedAt: return DirectorySelectionText.sortModified
         }
     }
 }
@@ -559,13 +564,16 @@ private struct DirectorySelectionRow: Sendable {
         let component = (candidate.relativePath as NSString).lastPathComponent
         name = component.isEmpty ? candidate.url.lastPathComponent : component
         let parent = (candidate.relativePath as NSString).deletingLastPathComponent
-        directory = parent.isEmpty || parent == "." ? "所选目录" : parent
+        directory = parent.isEmpty || parent == "." ? DirectorySelectionText.selectedDirectory : parent
         searchName = Self.searchKey(name + "\n" + candidate.relativePath)
         let ext = candidate.url.pathExtension.uppercased()
-        let format = LocalBookArchiveType(fileName: candidate.url.lastPathComponent).map { "\($0.displayName) 压缩包" } ?? ext
+        let format =
+            LocalBookArchiveType(fileName: candidate.url.lastPathComponent).map {
+                DirectorySelectionText.archive($0.displayName)
+            } ?? ext
         let size =
             candidate.byteCount < 0
-            ? "大小未知"
+            ? DirectorySelectionText.unknownSize
             : ByteCountFormatter.string(fromByteCount: candidate.byteCount, countStyle: .file)
         metadata = [format, size].filter { !$0.isEmpty }.joined(separator: " / ")
     }
@@ -617,20 +625,63 @@ private struct DirectorySelectionIndex: Sendable {
     }
 }
 
-private enum DirectorySelectionNotice {
+enum DirectorySelectionText {
+    static let title = text("title", "选择书籍")
+    static let searchPlaceholder = text("search_placeholder", "按文件名或路径筛选")
+    static let noMatches = text("no_matches", "没有文件名或路径匹配的文件")
+    static let noFiles = text("no_files", "没有可导入的文件")
+    static let scanEmpty = text("scan_empty", "本次扫描未找到可导入的文件")
+    static let truncatedTitle = text("truncated_title", "仅显示部分扫描结果")
+    static let scanIssueTitle = text("scan_issue_title", "部分项目未能扫描")
+    static let showMore = text("show_more", "继续显示")
+    static let selected = text("selected", "已选择")
+    static let unselected = text("unselected", "未选择")
+    static let selectedDirectory = text("selected_directory", "所选目录")
+    static let unknownSize = text("unknown_size", "大小未知")
+    static let sortTitle = text("sort_title", "排序")
+    static let sortName = text("sort_name", "名称（自然路径升序）")
+    static let sortSize = text("sort_size", "大小（从大到小）")
+    static let sortModified = text("sort_modified", "修改时间（从新到旧）")
+    static let organizing = text("organizing", "正在整理文件…")
+    static let filtering = text("filtering", "正在筛选…")
+    static let readFailure = text("read_failure", "无法读取该项目，请检查访问权限及文件是否可用。")
+    static let unreadableItem = text("unreadable_item", "无法读取该项目。")
+    static let filePath = text("file_path", "[文件路径]")
+
+    static func filesHeader(_ count: Int) -> String { format("files_header", "文件（%d）", count) }
+    static func shown(_ count: Int, total: Int) -> String { format("shown", "已显示 %1$d / %2$d 项", count, total) }
+    static func modified(_ date: String) -> String { format("modified", "修改于 %@", date) }
+    static func selectionCount(_ count: Int, total: Int) -> String {
+        format("selection_count", "已选 %1$d 项，共 %2$d 项", count, total)
+    }
+    static func matchingCount(_ count: Int, selected: Int) -> String {
+        format("matching_count", "匹配 %1$d 项，已选 %2$d 项", count, selected)
+    }
+    static func sortLabel(_ title: String) -> String { format("sort_label", "排序：%@", title) }
+    static func archive(_ type: String) -> String { format("archive", "%@ 压缩包", type) }
+
+    static func selectAllAction(deselect: Bool, filtered: Bool) -> String {
+        if deselect { return filtered ? text("deselect_filtered", "取消选择筛选结果") : text("deselect_all", "取消选择全部结果") }
+        return filtered ? text("select_filtered", "全选筛选结果") : text("select_all", "全选全部结果")
+    }
+
+    static func invertAction(filtered: Bool) -> String {
+        filtered ? text("invert_filtered", "反选筛选结果") : text("invert_all", "反选全部结果")
+    }
+
     static func summary(issues: [LocalBookImportIssue], isTruncated: Bool, count: Int) -> String? {
         guard isTruncated || !issues.isEmpty else { return nil }
         var lines: [String] = []
-        if isTruncated { lines.append("扫描提前结束，以下 \(count) 个文件不代表整个目录。") }
+        if isTruncated { lines.append(format("truncated_message", "扫描提前结束，以下 %d 个文件不代表整个目录。", count)) }
         if !issues.isEmpty {
-            lines.append("扫描遇到 \(issues.count) 项问题。部分项目无法完整读取，请核对以下提示。")
+            lines.append(format("scan_issues", "扫描遇到 %d 项问题。部分项目无法完整读取，请核对以下提示。", issues.count))
             for issue in issues.prefix(3) {
                 let normalized = issue.fileName.replacingOccurrences(of: "\\", with: "/")
                 let component = (normalized as NSString).lastPathComponent
-                let name = component.isEmpty || component == "." || component == "/" ? "所选目录" : component
-                lines.append("\(String(name.prefix(80)))：\(message(issue.message))")
+                let name = component.isEmpty || component == "." || component == "/" ? selectedDirectory : component
+                lines.append(format("issue_line", "%1$@：%2$@", String(name.prefix(80)), message(issue.message)))
             }
-            if issues.count > 3 { lines.append("另有 \(issues.count - 3) 项扫描问题。") }
+            if issues.count > 3 { lines.append(format("more_issues", "另有 %d 项扫描问题。", issues.count - 3)) }
         }
         return lines.joined(separator: "\n")
     }
@@ -638,13 +689,67 @@ private enum DirectorySelectionNotice {
     private static func message(_ raw: String) -> String {
         let technical = ["Error Domain=", "NSCocoaError", "NSPOSIXError", "UserInfo=", "NSError", "stack trace"]
         guard !technical.contains(where: { raw.localizedCaseInsensitiveContains($0) }) else {
-            return "无法读取该项目，请检查访问权限及文件是否可用。"
+            return readFailure
         }
         let pathPattern = #"(?i)(?<![a-z0-9_])(?:file://|[a-z]:[\\/]|~/|/)[^\s\"'<>，。；：！？（）【】]+"#
-        let sanitized = raw.replacingOccurrences(of: pathPattern, with: "[文件路径]", options: .regularExpression)
-            .components(separatedBy: .newlines).joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if sanitized.isEmpty { return "无法读取该项目。" }
-        return sanitized.count > 160 ? String(sanitized.prefix(160)) + "…" : sanitized
+        let owned = ownedIssue(raw)
+        let sanitized = (owned ?? raw).replacingOccurrences(
+            of: pathPattern, with: filePath, options: .regularExpression
+        )
+        .components(separatedBy: .newlines).joined(separator: " ")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        if sanitized.isEmpty { return unreadableItem }
+        return owned == nil && sanitized.count > 160 ? String(sanitized.prefix(160)) + "…" : sanitized
+    }
+
+    private static func ownedIssue(_ raw: String) -> String? {
+        let keys = [
+            "请选择有效的本地文件夹。": "invalid_folder",
+            "文件提供程序返回了无效的文件夹地址。": "invalid_folder_address",
+            "所选项目不是文件夹。": "not_folder",
+            "不扫描隐藏文件夹、文件包或无法确认这些属性的文件夹。": "hidden_or_package_folder",
+            "已达到 20,000 个扫描项目的上限，结果可能不完整。": "scan_limit",
+            "等待读取目录期间文件夹位置发生变化，请重新扫描。": "folder_moved",
+            "文件夹属性已变化或无法确认，已跳过读取。": "folder_attributes_changed",
+            "无法读取文件夹中的项目。": "cannot_read_folder",
+            "文件提供程序返回了无效的目录项目，已跳过。": "invalid_directory_item",
+            "项目位于所选文件夹之外，已跳过。": "item_outside_folder",
+            "等待读取文件属性期间项目位置发生变化，已跳过。": "item_moved",
+            "无法确认项目是否隐藏，已跳过。": "unknown_hidden_attribute",
+            "无法确认项目类型，已跳过。": "unknown_item_type",
+            "无法确认文件夹是否为文件包，已跳过。": "unknown_package_attribute",
+            "已达到 64 层目录深度的上限，更深层项目未扫描。": "depth_limit",
+            "无法获取文件大小，暂以 0 字节显示。": "unknown_file_size",
+            "文件位于所选文件夹之外，已跳过。": "file_outside_folder",
+            "已达到 5,000 个候选文件的上限，结果可能不完整。": "candidate_limit",
+            "未能获得文件提供程序的协调读取权限。": "no_coordinated_access",
+            "文件提供程序返回了无效的项目地址。": "invalid_item_address",
+            "项目位于隐藏文件夹中，已跳过。": "item_in_hidden_folder",
+            "项目或其上级文件夹包含符号链接，已跳过。": "item_contains_symlink",
+            "不扫描符号链接、替身或无法确认链接属性的项目。": "symlink_or_alias",
+            "没有读取权限，请重新选择文件夹并授权。": "no_read_permission",
+            "文件或文件夹已不存在，可能已被移动或删除。": "item_missing",
+        ]
+        if let key = keys[raw] { return text("error." + key, raw) }
+        let prefix = "无法获取文件大小或修改时间，大小暂以 0 字节显示。"
+        if raw.hasPrefix(prefix), let reason = ownedIssue(String(raw.dropFirst(prefix.count))) {
+            return format("error.metadata_unavailable", "无法获取文件大小或修改时间，大小暂以 0 字节显示。%@", reason)
+        }
+        let pattern = #"\A无法读取项目，文件提供程序可能暂时不可用（错误码：(-?[0-9]+)）。\z"#
+        if let regex = try? NSRegularExpression(pattern: pattern),
+            let match = regex.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+            let range = Range(match.range(at: 1), in: raw)
+        {
+            return format("error.provider_unavailable", "无法读取项目，文件提供程序可能暂时不可用（错误码：%@）。", String(raw[range]))
+        }
+        return nil
+    }
+
+    private static func text(_ key: String, _ fallback: String) -> String {
+        Bundle.main.localizedString(forKey: "consumer.directory_selection." + key, value: fallback, table: nil)
+    }
+
+    private static func format(_ key: String, _ fallback: String, _ arguments: CVarArg...) -> String {
+        String(format: text(key, fallback), locale: Locale.current, arguments: arguments)
     }
 }

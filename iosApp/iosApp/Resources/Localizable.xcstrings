@@ -39377,6 +39377,2284 @@
           }
         }
       }
+    },
+    "consumer.import_result.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Results"
+          }
+        }
+      }
+    },
+    "consumer.import_result.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "consumer.import_result.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入已取消"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Cancelled"
+          }
+        }
+      }
+    },
+    "consumer.import_result.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入失败"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Failed"
+          }
+        }
+      }
+    },
+    "consumer.import_result.partial_success": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分导入成功"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Partially Successful"
+          }
+        }
+      }
+    },
+    "consumer.import_result.incomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入未全部完成"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Incomplete"
+          }
+        }
+      }
+    },
+    "consumer.import_result.no_books": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未导入书籍"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Books Imported"
+          }
+        }
+      }
+    },
+    "consumer.import_result.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入完成"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Complete"
+          }
+        }
+      }
+    },
+    "consumer.import_result.cancelled_without_books": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停止后续导入，本次没有成功加入书架的书籍。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Further importing has stopped. No books were added to the bookshelf in this import."
+          }
+        }
+      }
+    },
+    "consumer.import_result.cancelled_with_books": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停止后续导入，已成功处理的书籍全部保留在书架中。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Further importing has stopped. All successfully imported books remain on the bookshelf."
+          }
+        }
+      }
+    },
+    "consumer.import_result.no_files": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有需要导入的文件。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There are no files to import."
+          }
+        }
+      }
+    },
+    "consumer.import_result.none_added": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次没有成功加入书架的书籍。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No books were added to the bookshelf in this import."
+          }
+        }
+      }
+    },
+    "consumer.import_result.successful_books_retained": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已成功导入的书籍已保留在书架中，其余失败原因见下方。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Successfully imported books remain on the bookshelf. Reasons for the other failures are listed below."
+          }
+        }
+      }
+    },
+    "consumer.import_result.unnamed_book": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未命名书籍"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled Book"
+          }
+        }
+      }
+    },
+    "consumer.import_result.unnamed_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未命名文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unnamed File"
+          }
+        }
+      }
+    },
+    "consumer.import_result.file_path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[文件路径]"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[file path]"
+          }
+        }
+      }
+    },
+    "consumer.import_result.unknown_failure": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法导入此文件，未提供具体原因。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file could not be imported. No specific reason was provided."
+          }
+        }
+      }
+    },
+    "consumer.import_result.open_book_hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开书籍阅读"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the book for reading"
+          }
+        }
+      }
+    },
+    "consumer.import_result.retained_books_header": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保留的书籍（%d）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Books Retained (%d)"
+          }
+        }
+      }
+    },
+    "consumer.import_result.added_books_header": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加入书架（%d）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added to Bookshelf (%d)"
+          }
+        }
+      }
+    },
+    "consumer.import_result.failures_header": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入失败（%d）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Failures (%d)"
+          }
+        }
+      }
+    },
+    "consumer.import_result.statistics": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已处理 %1$d / %2$d 个文件，成功 %3$d 本，失败 %4$d 项。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files processed: %1$d / %2$d; books added: %3$d; failures: %4$d."
+          }
+        }
+      }
+    },
+    "consumer.import_result.remaining_files": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚有 %d 个文件未完成处理。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files not fully processed: %d."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.unsupported_type": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 TXT、EPUB、PDF、UMD、MOBI/AZW3 或 ZIP、RAR、7z 压缩包；不支持 DRM"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a TXT, EPUB, PDF, UMD, or MOBI/AZW3 file, or a ZIP, RAR, or 7z archive. DRM is not supported."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.archive_too_large": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩包超过 16 GiB，无法导入"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The archive exceeds 16 GiB and cannot be imported."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.invalid_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择有效的常规文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a valid regular file."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.empty_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不能导入空文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty files cannot be imported."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.invalid_storage": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地书籍目录异常，无法导入"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is a problem with the local book folder. The file cannot be imported."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.cannot_create_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建本地书籍文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local book file could not be created."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.file_import_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地文件导入失败，请重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local file could not be imported. Try again."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.archive_import_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩包导入失败"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The archive could not be imported."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.archive_empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩包中没有可导入的书籍"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The archive contains no books that can be imported."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.select_archive_books": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择压缩包内需要导入的书籍"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the books to import from the archive."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.select_archive_book": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择压缩包内需要导入的一本书"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select one book to import from the archive."
+          }
+        }
+      }
+    },
+    "consumer.import_result.error.expired_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地导入文件已失效"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The prepared local import file is no longer valid."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择书籍"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select Books"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.search_placeholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按文件名或路径筛选"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter by filename or path"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.no_matches": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有文件名或路径匹配的文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No files match the filename or path."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.no_files": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可导入的文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No files are available to import."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.scan_empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次扫描未找到可导入的文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This scan found no files that can be imported."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.truncated_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅显示部分扫描结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partial Scan Results"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.scan_issue_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分项目未能扫描"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some Items Could Not Be Scanned"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.show_more": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续显示"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show More"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.selected": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.unselected": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未选择"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not selected"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.selected_directory": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选目录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected folder"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.unknown_size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大小未知"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size unknown"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.sort_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排序"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.sort_name": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名称（自然路径升序）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name (natural path order, ascending)"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.sort_size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大小（从大到小）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size (largest first)"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.sort_modified": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改时间（从新到旧）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modified (newest first)"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.organizing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在整理文件…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing files…"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.filtering": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在筛选…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtering…"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.read_failure": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取该项目，请检查访问权限及文件是否可用。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item could not be read. Check access permissions and file availability."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.unreadable_item": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取该项目。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item could not be read."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.file_path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[文件路径]"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[file path]"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.files_header": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件（%d）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files (%d)"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已显示 %1$d / %2$d 项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shown: %1$d / %2$d"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.modified": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改于 %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modified %@"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.selection_count": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选 %1$d 项，共 %2$d 项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected: %1$d; total: %2$d"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.matching_count": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配 %1$d 项，已选 %2$d 项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matches: %1$d; selected: %2$d"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.sort_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排序：%@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort: %@"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.archive": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 压缩包"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ archive"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.deselect_filtered": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消选择筛选结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deselect all filtered results"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.deselect_all": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消选择全部结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deselect all results"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.select_filtered": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全选筛选结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select all filtered results"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.select_all": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全选全部结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select all results"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.invert_filtered": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反选筛选结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invert selection in filtered results"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.invert_all": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反选全部结果"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invert selection in all results"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.truncated_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描提前结束，以下 %d 个文件不代表整个目录。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The scan ended early. Files found: %d. This is not a complete listing of the folder."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.scan_issues": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描遇到 %d 项问题。部分项目无法完整读取，请核对以下提示。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan issues: %d. Some items could not be read completely. Review the details below."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.issue_line": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@：%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.more_issues": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另有 %d 项扫描问题。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Additional scan issues: %d."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.invalid_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择有效的本地文件夹。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a valid local folder."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.invalid_folder_address": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件提供程序返回了无效的文件夹地址。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file provider returned an invalid folder location."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.not_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选项目不是文件夹。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected item is not a folder."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.hidden_or_package_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不扫描隐藏文件夹、文件包或无法确认这些属性的文件夹。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hidden folders, packages, and folders whose hidden or package status cannot be determined are not scanned."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.scan_limit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到 20,000 个扫描项目的上限，结果可能不完整。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The scan limit of 20,000 items was reached. Results may be incomplete."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.folder_moved": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待读取目录期间文件夹位置发生变化，请重新扫描。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder moved while waiting to read its contents. Scan again."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.folder_attributes_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件夹属性已变化或无法确认，已跳过读取。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder's attributes changed or could not be determined. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.cannot_read_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取文件夹中的项目。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The items in the folder could not be read."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.invalid_directory_item": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件提供程序返回了无效的目录项目，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file provider returned an invalid folder item. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.item_outside_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目位于所选文件夹之外，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item is outside the selected folder. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.item_moved": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待读取文件属性期间项目位置发生变化，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item moved while waiting to read its attributes. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.unknown_hidden_attribute": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认项目是否隐藏，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item's hidden status could not be determined. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.unknown_item_type": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认项目类型，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item's type could not be determined. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.unknown_package_attribute": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认文件夹是否为文件包，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder's package status could not be determined. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.depth_limit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到 64 层目录深度的上限，更深层项目未扫描。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder depth limit of 64 levels was reached. Deeper items were not scanned."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.unknown_file_size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法获取文件大小，暂以 0 字节显示。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file size could not be read. It is shown as 0 bytes for now."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.file_outside_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件位于所选文件夹之外，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is outside the selected folder. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.candidate_limit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到 5,000 个候选文件的上限，结果可能不完整。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The limit of 5,000 candidate files was reached. Results may be incomplete."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.no_coordinated_access": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能获得文件提供程序的协调读取权限。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coordinated read access from the file provider could not be obtained."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.invalid_item_address": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件提供程序返回了无效的项目地址。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file provider returned an invalid item location."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.item_in_hidden_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目位于隐藏文件夹中，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item is in a hidden folder. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.item_contains_symlink": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目或其上级文件夹包含符号链接，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item or one of its parent folders contains a symbolic link. It was skipped."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.symlink_or_alias": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不扫描符号链接、替身或无法确认链接属性的项目。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbolic links, aliases, and items whose link status cannot be determined are not scanned."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.no_read_permission": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有读取权限，请重新选择文件夹并授权。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read access is not permitted. Select the folder again and grant access."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.item_missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件或文件夹已不存在，可能已被移动或删除。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file or folder no longer exists. It may have been moved or deleted."
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.metadata_unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法获取文件大小或修改时间，大小暂以 0 字节显示。%@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file size or modification time could not be read. Size is shown as 0 bytes for now. %@"
+          }
+        }
+      }
+    },
+    "consumer.directory_selection.error.provider_unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取项目，文件提供程序可能暂时不可用（错误码：%@）。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item could not be read. The file provider may be temporarily unavailable (error code: %@)."
+          }
+        }
+      }
+    },
+    "consumer.book_info.detail_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍信息"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book information"
+          }
+        }
+      }
+    },
+    "consumer.book_info.edit_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍信息编辑"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit book information"
+          }
+        }
+      }
+    },
+    "consumer.book_info.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书名"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title"
+          }
+        }
+      }
+    },
+    "consumer.book_info.author": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作者"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Author"
+          }
+        }
+      }
+    },
+    "consumer.book_info.type": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "类型"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        }
+      }
+    },
+    "consumer.book_info.type_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "类型："
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type:"
+          }
+        }
+      }
+    },
+    "consumer.book_info.type_text": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文本"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        }
+      }
+    },
+    "consumer.book_info.type_audio": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio"
+          }
+        }
+      }
+    },
+    "consumer.book_info.type_image": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image"
+          }
+        }
+      }
+    },
+    "consumer.book_info.type_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File"
+          }
+        }
+      }
+    },
+    "consumer.book_info.cover_address": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面地址"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover address"
+          }
+        }
+      }
+    },
+    "consumer.book_info.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内容简介"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book description"
+          }
+        }
+      }
+    },
+    "consumer.book_info.cover": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover"
+          }
+        }
+      }
+    },
+    "consumer.book_info.local_cover": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择本地图片"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose local image"
+          }
+        }
+      }
+    },
+    "consumer.book_info.cover_source": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面换源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change cover source"
+          }
+        }
+      }
+    },
+    "consumer.book_info.refresh_cover": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新封面"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh cover"
+          }
+        }
+      }
+    },
+    "consumer.book_info.select_cover_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择封面失败"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't select cover"
+          }
+        }
+      }
+    },
+    "consumer.book_info.unreadable_image": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件不是可读取的图片。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file is not a readable image."
+          }
+        }
+      }
+    },
+    "consumer.book_info.cover_load_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面加载失败"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load cover"
+          }
+        }
+      }
+    },
+    "consumer.book_info.cover_load_failed_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载当前封面，请检查封面地址后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to load the current cover. Check the cover address and try again."
+          }
+        }
+      }
+    },
+    "consumer.local_import.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入本地书籍"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Local Books"
+          }
+        }
+      }
+    },
+    "consumer.local_import.preparing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备文件…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing files…"
+          }
+        }
+      }
+    },
+    "consumer.local_import.importing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在解析并加入书架…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading files and adding books…"
+          }
+        }
+      }
+    },
+    "consumer.local_import.cancelling": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在取消，等待当前操作结束…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelling; waiting for the current operation…"
+          }
+        }
+      }
+    },
+    "consumer.local_import.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消导入"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import cancelled"
+          }
+        }
+      }
+    },
+    "consumer.local_import.unsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 TXT、EPUB、PDF、UMD、MOBI/AZW3 或 ZIP、RAR、7z 压缩包；不支持 DRM"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose TXT, EPUB, PDF, UMD, MOBI/AZW3 files or ZIP, RAR, 7z archives; DRM is not supported"
+          }
+        }
+      }
+    },
+    "consumer.local_import.choose_files": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Files"
+          }
+        }
+      }
+    },
+    "consumer.local_import.scan_folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描文件夹"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan Folder"
+          }
+        }
+      }
+    },
+    "consumer.local_import.file_name_rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入文件名规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File Name Rules"
+          }
+        }
+      }
+    },
+    "consumer.local_import.scanning": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在扫描文件夹…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning folder…"
+          }
+        }
+      }
+    },
+    "consumer.local_import.success": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入《%@》"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported “%@”"
+          }
+        }
+      }
+    },
+    "consumer.local_import.scanned": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已扫描 %1$d 项，找到 %2$d 个文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Items scanned: %1$d; files found: %2$d"
+          }
+        }
+      }
+    },
+    "consumer.local_import.preparing_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件 %1$d / %2$d\n%3$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File %1$d / %2$d\n%3$@"
+          }
+        }
+      }
+    },
+    "consumer.local_import.importing_entry": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件 %1$d / %2$d，条目 %3$d / %4$d\n%5$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File %1$d / %2$d; entry %3$d / %4$d\n%5$@"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

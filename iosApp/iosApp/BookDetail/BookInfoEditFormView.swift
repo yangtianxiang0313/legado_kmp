@@ -1,5 +1,57 @@
 import UIKit
 
+enum BookInfoEditText: String {
+    case detail = "consumer.book_info.detail_title"
+    case editTitle = "consumer.book_info.edit_title"
+    case name = "consumer.book_info.name"
+    case author = "consumer.book_info.author"
+    case type = "consumer.book_info.type"
+    case typeLabel = "consumer.book_info.type_label"
+    case text = "consumer.book_info.type_text"
+    case audio = "consumer.book_info.type_audio"
+    case image = "consumer.book_info.type_image"
+    case file = "consumer.book_info.type_file"
+    case coverAddress = "consumer.book_info.cover_address"
+    case intro = "consumer.book_info.intro"
+    case cover = "consumer.book_info.cover"
+    case localCover = "consumer.book_info.local_cover"
+    case coverSource = "consumer.book_info.cover_source"
+    case refreshCover = "consumer.book_info.refresh_cover"
+    case selectCoverFailed = "consumer.book_info.select_cover_failed"
+    case unreadableImage = "consumer.book_info.unreadable_image"
+    case coverLoadFailed = "consumer.book_info.cover_load_failed"
+    case coverLoadFailedMessage = "consumer.book_info.cover_load_failed_message"
+
+    var value: String {
+        Bundle.main.localizedString(forKey: rawValue, value: fallback, table: nil)
+    }
+
+    private var fallback: String {
+        switch self {
+        case .detail: return "书籍信息"
+        case .editTitle: return "书籍信息编辑"
+        case .name: return "书名"
+        case .author: return "作者"
+        case .type: return "类型"
+        case .typeLabel: return "类型："
+        case .text: return "文本"
+        case .audio: return "音频"
+        case .image: return "图片"
+        case .file: return "文件"
+        case .coverAddress: return "封面地址"
+        case .intro: return "内容简介"
+        case .cover: return "封面"
+        case .localCover: return "选择本地图片"
+        case .coverSource: return "封面换源"
+        case .refreshCover: return "刷新封面"
+        case .selectCoverFailed: return "选择封面失败"
+        case .unreadableImage: return "所选文件不是可读取的图片。"
+        case .coverLoadFailed: return "封面加载失败"
+        case .coverLoadFailedMessage: return "无法加载当前封面，请检查封面地址后重试。"
+        }
+    }
+}
+
 @MainActor
 final class BookInfoEditFormView: UIView {
     let nameField: UITextField = BookInfoEditTextField()
@@ -10,9 +62,9 @@ final class BookInfoEditFormView: UIView {
     let defaultCoverView = AndroidDefaultBookCoverView()
     let coverImageView = UIImageView()
     let coverSpinner = UIActivityIndicatorView(style: .medium)
-    let localCoverButton: UIButton = BookInfoEditStrokeButton(title: "选择本地图片")
-    let coverSourceButton: UIButton = BookInfoEditStrokeButton(title: "封面换源")
-    let refreshCoverButton: UIButton = BookInfoEditStrokeButton(title: "刷新封面")
+    let localCoverButton: UIButton = BookInfoEditStrokeButton(title: BookInfoEditText.localCover.value)
+    let coverSourceButton: UIButton = BookInfoEditStrokeButton(title: BookInfoEditText.coverSource.value)
+    let refreshCoverButton: UIButton = BookInfoEditStrokeButton(title: BookInfoEditText.refreshCover.value)
     let scrollView = UIScrollView()
 
     private let overflowScrollView = UIScrollView()
@@ -170,7 +222,8 @@ final class BookInfoEditFormView: UIView {
 
     private func configureEditors() {
         for (field, title, identifier) in [
-            (nameField, "书名", "name"), (authorField, "作者", "author"),
+            (nameField, BookInfoEditText.name.value, "name"),
+            (authorField, BookInfoEditText.author.value, "author"),
         ] {
             field.accessibilityLabel = title
             field.accessibilityIdentifier = "bookInfoEdit.\(identifier)"
@@ -179,7 +232,8 @@ final class BookInfoEditFormView: UIView {
             field.returnKeyType = .next
         }
         for (textView, title, identifier) in [
-            (coverUrlTextView, "封面地址", "coverUrl"), (introTextView, "内容简介", "intro"),
+            (coverUrlTextView, BookInfoEditText.coverAddress.value, "coverUrl"),
+            (introTextView, BookInfoEditText.intro.value, "intro"),
         ] {
             textView.accessibilityLabel = title
             textView.accessibilityIdentifier = "bookInfoEdit.\(identifier)"
@@ -192,7 +246,7 @@ final class BookInfoEditFormView: UIView {
         coverUrlTextView.smartInsertDeleteType = .no
         coverUrlTextView.textContentType = .URL
         coverUrlTextView.textContainer.lineBreakMode = .byCharWrapping
-        typeButton.accessibilityLabel = "类型"
+        typeButton.accessibilityLabel = BookInfoEditText.type.value
         typeButton.accessibilityIdentifier = "bookInfoEdit.type"
         for (button, identifier) in [
             (localCoverButton, "localCover"), (coverSourceButton, "coverSource"),
@@ -200,12 +254,12 @@ final class BookInfoEditFormView: UIView {
         ] {
             button.accessibilityIdentifier = "bookInfoEdit.\(identifier)"
         }
-        coverImageView.accessibilityLabel = "封面"
+        coverImageView.accessibilityLabel = BookInfoEditText.cover.value
         coverImageView.accessibilityIdentifier = "bookInfoEdit.coverPreview"
         coverImageView.isAccessibilityElement = true
         coverImageView.clipsToBounds = true
         coverImageView.contentMode = .scaleAspectFill
-        defaultCoverView.accessibilityLabel = "封面"
+        defaultCoverView.accessibilityLabel = BookInfoEditText.cover.value
         defaultCoverView.accessibilityIdentifier = "bookInfoEdit.coverPreview"
         defaultCoverView.isAccessibilityElement = true
         defaultCoverView.accessibilityElementsHidden = false
@@ -216,10 +270,10 @@ final class BookInfoEditFormView: UIView {
 
     private func configureHierarchy() {
         fields = [
-            BookInfoEditField(title: "书名", editor: nameField),
-            BookInfoEditField(title: "作者", editor: authorField),
-            BookInfoEditField(title: "封面地址", editor: coverUrlTextView),
-            BookInfoEditField(title: "内容简介", editor: introTextView),
+            BookInfoEditField(title: BookInfoEditText.name.value, editor: nameField),
+            BookInfoEditField(title: BookInfoEditText.author.value, editor: authorField),
+            BookInfoEditField(title: BookInfoEditText.coverAddress.value, editor: coverUrlTextView),
+            BookInfoEditField(title: BookInfoEditText.intro.value, editor: introTextView),
         ]
         for field in fields { field.onMetricsChange = { [weak self] in self?.setNeedsLayout() } }
         for scroller in [overflowScrollView, scrollView, typeRow, commandScrollView] {
@@ -242,7 +296,7 @@ final class BookInfoEditFormView: UIView {
         header.addSubview(fields[0])
         header.addSubview(fields[1])
         scrollView.addSubview(body)
-        typeLabel.text = "类型："
+        typeLabel.text = BookInfoEditText.typeLabel.value
         typeLabel.isAccessibilityElement = false
         typeRow.addSubview(typeLabel)
         typeRow.addSubview(typeButton)
