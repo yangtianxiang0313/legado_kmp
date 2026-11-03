@@ -1,8 +1,12 @@
 package io.legado.kmp.shared.data.repository
 
+import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
 import io.legado.kmp.shared.data.database.LegadoDatabase
 import io.legado.kmp.shared.domain.repository.RssReadRecordRepository
 import io.legado.kmp.shared.model.RssReadRecord
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 
 class RssReadRecordRepositoryImpl(
     private val database: LegadoDatabase
@@ -21,6 +25,12 @@ class RssReadRecordRepositoryImpl(
 
     override suspend fun getRecords(): List<RssReadRecord> {
         return database.rssReadRecordQueries.selectAllRssReadRecords(mapper = ::mapRecord).executeAsList()
+    }
+
+    override fun observeRecords(): Flow<List<RssReadRecord>> {
+        return database.rssReadRecordQueries.selectAllRssReadRecords(mapper = ::mapRecord)
+            .asFlow()
+            .mapToList(Dispatchers.Default)
     }
 
     override suspend fun countRecords(): Int = database.rssReadRecordQueries.countAllRssReadRecords().executeAsOne().toInt()

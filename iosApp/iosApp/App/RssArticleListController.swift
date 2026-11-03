@@ -127,11 +127,20 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
         if active { resume() } else { suspend() }
     }
 
-    func markRead(_ article: RssArticle) {
-        for cell in visibleCells() where bindings[ObjectIdentifier(cell)]?.article === article {
-            if let compact = cell as? AndroidReplicaRssArticleCell { compact.updateReadState(true) }
-            mediaView(cell)?.updateReadState(true)
+    func refreshReadStates() {
+        guard active else { return }
+        for cell in visibleCells() {
+            guard let binding = bindings[ObjectIdentifier(cell)],
+                isCurrent(cell, article: binding.article, configuration: binding.id)
+            else { continue }
+            updateReadState(cell, article: binding.article)
         }
+    }
+
+    private func updateReadState(_ cell: UIView, article: RssArticle) {
+        let isRead = isArticleRead(article)
+        (cell as? AndroidReplicaRssArticleCell)?.updateReadState(isRead)
+        mediaView(cell)?.updateReadState(isRead)
     }
 
     private func configureViews() {
@@ -297,6 +306,7 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
             isCurrent(cell, article: binding.article, configuration: binding.id),
             let window = view.window, let scene = window.windowScene, let root = window.rootViewController
         else { cancel(cell); return }
+        updateReadState(cell, article: binding.article)
         let epoch = generation
         let sizeChanged: () -> Void = { [weak self, weak cell, weak window, weak scene, weak root] in
             guard let self, let cell, let window, let scene, let root,

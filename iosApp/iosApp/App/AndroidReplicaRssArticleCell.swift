@@ -93,7 +93,7 @@ final class AndroidReplicaRssArticleCell: UITableViewCell {
     }
 
     func updateReadState(_ isRead: Bool) {
-        titleLabel.textColor = isRead ? AndroidReplicaTheme.secondaryText : AndroidReplicaTheme.primaryText
+        titleLabel.textColor = isRead ? AndroidReplicaTheme.summaryText : AndroidReplicaTheme.primaryText
     }
 
     func cancelThumbnailLoading() {
@@ -151,7 +151,7 @@ final class AndroidReplicaRssArticleCell: UITableViewCell {
     private func configureText(title: String, detail: String?, isRead: Bool) {
         accessibilityCustomActions = nil
         titleLabel.text = title
-        titleLabel.textColor = isRead ? AndroidReplicaTheme.secondaryText : AndroidReplicaTheme.primaryText
+        titleLabel.textColor = isRead ? AndroidReplicaTheme.summaryText : AndroidReplicaTheme.primaryText
         detailLabel.text = detail
         let hasDetail = detail?.isEmpty == false
         detailLabel.isHidden = !hasDetail

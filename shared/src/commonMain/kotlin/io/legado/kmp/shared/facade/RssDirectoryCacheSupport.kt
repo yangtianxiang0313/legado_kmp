@@ -40,6 +40,13 @@ internal class RssDirectoryCacheSupport(
         override fun toString(): String = "RssDirectoryCacheContext(redacted)"
     }
 
+    internal class Retained(
+        val articles: List<RssArticle>,
+        val cacheRetained: Boolean,
+    ) {
+        override fun toString(): String = "RssDirectoryRetention(redacted)"
+    }
+
     @Serializable
     private data class Snapshot(
         val fingerprint: String,
@@ -92,17 +99,31 @@ internal class RssDirectoryCacheSupport(
         return decode(repository.get(key), fingerprint)?.articles.orEmpty()
     }
 
-    suspend fun retain(captured: Captured?, page: Int, articles: List<RssArticle>): Boolean {
-        if (captured == null) return false
-        return try {
+    suspend fun retain(
+        captured: Captured?,
+        page: Int,
+        articles: List<RssArticle>,
+        retainHistory: Boolean,
+    ): Retained {
+        currentCoroutineContext().ensureActive()
+        if (captured == null) return Retained(articles, false)
+        val previous = captured.previous
+        val existing = decode(previous, captured.fingerprint)?.takeIf { snapshot ->
+            snapshot.articles.all { it.origin == captured.origin && it.sort == captured.sortName }
+        }
+        // Never advertise a later page without the complete, contiguous prefix starting at page 1.
+        if (page > 1 && (existing == null || existing.lastPage != page - 1)) {
+            return Retained(articles, false)
+        }
+        val merged = when {
+            page > 1 -> existing?.articles.orEmpty() + articles
+            retainHistory -> articles + existing?.articles.orEmpty()
+            else -> articles
+        }.distinctBy { it.origin to it.link }
+        // Online history must not depend on whether the optional cache write succeeds.
+        val visibleArticles = if (page == 1 && retainHistory) merged else articles
+        val cacheRetained = try {
             currentCoroutineContext().ensureActive()
-            val previous = captured.previous
-            val existing = if (page == 1) null else decode(previous, captured.fingerprint)?.takeIf { snapshot ->
-                snapshot.articles.all { it.origin == captured.origin && it.sort == captured.sortName }
-            }
-            // Never advertise a later page without the complete, contiguous prefix starting at page 1.
-            if (page > 1 && (existing == null || existing.lastPage != page - 1)) return false
-            val merged = (existing?.articles.orEmpty() + articles).distinctBy { it.origin to it.link }
             val value = Json.encodeToString(Snapshot(captured.fingerprint, page, merged))
             currentCoroutineContext().ensureActive()
             when {
@@ -115,6 +136,8 @@ internal class RssDirectoryCacheSupport(
         } catch (_: Exception) {
             false
         }
+        currentCoroutineContext().ensureActive()
+        return Retained(visibleArticles, cacheRetained)
     }
 
     private fun decode(cache: Cache?, fingerprint: String): Snapshot? {

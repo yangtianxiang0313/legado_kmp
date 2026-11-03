@@ -3,12 +3,14 @@ package io.legado.kmp.shared.facade
 import io.legado.kmp.shared.bootstrap.SharedBootstrap
 import io.legado.kmp.shared.domain.repository.CacheRepository
 import io.legado.kmp.shared.domain.repository.CookieRepository
+import io.legado.kmp.shared.domain.repository.RssArticleRepository
 import io.legado.kmp.shared.domain.repository.RssSourceRepository
 import io.legado.kmp.shared.domain.rss.rssDirectoryCachePrefix
 import io.legado.kmp.shared.domain.usecase.FetchRssArticlesUseCase
 import io.legado.kmp.shared.domain.usecase.GetRssReadRecordsUseCase
 import io.legado.kmp.shared.domain.usecase.MarkRssArticleReadUseCase
 import io.legado.kmp.shared.model.RssArticle
+import io.legado.kmp.shared.model.RssReadRecord
 import io.legado.kmp.shared.model.RssSource
 import io.legado.kmp.shared.network.LegacyJsConnectGateway
 import io.legado.kmp.shared.source.SourceStateStore
@@ -39,6 +41,7 @@ class RssDirectoryFacade(
     private val fetchRssArticles: FetchRssArticlesUseCase,
     private val markRssArticleRead: MarkRssArticleReadUseCase,
     private val getRssReadRecords: GetRssReadRecordsUseCase,
+    private val articleRepository: RssArticleRepository,
 ) {
     private val directories = RssDirectoryCacheSupport(cache, state, cookies, gateway)
 
@@ -54,6 +57,7 @@ class RssDirectoryFacade(
             RssDirectoryFacade(
                 koin.get(), koin.get(), koin.get(), koin.get(),
                 koin.get(), koin.get(), koin.get(), koin.get(),
+                koin.get(),
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -85,20 +89,23 @@ class RssDirectoryFacade(
     @Throws(RecoverableSharedException::class, CancellationException::class)
     suspend fun cachedArticles(source: RssSource, sortName: String, sortUrl: String): List<RssArticle> =
         directoryOperation("cachedArticles") {
-            if (!configurationMatches(source)) return@directoryOperation emptyList()
-            val fingerprint = directories.fingerprint(source, sortName, sortUrl)
-                ?: return@directoryOperation emptyList()
-            val key = rssDirectoryCacheKey(source.sourceUrl, sortName, sortUrl)
-            val articles = directories.cached(key, fingerprint)
-            if (articles.isEmpty()) return@directoryOperation emptyList()
-            if (articles.any { it.origin != source.sourceUrl || it.sort != sortName }) {
-                return@directoryOperation emptyList()
+            publication.withLock {
+                currentCoroutineContext().ensureActive()
+                if (!configurationMatches(source)) return@withLock emptyList()
+                val fingerprint = directories.fingerprint(source, sortName, sortUrl)
+                    ?: return@withLock emptyList()
+                val key = rssDirectoryCacheKey(source.sourceUrl, sortName, sortUrl)
+                val articles = directories.cached(key, fingerprint)
+                if (articles.isEmpty()) return@withLock emptyList()
+                if (articles.any { it.origin != source.sourceUrl || it.sort != sortName }) {
+                    return@withLock emptyList()
+                }
+                val readArticles = overlayReadRecords(articles)
+                if (fingerprint != directories.fingerprint(source, sortName, sortUrl) ||
+                    !configurationMatches(source)
+                ) return@withLock emptyList()
+                readArticles
             }
-            val readArticles = overlayReadRecords(articles)
-            if (fingerprint != directories.fingerprint(source, sortName, sortUrl) ||
-                !configurationMatches(source)
-            ) return@directoryOperation emptyList()
-            readArticles
         }
 
     @Throws(RecoverableSharedException::class, CancellationException::class)
@@ -125,18 +132,39 @@ class RssDirectoryFacade(
                     throw CancellationException("RSS directory request superseded")
                 }
                 requireCurrentConfiguration(source)
-                // Store raw rows, never a historical read overlay. The payload remains this network page.
+                // Store raw rows, never a historical read overlay.
                 // Response scripts may change cookies/variables; retain only in the original partition.
-                val cacheRetained = directories.retain(captured, page, articles)
-                val readArticles = overlayReadRecords(articles)
+                val retained = directories.retain(captured, page, articles, source.ruleNextPage.isNullOrEmpty())
+                val readArticles = overlayReadRecords(retained.articles)
                 requireCurrentConfiguration(source)
                 currentCoroutineContext().ensureActive()
-                RssDirectoryResult(readArticles, nextPageUrl, cacheRetained)
+                RssDirectoryResult(readArticles, nextPageUrl, retained.cacheRetained)
             }
         } finally {
             finishGeneration(key, generation)
         }
     }
+
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun clearArticles(source: RssSource): Unit = directoryOperation("clearArticles") {
+        publication.withLock {
+            currentCoroutineContext().ensureActive()
+            requireCurrentConfiguration(source)
+            val prefix = rssDirectoryCachePrefix(source.sourceUrl)
+            // Invalidate every category before deleting, including requests that captured no cache row.
+            activeGenerations.keys.removeAll { it.startsWith(prefix) }
+            articleRepository.delete(source.sourceUrl)
+            currentCoroutineContext().ensureActive()
+        }
+    }
+
+    @Throws(RecoverableSharedException::class, CancellationException::class)
+    suspend fun readRecords(): List<RssReadRecord> = directoryOperation("readRecords") {
+        getRssReadRecords()
+    }
+
+    fun watchReadRecords(onUpdate: (List<RssReadRecord>) -> Unit): FlowSubscription =
+        watchFlow(getRssReadRecords.observe(), onUpdate, label = "RssDirectoryFacade.readRecords")
 
     @Throws(RecoverableSharedException::class, CancellationException::class)
     suspend fun markRead(article: RssArticle): Unit = directoryOperation("markRead") {

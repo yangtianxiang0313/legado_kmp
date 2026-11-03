@@ -4,6 +4,7 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import io.legado.kmp.shared.data.database.LegadoDatabase
 import io.legado.kmp.shared.domain.repository.RssArticleRepository
+import io.legado.kmp.shared.domain.rss.rssDirectoryCachePrefix
 import io.legado.kmp.shared.model.RssArticle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -121,8 +122,15 @@ class RssArticleRepositoryImpl(
         database.rssArticleQueries.updateRssArticleOrigin(origin, oldOrigin)
     }
 
-    override suspend fun delete(origin: String) {
-        database.rssArticleQueries.deleteRssArticlesByOrigin(origin)
+    override suspend fun delete(origin: String): Unit = withContext(Dispatchers.Default) {
+        val context = currentCoroutineContext()
+        context.ensureActive()
+        database.rssArticleQueries.transaction {
+            context.ensureActive()
+            database.rssArticleQueries.deleteRssArticlesByOrigin(origin)
+            database.cacheQueries.deleteByPrefix(rssDirectoryCachePrefix(origin))
+            context.ensureActive()
+        }
     }
 
     private fun mapArticle(

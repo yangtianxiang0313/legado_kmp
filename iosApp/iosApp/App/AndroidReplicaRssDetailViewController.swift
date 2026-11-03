@@ -11,16 +11,23 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     private let source: RssSource
     private let screen = RssScreenAdapter()
     private lazy var directoryLoader = RssDirectoryLoadingCoordinator(screen: screen)
+    private lazy var directoryActions = RssDirectoryActionsCoordinator(
+        owner: self, screen: screen, source: source,
+        canUseActions: { [weak self] in self?.canUseArticleList == true },
+        isRuntimeReady: { [weak self] in self?.isRuntimeReady == true },
+        sourceAvailable: { [weak self] in self?.sourceAvailable == true },
+        currentStyle: { [weak self] in self?.layoutStyle ?? .compact },
+        onStyleChange: { [weak self] in self?.applyLayoutStyle($0) },
+        onClearStarted: { [weak self] in self?.prepareToClearArticles() },
+        onClearFinished: { [weak self] in self?.finishClearingArticles(success: $0) },
+        onReturn: { [weak self] in self?.resumeAfterTransition() })
     private lazy var topBar = AndroidReplicaDetailBar(
         title: source.sourceName, target: self, backAction: #selector(handleBack))
     private let refreshButton = UIButton(type: .system)
     private let sortButton = UIButton(type: .system)
-    private let layoutButton = UIButton(type: .system)
     private let articleList = RssArticleListController()
     private var layoutStyle: RssArticlePresentationStyle
     private var sourceAvailable = true
-    private var styleRequestID: UUID?
-    private var styleTask: Task<Void, Never>?
     private let stateView = ContentStateView()
     private let statusBar = UIStackView()
     private let statusLabel = UILabel()
@@ -29,7 +36,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     private var sorts: [(name: String, url: String)] = []
     private var selectedSort: (name: String, url: String)?
     private var articles: [RssArticle] = []
-    private var readInSession = Set<ArticleIdentity>()
+    private var readLinks = Set<Data>()
+    private var articlesClearedUntilRefresh = false
     private var favorites: [RssStar] = []
     private var nextPageUrl: String?
     private var currentPage: Int32 = 0
@@ -44,6 +52,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     private var applicationSuspended = UIApplication.shared.applicationState != .active
     private var sceneSuspended = false
     private var protectedDataSuspended = false
+    private var lockSuspended = false
     private var retryAction: RetryAction?
     private var requestGeneration = 0
     private var sortsTask: Task<Void, Never>?
@@ -62,7 +71,6 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        styleTask?.cancel()
         sortsTask?.cancel()
         screen.unbind()
     }
@@ -108,13 +116,13 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         super.viewWillDisappear(animated)
         hasAppeared = false
         articleList.suspend()
-        cancelStyleUpdate()
+        directoryActions.pageWillDisappear()
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         articleList.layoutDidChange()
-        updateLayoutButton()
+        directoryActions.updateButtons()
     }
 
     override func didMove(toParent parent: UIViewController?) {
@@ -146,7 +154,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         guard !hasLeftPage else { return }
         hasLeftPage = true
         articleList.suspend()
-        cancelStyleUpdate()
+        directoryActions.suspend()
         NotificationCenter.default.removeObserver(self)
         invalidateRequests()
         screen.unbind()
@@ -155,6 +163,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
 
     private var canUseArticleList: Bool {
         hasAppeared && !hasLeftPage && !applicationSuspended && !sceneSuspended && !protectedDataSuspended
+            && !lockSuspended
             && RssArticleListPresentation.isActive(self)
     }
 
@@ -168,10 +177,11 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
             UIScene.didDisconnectNotification:
             sceneSuspended = true
         case UIApplication.protectedDataWillBecomeUnavailableNotification: protectedDataSuspended = true
+        case .appLockWillCover: lockSuspended = true
         default: break
         }
         articleList.suspend()
-        cancelStyleUpdate()
+        directoryActions.suspend()
     }
 
     @objc private func resumePresentation(_ notification: Notification) {
@@ -181,10 +191,12 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         case UIApplication.didBecomeActiveNotification: applicationSuspended = false
         case UIScene.didActivateNotification: sceneSuspended = false
         case UIApplication.protectedDataDidBecomeAvailableNotification: protectedDataSuspended = false
+        case .appLockStatusDidChange:
+            lockSuspended = !AppLockManager.shared.isUnlocked(in: viewIfLoaded?.window)
         default: break
         }
         DispatchQueue.main.async { [weak self] in
-            self?.articleList.resume(); self?.updateLayoutButton()
+            self?.articleList.resume(); self?.directoryActions.updateButtons()
         }
     }
 
@@ -201,16 +213,13 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         sortButton.addTarget(self, action: #selector(showSortPicker), for: .touchUpInside)
         topBar.addAction(refreshButton)
         topBar.addAction(sortButton)
-        layoutButton.accessibilityIdentifier = "rss.layoutButton"
-        layoutButton.accessibilityLabel = L10n.RSS.switchLayout
-        layoutButton.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.RSS.switchLayout))
-        layoutButton.addTarget(self, action: #selector(switchLayout), for: .touchUpInside)
-        topBar.addAction(layoutButton)
+        directoryActions.configureButtons()
+        topBar.addAction(directoryActions.layoutButton)
+        topBar.addAction(directoryActions.moreButton, isOverflow: true)
         updateSortMenu()
-        updateLayoutButton()
         articleList.isPresentationActive = { [weak self] in self?.canUseArticleList == true }
         articleList.isArticleRead = { [weak self] article in
-            article.read || self?.readInSession.contains(ArticleIdentity(article)) == true
+            self?.readLinks.contains(Data(article.link.utf8)) == true
         }
         articleList.onSelectArticle = { [weak self] in self?.openArticle($0) }
         articleList.onLoadMore = { [weak self] in self?.loadMore() }
@@ -272,18 +281,23 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
             guard let self, !self.hasLeftPage else { return }
             self.favorites = favorites
         }
+        screen.onReadRecordsChange = { [weak self] records in
+            guard let self, !self.hasLeftPage else { return }
+            self.readLinks = Set(records.filter(\.read).map { Data($0.record.utf8) })
+            self.articleList.refreshReadStates()
+        }
         screen.onSourcesChange = { [weak self] sources in
             guard let self, !self.hasLeftPage else { return }
             let current = sources.first { $0.sourceUrl.utf8.elementsEqual(self.source.sourceUrl.utf8) }
             self.sourceAvailable = current != nil
             if let current { self.applyLayoutStyle(RssArticlePresentationStyle(articleStyle: current.articleStyle)) }
-            self.updateLayoutButton()
+            self.directoryActions.updateButtons()
         }
         switch screen.bootstrap() {
         case .success:
             isRuntimeReady = true
             loadSorts(forceRefresh: false)
-            updateLayoutButton()
+            directoryActions.updateButtons()
         case let .failure(error):
             showFailure(message: error.message, action: .bootstrap)
         }
@@ -294,16 +308,10 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         navigationController?.popViewController(animated: true)
     }
 
-    private func updateLayoutButton() {
-        layoutButton.setImage(UIImage(systemName: layoutStyle.symbolName), for: .normal)
-        layoutButton.accessibilityValue = layoutStyle.title
-        layoutButton.isEnabled = isRuntimeReady && sourceAvailable && styleRequestID == nil && canUseArticleList
-    }
-
     private func resumeAfterTransition() {
         let enqueue = { [weak self] in
             DispatchQueue.main.async { [weak self] in
-                self?.articleList.resume(); self?.updateLayoutButton()
+                self?.articleList.resume(); self?.directoryActions.updateButtons()
             }
         }
         if let transition = transitionCoordinator,
@@ -318,56 +326,34 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         guard style != layoutStyle else { return }
         layoutStyle = style
         renderArticles()
-        updateLayoutButton()
+        directoryActions.updateButtons()
     }
 
-    private func cancelStyleUpdate() {
-        styleRequestID = nil
-        styleTask?.cancel()
-        styleTask = nil
-        updateLayoutButton()
+    private func prepareToClearArticles() {
+        invalidateRequests()
+        hideStatus()
+        if articles.isEmpty { stateView.showLoading(message: L10n.Common.loadingTitle) }
+        articleList.updatePagination(pagination)
+        updateSortMenu()
     }
 
-    @objc private func switchLayout() {
-        guard canUseArticleList, isRuntimeReady, sourceAvailable, styleRequestID == nil,
-            let window = view.window, let root = window.rootViewController, let scene = window.windowScene
-        else { return }
-        let requestedStyle = layoutStyle.next
-        let requestID = UUID()
-        styleRequestID = requestID
-        updateLayoutButton()
-        styleTask = Task { @MainActor [weak self, screen, source, weak window, weak root, weak scene] in
-            defer {
-                if let self, self.styleRequestID == requestID {
-                    self.styleRequestID = nil
-                    self.styleTask = nil
-                    self.updateLayoutButton()
-                }
-            }
-            do {
-                let updated = try await screen.setArticleStyle(
-                    sourceURL: source.sourceUrl, style: Int32(requestedStyle.rawValue))
-                try Task.checkCancellation()
-                guard let self, self.styleRequestID == requestID, self.canUseArticleList,
-                    let window, let root, let scene, self.viewIfLoaded?.window === window,
-                    window.rootViewController === root, window.windowScene === scene
-                else { return }
-                guard let updated else {
-                    self.sourceAvailable = false; self.showTransientMessage(L10n.RSS.unavailable); return
-                }
-                self.applyLayoutStyle(RssArticlePresentationStyle(articleStyle: updated.articleStyle))
-            } catch is CancellationError {} catch {
-                guard let self, !Task.isCancelled, self.styleRequestID == requestID, self.canUseArticleList,
-                    let window, let root, let scene, self.viewIfLoaded?.window === window,
-                    window.rootViewController === root, window.windowScene === scene
-                else { return }
-                self.showTransientMessage(error.userFacingMessage)
-            }
+    private func finishClearingArticles(success: Bool) {
+        guard !hasLeftPage else { return }
+        if success {
+            invalidateRequests()
+            articlesClearedUntilRefresh = true
+            clearArticles()
+            renderArticles(resetOffset: true)
+            showEmpty(L10n.RSS.emptyArticles)
+        } else if articles.isEmpty {
+            showEmpty(L10n.RSS.emptyArticles)
         }
+        updateSortMenu()
     }
 
     @objc private func refresh() {
-        guard !hasLeftPage else { return }
+        guard canUseArticleList, !directoryActions.isClearingArticles else { return }
+        articlesClearedUntilRefresh = false
         if isRuntimeReady {
             loadSorts(forceRefresh: true)
         } else {
@@ -408,7 +394,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     }
 
     private func loadSorts(forceRefresh: Bool) {
-        guard !hasLeftPage else { return }
+        guard !hasLeftPage, !directoryActions.isClearingArticles, !articlesClearedUntilRefresh else { return }
         beginFirstPageLoad(keepingArticles: !articles.isEmpty)
         showLoading(L10n.RSS.loadingSorts)
         let generation = requestGeneration
@@ -472,12 +458,13 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         let title = selectedSort?.name ?? L10n.RSS.sortFallback
         topBar.setTitle(title.isEmpty ? source.sourceName : "\(title) · \(source.sourceName)")
         sortButton.accessibilityValue = selectedSort?.name
-        sortButton.isEnabled = sorts.isEmpty == false
+        sortButton.isEnabled = !sorts.isEmpty && !directoryActions.isClearingArticles
+        refreshButton.isEnabled = !directoryActions.isClearingArticles
         sortButton.tintColor = sorts.isEmpty ? AndroidReplicaTheme.secondaryText : AndroidReplicaTheme.primaryText
     }
 
     @objc private func showSortPicker() {
-        guard !hasLeftPage, presentedViewController == nil else { return }
+        guard canUseArticleList, !directoryActions.isClearingArticles, presentedViewController == nil else { return }
         guard sorts.isEmpty == false else {
             showTransientMessage(L10n.RSS.sortUnavailable)
             return
@@ -499,11 +486,19 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     }
 
     private func selectSort(_ sort: (name: String, url: String)) {
-        guard !hasLeftPage, sort.name != selectedSort?.name || sort.url != selectedSort?.url,
+        guard !hasLeftPage, !directoryActions.isClearingArticles,
+            sort.name != selectedSort?.name || sort.url != selectedSort?.url,
             let currentSort = sorts.first(where: { $0.name == sort.name && $0.url == sort.url })
         else { return }
         selectedSort = currentSort
         updateSortMenu()
+        if articlesClearedUntilRefresh {
+            invalidateRequests()
+            clearArticles()
+            renderArticles(resetOffset: true)
+            showEmpty(L10n.RSS.emptyArticles)
+            return
+        }
         beginFirstPageLoad(keepingArticles: false)
         showLoading(L10n.RSS.loadingArticles)
         loadArticles(
@@ -513,7 +508,9 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     private func loadArticles(
         sort: (name: String, url: String), requestURL: String, page: Int32, append: Bool, generation: Int
     ) {
-        guard isCurrentRequest(generation, sort: sort), !directoryLoader.isLoading, sortsTask == nil else { return }
+        guard isCurrentRequest(generation, sort: sort), !directoryActions.isClearingArticles,
+            !articlesClearedUntilRefresh, !directoryLoader.isLoading, sortsTask == nil
+        else { return }
         directoryLoader.load(
             source: source, sort: sort, requestURL: requestURL, page: page, showSaved: !append && articles.isEmpty,
             onSaved: { [weak self] saved in
@@ -652,7 +649,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     }
 
     @objc private func retry() {
-        guard !hasLeftPage else { return }
+        guard !hasLeftPage, !directoryActions.isClearingArticles, !articlesClearedUntilRefresh else { return }
         switch retryAction {
         case .bootstrap:
             bootstrap()
@@ -688,7 +685,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     }
 
     private func loadMore() {
-        guard canUseArticleList, !articleList.isRendering, hasMore, !isLoadingFirstPage, !isLoadingMore,
+        guard canUseArticleList, !directoryActions.isClearingArticles, !articlesClearedUntilRefresh,
+            !articleList.isRendering, hasMore, !isLoadingFirstPage, !isLoadingMore,
             sortsTask == nil, !directoryLoader.isLoading, retryAction == nil || retryAction == .more,
             let selectedSort, let nextRequestURL
         else { return }
@@ -703,7 +701,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     }
 
     private func openArticle(_ article: RssArticle) {
-        guard canUseArticleList, !articleList.isRendering, let navigation = navigationController,
+        guard canUseArticleList, !directoryActions.isClearingArticles,
+            !articleList.isRendering, let navigation = navigationController,
             articles.contains(where: { $0 === article })
         else { return }
         let controller = AndroidReplicaRssArticleViewController(
@@ -712,15 +711,30 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         articleList.suspend()
         navigation.pushViewController(controller, animated: true)
         if navigation.topViewController === controller {
-            readInSession.insert(ArticleIdentity(article))
-            articleList.markRead(article)
-            Task { @MainActor [screen, weak controller] in
+            let window = viewIfLoaded?.window
+            let root = window?.rootViewController
+            let scene = window?.windowScene
+            Task { @MainActor [screen, weak controller, weak window, weak root, weak scene] in
                 do { try await screen.markRead(article: article) } catch {
-                    guard let controller, controller.canPerformNavigationAction,
-                        controller.viewIfLoaded?.window?.isKeyWindow == true,
-                        AppLockManager.shared.isUnlocked(in: controller.viewIfLoaded?.window)
-                    else { return }
-                    controller.showTransientMessage(L10n.RSS.readRecordFailed)
+                    let showFailure = { [weak controller, weak window, weak root, weak scene] in
+                        guard let controller, let window, let root, let scene,
+                            controller.canPerformNavigationAction, controller.viewIfLoaded?.window === window,
+                            window.rootViewController === root, window.windowScene === scene, window.isKeyWindow,
+                            scene.activationState == .foregroundActive, UIApplication.shared.isProtectedDataAvailable,
+                            AppLockManager.shared.isUnlocked(in: window)
+                        else { return }
+                        controller.showTransientMessage(L10n.RSS.readRecordFailed)
+                    }
+                    if let transition = controller?.transitionCoordinator,
+                        transition.animate(
+                            alongsideTransition: nil,
+                            completion: { context in
+                                if !context.isCancelled { DispatchQueue.main.async(execute: showFailure) }
+                            })
+                    {
+                        return
+                    }
+                    DispatchQueue.main.async(execute: showFailure)
                 }
             }
         } else {

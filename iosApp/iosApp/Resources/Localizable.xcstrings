@@ -4710,6 +4710,41 @@
         }
       }
     },
+    "rss.read_records_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reading records" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "阅读记录" } }
+      }
+    },
+    "rss.empty_read_records" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No reading records" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "暂无阅读记录" } }
+      }
+    },
+    "rss.clear_articles" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear articles" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "清除文章" } }
+      }
+    },
+    "rss.clear_articles_confirm_message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear all articles and cached text for this subscription source? Favorites and reading records will be kept." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "确定清除当前订阅源的全部文章和正文缓存？收藏和阅读记录将保留。" } }
+      }
+    },
+    "rss.articles_cleared" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Articles cleared" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "文章已清除" } }
+      }
+    },
     "rss.directory_retention_failed" : {
       "extractionState": "manual",
       "localizations": {

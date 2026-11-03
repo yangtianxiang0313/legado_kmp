@@ -5,17 +5,26 @@ final class RssScreenAdapter {
     private let bindings = ScreenBindingController(owner: "RssScreen")
     private var facade: RssFacade?
     private var directory: RssDirectoryFacade?
+    private var bindingID: UUID?
     private var lastFavoritesSignature: String?
     private(set) var currentFavorites: [RssStar] = []
     private(set) var hasFavoritesSnapshot = false
+    private(set) var currentReadRecords: [RssReadRecord] = []
+    private(set) var hasReadRecordsSnapshot = false
+    private(set) var readRecordsRevision: UInt64 = 0
 
     var onSourcesChange: (([RssSource]) -> Void)?
     var onFavoritesChange: (([RssStar]) -> Void)?
+    var onReadRecordsChange: (([RssReadRecord]) -> Void)?
 
     func bootstrap() -> Result<Void, SharedRuntimeError> {
+        unbind()
         hasFavoritesSnapshot = false
-        bindings.cancelAll()
         lastFavoritesSignature = nil
+        facade = nil
+        directory = nil
+        let id = UUID()
+        bindingID = id
 
         switch SharedRuntime.rssFacade() {
         case .success(let facade):
@@ -31,15 +40,26 @@ final class RssScreenAdapter {
             bindings.bind(
                 facade.watchSources { [weak self] sources in
                     DispatchQueue.main.async {
-                        self?.handleSources(sources)
+                        guard let self, self.bindingID == id else { return }
+                        self.handleSources(sources)
                     }
                 })
             bindings.bind(
                 facade.watchFavorites { [weak self] favorites in
                     DispatchQueue.main.async {
-                        self?.handleFavorites(favorites)
+                        guard let self, self.bindingID == id else { return }
+                        self.handleFavorites(favorites)
                     }
                 })
+            if let directory {
+                bindings.bind(
+                    directory.watchReadRecords { [weak self] records in
+                        DispatchQueue.main.async {
+                            guard let self, self.bindingID == id else { return }
+                            self.handleReadRecords(records)
+                        }
+                    })
+            }
             return .success(())
         case .failure(let error):
             return .failure(error)
@@ -47,7 +67,11 @@ final class RssScreenAdapter {
     }
 
     func unbind() {
+        bindingID = nil
         bindings.cancelAll()
+        currentReadRecords = []
+        hasReadRecordsSnapshot = false
+        readRecordsRevision &+= 1
     }
 
     func loadSorts(source: RssSource, forceRefresh: Bool) async throws -> [(name: String, url: String)] {
@@ -97,6 +121,16 @@ final class RssScreenAdapter {
     func markRead(article: RssArticle) async throws {
         guard let directory else { throw runtimeNotReadyError() }
         try await SharedAsync.void { directory.markRead(article: article, completionHandler: $0) }
+    }
+
+    func readRecords() async throws -> [RssReadRecord] {
+        guard let directory else { throw runtimeNotReadyError() }
+        return try await SharedAsync.value { directory.readRecords(completionHandler: $0) }
+    }
+
+    func clearArticles(source: RssSource) async throws {
+        guard let directory else { throw runtimeNotReadyError() }
+        try await SharedAsync.void { directory.clearArticles(source: source, completionHandler: $0) }
     }
 
     func loadContent(article: RssArticle, source: RssSource) async throws -> String {
@@ -184,6 +218,20 @@ final class RssScreenAdapter {
         guard signature != lastFavoritesSignature else { return }
         lastFavoritesSignature = signature
         onFavoritesChange?(sorted)
+    }
+
+    private func handleReadRecords(_ records: [RssReadRecord]) {
+        let changed =
+            !hasReadRecordsSnapshot || records.count != currentReadRecords.count
+            || zip(records, currentReadRecords).contains { lhs, rhs in
+                !lhs.record.utf8.elementsEqual(rhs.record.utf8) || lhs.title != rhs.title
+                    || lhs.readTime != rhs.readTime || lhs.read != rhs.read
+            }
+        currentReadRecords = records
+        hasReadRecordsSnapshot = true
+        guard changed else { return }
+        readRecordsRevision &+= 1
+        onReadRecordsChange?(records)
     }
 
     private func runtimeNotReadyError() -> Error {

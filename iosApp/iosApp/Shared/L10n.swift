@@ -1830,6 +1830,12 @@ enum L10n {
         static let savedArticles = text("rss.saved_articles", "已保存的文章")
         static let directoryRetentionFailed = text("rss.directory_retention_failed", "文章目录未能保存，请稍后刷新")
         static let readRecordFailed = text("rss.read_record_failed", "已读状态保存失败")
+        static let readRecordsTitle = text("rss.read_records_title", "阅读记录")
+        static let emptyReadRecords = text("rss.empty_read_records", "暂无阅读记录")
+        static let clearArticles = text("rss.clear_articles", "清除文章")
+        static let clearArticlesConfirmMessage = text(
+            "rss.clear_articles_confirm_message", "确定清除当前订阅源的全部文章和正文缓存？收藏和阅读记录将保留。")
+        static let articlesCleared = text("rss.articles_cleared", "文章已清除")
         static let contentFailed = text("rss.content_failed", "正文加载失败")
         static let emptyArticles = text("rss.empty_articles", "当前分类还没有文章。")
         static let favoriteAdded = text("rss.favorite_added", "已加入收藏")

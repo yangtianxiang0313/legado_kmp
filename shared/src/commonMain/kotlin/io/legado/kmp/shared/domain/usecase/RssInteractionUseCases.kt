@@ -29,6 +29,7 @@ class GetRssReadRecordsUseCase(
     private val repository: RssReadRecordRepository
 ) {
     suspend operator fun invoke(): List<RssReadRecord> = repository.getRecords()
+    fun observe(): Flow<List<RssReadRecord>> = repository.observeRecords()
 }
 
 class CountRssReadRecordsUseCase(
