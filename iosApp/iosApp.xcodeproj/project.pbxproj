@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F041A1010000000000000002 /* MangaChapterListPresentationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F041A1020000000000000002; };
+		F041A1010000000000000001 /* MangaReaderCatalogClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F041A1020000000000000001; };
 		F04194010000000000000002 /* RssReadRecordsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04194020000000000000002; };
 		F04194010000000000000001 /* RssDirectoryActionsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04194020000000000000001; };
 		F04184010000000000000001 /* RssDirectoryLoadingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04184020000000000000001; };
@@ -778,6 +780,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F041A1020000000000000002 /* MangaChapterListPresentationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaChapterListPresentationCoordinator.swift; sourceTree = "<group>"; };
+		F041A1020000000000000001 /* MangaReaderCatalogClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaReaderCatalogClient.swift; sourceTree = "<group>"; };
 		F04194020000000000000002 /* RssReadRecordsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssReadRecordsViewController.swift; sourceTree = "<group>"; };
 		F04194020000000000000001 /* RssDirectoryActionsCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssDirectoryActionsCoordinator.swift; sourceTree = "<group>"; };
 		F04184020000000000000001 /* RssDirectoryLoadingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssDirectoryLoadingCoordinator.swift; sourceTree = "<group>"; };
@@ -1681,7 +1685,7 @@
 		};
 		F027E3000000000000000002 /* Manga */ = {
 			isa = PBXGroup;
-			children = (F02AE1020000000000000001, F02AE1020000000000000002, F028C1020000000000000001, F028C1020000000000000002, F028C1020000000000000003, F028C1020000000000000004, F028C1020000000000000005, F028C1020000000000000006, F028C1020000000000000007, F028AE020000000000000001, F028AE020000000000000002, F027E2000000000000000005, F027E2000000000000000006, F027E2000000000000000007, F027E2000000000000000008, F027E2000000000000000009, F027E200000000000000000A, F027E200000000000000000B);
+			children = (F041A1020000000000000001, F041A1020000000000000002, F02AE1020000000000000001, F02AE1020000000000000002, F028C1020000000000000001, F028C1020000000000000002, F028C1020000000000000003, F028C1020000000000000004, F028C1020000000000000005, F028C1020000000000000006, F028C1020000000000000007, F028AE020000000000000001, F028AE020000000000000002, F027E2000000000000000005, F027E2000000000000000006, F027E2000000000000000007, F027E2000000000000000008, F027E2000000000000000009, F027E200000000000000000A, F027E200000000000000000B);
 			path = Manga;
 			sourceTree = "<group>";
 		};
@@ -2737,6 +2741,8 @@
 				F027E1000000000000000003 /* PdfReaderProgressStore.swift in Sources */,
 				F027E1000000000000000004 /* PdfPageListViewController.swift in Sources */,
 				F027E1000000000000000005 /* MangaReaderViewController.swift in Sources */,
+				F041A1010000000000000002 /* MangaChapterListPresentationCoordinator.swift in Sources */,
+				F041A1010000000000000001 /* MangaReaderCatalogClient.swift in Sources */,
 				F02AE1010000000000000001 /* MangaProgressSyncCoordinator.swift in Sources */,
 				F02AE1010000000000000002 /* MangaReaderExitFlow.swift in Sources */,
 				F027E1000000000000000006 /* MangaReaderAdapter.swift in Sources */,

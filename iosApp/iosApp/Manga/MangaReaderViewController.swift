@@ -30,6 +30,13 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         },
         onSuspendForLogin: { [weak self] in self?.suspendForLogin() })
     private lazy var sourceDestination = MangaReaderSourceChangeDestination(owner: self, adapter: adapter)
+    private lazy var catalog = MangaChapterListPresentationCoordinator(
+        owner: self, adapter: adapter,
+        canPresent: { [weak self] in
+            guard let self else { return false }
+            return !self.isLoading && !self.isApplyingChapter && !self.isExiting && !self.recovery.isBusy
+                && !self.sourceDestination.isPending
+        }, onPrepared: { [weak self] in self?.apply($0) })
     private lazy var progressSync: MangaProgressSyncCoordinator = MangaProgressSyncCoordinator(
         owner: self, adapter: adapter,
         context: { [weak self] in
@@ -45,7 +52,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         prepare: { [weak self] in self?.prepareForExit() },
         stateDidChange: { [weak self] exiting in
             guard let self else { return }
-            self.chrome.setBusy(exiting || self.isLoading)
+            self.catalogActivityChanged()
             if !exiting { self.resumeIfNeeded() }
         })
     private var wasLoadingBeforeRecovery = false
@@ -54,6 +61,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     private let brightness = MangaReaderBrightness()
     private lazy var downloadCoordinator = MangaReaderDownloadCoordinator(bookURL: bookURL)
     private let stateView = MangaReaderStateView()
+    private let catalogStateView = MangaReaderStateView()
     private var chapter: MangaReaderChapter?
     private var pagePosition = 0
     private var loadTask: Task<Void, Never>?
@@ -107,6 +115,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         configureChrome()
         configureState()
         progressSync.onPresentationChanged = { [weak self] in self?.updateAutomaticReading() }
+        catalog.onActivityChanged = { [weak self] in self?.catalogActivityChanged() }
         chapterWindow.onChange = { [weak self] in self?.renderWindowPages() }
         chapterWindow.onFailure = { [weak self] index, error in self?.neighborFailed(index: index, error: error) }
         readingSettings.onChange = { [weak self] options in self?.applyReadingOptions(options) }
@@ -145,6 +154,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        catalog.ownerWillDisappear()
         isReadingVisible = false
         chrome.setReaderVisible(false)
         brightness.restore()
@@ -162,15 +172,21 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         prefetcher.cancel()
         images.cancelAll()
         persistPause()
-        if let hidden = previousNavigationHidden { navigationController?.setNavigationBarHidden(hidden, animated: false) }
-        if let enabled = previousPopEnabled { navigationController?.interactivePopGestureRecognizer?.isEnabled = enabled }
+        if let hidden = previousNavigationHidden {
+            navigationController?.setNavigationBarHidden(hidden, animated: false)
+        }
+        if let enabled = previousPopEnabled {
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = enabled
+        }
         let adapter = adapter
         Task { await adapter.finish() }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        guard collection.bounds.width > 0, collection.bounds.height > 0, readerLayout.needsViewportUpdate else { return }
+        guard collection.bounds.width > 0, collection.bounds.height > 0, readerLayout.needsViewportUpdate else {
+            return
+        }
         strip.updateViewport()
         updatePrefetch()
     }
@@ -188,12 +204,16 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     private var canUseActions: Bool {
-        canNavigate && !isLoading && !isApplyingChapter && !isExiting && !sourceDestination.isPending
+        canNavigate && !isReaderBusy && !isApplyingChapter
             && navigationController?.topViewController === self
     }
 
+    private var isReaderBusy: Bool {
+        isLoading || isExiting || recovery.isBusy || sourceDestination.isPending || catalog.isActive
+    }
+
     private var canSyncProgress: Bool {
-        canUseActions && !recovery.isBusy && !sourceDestination.isPending && isReadingVisible && !hasVisiblePresentation
+        canUseActions && isReadingVisible && !hasVisiblePresentation
     }
 
     private func configureCollection() {
@@ -253,7 +273,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         chrome.menuProvider = { [weak self] in await self?.readingMenu() ?? [] }
         chrome.onDownload = { [weak self] in self?.showDownloads() }
         chrome.onSettings = { [weak self] in
-            guard let self, self.canNavigate, !self.isLoading, !self.isExiting, self.presentedViewController == nil else {
+            guard let self, self.canUseActions, self.presentedViewController == nil else {
                 return
             }
             self.recordPosition(immediate: true)
@@ -271,18 +291,44 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     private func configureState() {
-        stateView.translatesAutoresizingMaskIntoConstraints = false
-        view.insertSubview(stateView, belowSubview: chrome)
-        NSLayoutConstraint.activate([
-            stateView.leadingAnchor.constraint(equalTo: collection.leadingAnchor),
-            stateView.trailingAnchor.constraint(equalTo: collection.trailingAnchor),
-            stateView.topAnchor.constraint(equalTo: collection.topAnchor, constant: 56),
-            stateView.bottomAnchor.constraint(equalTo: collection.bottomAnchor, constant: -100),
-        ])
+        for state in [stateView, catalogStateView] {
+            state.translatesAutoresizingMaskIntoConstraints = false
+            view.insertSubview(state, belowSubview: chrome)
+            NSLayoutConstraint.activate([
+                state.leadingAnchor.constraint(equalTo: collection.leadingAnchor),
+                state.trailingAnchor.constraint(equalTo: collection.trailingAnchor),
+                state.topAnchor.constraint(equalTo: collection.topAnchor, constant: 56),
+                state.bottomAnchor.constraint(equalTo: collection.bottomAnchor, constant: -100),
+            ])
+        }
+        catalogStateView.hide()
+    }
+
+    private func updateReaderInteraction() {
+        let busy = isReaderBusy
+        collection.isUserInteractionEnabled = !busy
+        collection.isScrollEnabled = !busy
+        stateView.isUserInteractionEnabled = !busy
+        stateView.accessibilityElementsHidden = busy
+        chrome.setBusy(busy)
+    }
+
+    private func catalogActivityChanged() {
+        updateReaderInteraction()
+        if catalog.isPreparing {
+            collection.setContentOffset(collection.contentOffset, animated: false)
+            catalogStateView.show(message: "正在加载漫画…", loading: true)
+            setControlsVisible(true, animated: false)
+        } else {
+            catalogStateView.hide()
+        }
+        updatePrefetch()
+        updateAutomaticReading()
     }
 
     private func load(index: Int?, position: Int?, refresh: Bool = false) {
         guard !isExiting, !recovery.isBusy, !sourceDestination.isPending else { return }
+        catalog.cancel()
         progressSync.invalidateContext()
         recordPosition(immediate: true)
         chapterWindow.cancel()
@@ -314,16 +360,16 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
                 guard self.loadRevision == revision else { return }
                 self.loadTask = nil
                 self.isLoading = false
-                self.collection.isUserInteractionEnabled = true
+                self.updateReaderInteraction()
                 self.apply(prepared)
             } catch {
                 guard self.loadRevision == revision else { return }
                 self.loadTask = nil
                 if error is CancellationError || Task.isCancelled { return }
                 self.isLoading = false
-                self.collection.isUserInteractionEnabled = true
-                self.chrome.setBusy(false)
-                self.showState(message: error.localizedDescription, actionTitle: "重试", icon: "arrow.clockwise") { [weak self] in
+                self.updateReaderInteraction()
+                self.showState(message: error.localizedDescription, actionTitle: "重试", icon: "arrow.clockwise") {
+                    [weak self] in
                     self?.retryLoad()
                 }
                 self.updateAutomaticReading()
@@ -344,10 +390,11 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         strip.setPages(prepared.pages.isEmpty ? [] : chapterWindow.pages, restoring: key)
         isApplyingChapter = false
         updateChapterChrome()
-        chrome.setBusy(false)
+        chrome.setBusy(isReaderBusy)
         if prepared.pages.isEmpty {
             let hasNext = Int(prepared.chapterIndex) + 1 < prepared.chapters.count
-            showState(message: prepared.chapterTitle, actionTitle: hasNext ? "下一章" : nil, icon: "forward.end") { [weak self] in
+            showState(message: prepared.chapterTitle, actionTitle: hasNext ? "下一章" : nil, icon: "forward.end") {
+                [weak self] in
                 self?.changeChapter(by: 1)
             }
         } else {
@@ -365,13 +412,16 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     private func updateChapterChrome() {
         guard let prepared = chapter else { return }
         chrome.setTitle(book: prepared.book.name, chapter: prepared.chapterTitle)
-        chrome.setNavigation(previous: prepared.chapterIndex > 0, next: Int(prepared.chapterIndex) + 1 < prepared.chapters.count)
+        chrome.setNavigation(
+            previous: prepared.chapterIndex > 0, next: Int(prepared.chapterIndex) + 1 < prepared.chapters.count)
         chrome.setPage(pagePosition, count: prepared.pages.count)
         chrome.setReadingInfo(prepared, position: pagePosition, configuration: readingOptions.footer)
+        chrome.setBusy(isReaderBusy)
     }
 
     private func renderWindowPages() {
-        guard !isLoading, !isApplyingChapter, !isExiting, chapter?.pages.isEmpty == false, !sourceDestination.isPending else {
+        guard !isLoading, !isApplyingChapter, !isExiting, chapter?.pages.isEmpty == false, !sourceDestination.isPending
+        else {
             return
         }
         strip.setPages(chapterWindow.pages)
@@ -415,11 +465,12 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     private func retryLoad() {
+        guard !catalog.isActive else { return }
         load(index: requestedIndex, position: requestedPosition, refresh: requestedRefresh)
     }
 
     private func changeChapter(by delta: Int) {
-        guard !isLoading, !isExiting, let chapter else { return }
+        guard canUseActions, let chapter else { return }
         let index = Int(chapter.chapterIndex) + delta
         guard chapter.chapters.indices.contains(index) else { return }
         if let prepared = chapterWindow.pages.first(where: { $0.chapterIndex == index })?.chapter {
@@ -442,34 +493,18 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     private func showContents() {
-        guard canNavigate, !isLoading, !isExiting, presentedViewController == nil, let chapter else { return }
+        guard canUseActions, !catalog.isActive, presentedViewController == nil, chapter != nil else { return }
         recordPosition(immediate: true)
-        let controller = MangaContentsViewController(chapters: chapter.chapters, currentIndex: Int(chapter.chapterIndex)) {
-            [weak self] index in
-            guard let self, self.canNavigate else { return }
-            self.load(index: index, position: 0)
-        }
-        controller.loadTask = Task { [weak controller, adapter] in
-            guard let titles = try? await adapter.contents(), !Task.isCancelled else { return }
-            controller?.updateTitles(titles)
-        }
-        let navigation = UINavigationController(rootViewController: controller)
-        navigation.overrideUserInterfaceStyle = .dark
-        if let sheet = navigation.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
-            sheet.selectedDetentIdentifier = .large
-            sheet.prefersGrabberVisible = true
-        }
-        present(navigation, animated: !UIAccessibility.isReduceMotionEnabled)
+        catalog.present()
     }
 
     private func showDownloads() {
-        guard canNavigate, !isLoading, !isExiting, presentedViewController == nil, let chapter else { return }
+        guard canUseActions, presentedViewController == nil, let chapter else { return }
         recordPosition(immediate: true)
         let revision = loadRevision
         downloadCoordinator.present(from: self, chapter: chapter, anchor: chrome.downloadAnchor) { [weak self] in
             guard let self else { return false }
-            return self.canNavigate && !self.isLoading && !self.isExiting && self.loadRevision == revision
+            return self.canUseActions && self.loadRevision == revision
         }
     }
 
@@ -500,7 +535,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     private func updateAutomaticReading() {
         let eligible =
             isReadingVisible && canUseActions && !recovery.isBusy && !controlsVisible && stateView.isHidden
-            && !hasVisiblePresentation && !collection.isDragging && !collection.isDecelerating
+            && !catalog.isActive && !hasVisiblePresentation && !collection.isDragging && !collection.isDecelerating
             && !readerLayout.needsViewportUpdate && view.window?.isKeyWindow == true
             && view.window.map { AppLockManager.shared.isUnlocked(in: $0) } == true
         automaticReading.update(
@@ -529,6 +564,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
 
     private func recoveryBusyChanged(_ busy: Bool) {
         if busy {
+            catalog.cancel()
             progressSync.invalidateContext()
             wasLoadingBeforeRecovery = isLoading || chapter == nil
             recordPosition(immediate: true)
@@ -546,8 +582,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         } else {
             sourceDestination.navigateIfNeeded()
             guard !sourceDestination.isPending else { return }
-            collection.isUserInteractionEnabled = true
-            chrome.setBusy(isLoading)
+            catalogActivityChanged()
             if wasLoadingBeforeRecovery { retryLoad() } else { resumeIfNeeded() }
         }
     }
@@ -555,6 +590,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     private func sourceChangeCommitted(
         _ result: BookDetailRefreshResult, replacing originalURL: String, targets: [UIViewController]
     ) {
+        catalog.cancel()
         progressSync.invalidateContext()
         automaticReading.stop()
         loadRevision = UUID()
@@ -568,6 +604,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     private func suspendForLogin() {
+        catalog.cancel()
         progressSync.invalidateContext()
         recordPosition(immediate: true)
         automaticReading.stop()
@@ -583,7 +620,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     private func seek(to position: Int) {
-        guard !isLoading, !isExiting, let chapter, chapter.pages.indices.contains(position) else { return }
+        guard canUseActions, let chapter, chapter.pages.indices.contains(position) else { return }
         pagePosition = position
         strip.seek(to: MangaWindowPage(chapter: chapter, position: position).key)
         chrome.setPage(position, count: chapter.pages.count)
@@ -641,7 +678,8 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         let ownedPresentationVisible =
             presentedViewController?.viewIfLoaded?.window?.windowScene === readingScene
             && readingScene?.activationState == .foregroundActive
-        guard (canNavigate || ownedPresentationVisible), !isExiting, !recovery.isBusy, !sourceDestination.isPending else {
+        guard (canNavigate || ownedPresentationVisible), !isExiting, !recovery.isBusy, !sourceDestination.isPending
+        else {
             return
         }
         adapter.resumeLoading()
@@ -658,11 +696,11 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
             if view is UIControl { return false }
             target = view.superview
         }
-        return !isLoading && !isExiting
+        return canUseActions
     }
 
     @objc private func tapPage(_ gesture: UITapGestureRecognizer) {
-        guard !isLoading, !isExiting else { return }
+        guard canUseActions else { return }
         switch readerLayout.tapAction(at: gesture.location(in: collection), clickScroll: readingOptions.clickScroll) {
         case .controls:
             setControlsVisible(!controlsVisible)
@@ -681,14 +719,15 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     @objc private func zoomPage(_ gesture: UITapGestureRecognizer) {
-        guard canNavigate, !isLoading, !isExiting, readingOptions.allowsZoom, presentedViewController == nil,
+        guard canUseActions, readingOptions.allowsZoom, presentedViewController == nil,
             let path = collection.indexPathForItem(at: gesture.location(in: collection)),
             strip.pages.indices.contains(path.item)
         else { return }
         recordPosition(immediate: true)
         let item = strip.pages[path.item]
         let controller = MangaImageZoomViewController(
-            imageURL: item.page.mImageUrl, title: "\(item.position + 1) / \(item.chapter.pages.count)", pipeline: images,
+            imageURL: item.page.mImageUrl, title: "\(item.position + 1) / \(item.chapter.pages.count)",
+            pipeline: images,
             displayStyle: readingOptions.displayStyle, colorFilter: readingOptions.colorFilter)
         let navigation = UINavigationController(rootViewController: controller)
         navigation.overrideUserInterfaceStyle = .dark
@@ -697,9 +736,11 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     @objc private func sceneDeactivated(_ notification: Notification) {
-        guard let scene = notification.object as? UIScene, scene === (readingScene ?? viewIfLoaded?.window?.windowScene) else {
+        guard let scene = notification.object as? UIScene, scene === (readingScene ?? viewIfLoaded?.window?.windowScene)
+        else {
             return
         }
+        catalog.cancel()
         recordPosition(immediate: true)
         progressSync.suspend(upload: !recovery.isBusy && !sourceDestination.isPending)
         chrome.setReaderVisible(false)
@@ -720,7 +761,8 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     @objc private func sceneActivated(_ notification: Notification) {
-        guard let scene = notification.object as? UIScene, scene === (readingScene ?? viewIfLoaded?.window?.windowScene) else {
+        guard let scene = notification.object as? UIScene, scene === (readingScene ?? viewIfLoaded?.window?.windowScene)
+        else {
             return
         }
         resumeIfNeeded()
@@ -729,13 +771,15 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
     }
 
     @objc private func back() {
-        guard canNavigate, !isExiting, !recovery.isBusy, !sourceDestination.isPending, presentedViewController == nil else {
+        guard canNavigate, !isExiting, !recovery.isBusy, !sourceDestination.isPending, presentedViewController == nil
+        else {
             return
         }
         exitFlow.begin()
     }
 
     private func prepareForExit() {
+        catalog.cancel()
         progressSync.invalidateContext()
         automaticReading.stop()
         recordPosition(immediate: true)

@@ -17,6 +17,7 @@ final class MangaReaderAdapter {
     private var reader: ReaderFacade?
     private var manga: MangaReaderFacade?
     private var books: BookDetailFacade?
+    private var catalogClient: MangaReaderCatalogClient?
     private var progressSyncClient: MangaReaderProgressSyncClient?
     private var progressSyncDirectory: [BookChapter] = []
     private var readTimeTask: Task<Void, Never>?
@@ -58,6 +59,14 @@ final class MangaReaderAdapter {
         reader = resolved
         progress.bind(bookURL: bookURL, facade: resolved)
         requests.bind(bookURL: bookURL, facade: resolved)
+        catalogClient = MangaReaderCatalogClient(
+            bookURL: bookURL, reader: resolved, books: resolvedBooks, queue: progress,
+            context: { [weak self] in
+                guard let self, !self.isRetired, !self.isRecovering, !self.isLoadingSuspended,
+                    let chapter = self.chapter
+                else { throw CancellationError() }
+                return .init(generation: self.recoveryGeneration, book: chapter.book)
+            })
         progressSyncClient = MangaReaderProgressSyncClient(
             bookURL: bookURL, reader: resolved, manga: resolvedManga, books: resolvedBooks,
             settings: settings, queue: progress,
@@ -91,19 +100,37 @@ final class MangaReaderAdapter {
     }
 
     func load(index: Int, position: Int, refresh: Bool = false) async throws -> MangaReaderChapter {
+        try await load(index: index, position: position, refresh: refresh, catalogSelection: nil)
+    }
+
+    private func load(
+        index: Int, position: Int, refresh: Bool, catalogSelection: MangaReaderCatalogClient.Selection?
+    ) async throws -> MangaReaderChapter {
         guard !isRecovering, !isRetired else { throw CancellationError() }
+        let generation: UUID
+        if let catalogSelection {
+            generation = try requireCatalogClient().begin(catalogSelection)
+        } else {
+            generation = UUID()
+        }
         progressSyncClient?.cancelPreparation()
         cancelNeighbors()
         isNeighborContextValid = false
-        recoveryGeneration = UUID()
+        recoveryGeneration = generation
         try bootstrap()
         guard let manga else { throw CancellationError() }
         let ticket = try requests.begin()
         do {
             try await progress.flushForExit()
             try requests.check(ticket)
+            if let catalogSelection {
+                try await requireCatalogClient().validate(catalogSelection)
+                try requests.check(ticket)
+            }
             let requestGate = requests
-            let payload: ReaderChapterPayload = try await SharedCancellableAsync.value { completion in
+            let payload: ReaderChapterPayload = try await SharedCancellableAsync.value(
+                awaitCancellationCompletion: catalogSelection != nil
+            ) { completion in
                 let subscription = ticket.facade.prepareChapterRequest(
                     bookUrl: ticket.bookURL, chapterIndex: Int32(clamping: index), refreshContent: refresh
                 ) { result in
@@ -124,12 +151,19 @@ final class MangaReaderAdapter {
                 return subscription
             }
             try requests.check(ticket)
+            if let catalogSelection {
+                try requireCatalogClient().validate(payload, selection: catalogSelection)
+            }
             let prepared: MangaReaderChapter = try await SharedAsync.value { completion in
                 manga.prepareReaderChapter(
                     payload: payload, chapterPosition: Int32(clamping: position), completionHandler: completion)
             }
             try requests.check(ticket)
             guard prepared.book.bookUrl == bookURL else { throw failure("漫画书籍状态已变化") }
+            if let catalogSelection {
+                try await requireCatalogClient().validate(prepared, selection: catalogSelection)
+                try requests.check(ticket)
+            }
             neighborIdentity = MangaChapterWindowIdentity(prepared)
             neighborDirectory = payload.chapters.map(MangaChapterWindowIdentity.Entry.init)
             progressSyncDirectory = payload.chapters
@@ -260,7 +294,8 @@ final class MangaReaderAdapter {
                     let reader = self.reader,
                     Int(
                         reader.computeSimulatedChapterSize(
-                            readConfig: book.readConfig, realChapterSize: Int32(clamping: self.neighborDirectory.count)))
+                            readConfig: book.readConfig, realChapterSize: Int32(clamping: self.neighborDirectory.count))
+                    )
                         == identity.entries.count
                 else {
                     self.isNeighborContextValid = false
@@ -275,7 +310,9 @@ final class MangaReaderAdapter {
                 guard let self, self.bindingID == binding, !self.isRetired, self.neighborIdentity != nil else {
                     return
                 }
-                if ReaderCatalogSnapshot.signature(chapters) != ReaderCatalogSnapshot.signature(self.progressSyncDirectory) {
+                if ReaderCatalogSnapshot.signature(chapters)
+                    != ReaderCatalogSnapshot.signature(self.progressSyncDirectory)
+                {
                     self.progressSyncClient?.invalidate()
                 }
                 guard directory != self.neighborDirectory else { return }
@@ -296,7 +333,8 @@ final class MangaReaderAdapter {
         guard !isRecovering, !isRetired, let chapter else { return }
         let bounded = max(0, min(position, chapter.pages.count - 1))
         progress.stage(
-            .init(chapterIndex: Int(chapter.chapterIndex), chapterTitle: chapter.chapterTitle, chapterPosition: bounded),
+            .init(
+                chapterIndex: Int(chapter.chapterIndex), chapterTitle: chapter.chapterTitle, chapterPosition: bounded),
             immediate: immediate)
     }
 
@@ -378,6 +416,35 @@ final class MangaReaderAdapter {
         try Task.checkCancellation()
         guard !isRetired, !isRecovering, recoveryGeneration == generation else { throw CancellationError() }
         return items
+    }
+
+    func loadCatalogSnapshot() async throws -> MangaReaderCatalogSnapshot {
+        try await requireCatalogClient().snapshot()
+    }
+
+    func prepareCatalogSelection(
+        index: Int, position: Int, snapshot: MangaReaderCatalogSnapshot
+    ) async throws -> MangaReaderChapter {
+        let selection = try await requireCatalogClient().prepareSelection(
+            index: index, position: position, snapshot: snapshot)
+        return try await load(index: index, position: position, refresh: false, catalogSelection: selection)
+    }
+
+    func isCatalogSelectionContextCurrent(snapshot: MangaReaderCatalogSnapshot) -> Bool {
+        catalogClient?.isSelectionContextCurrent(snapshot: snapshot) == true
+    }
+
+    func isPreparedCatalogSelectionCurrent(
+        _ prepared: MangaReaderChapter, snapshot: MangaReaderCatalogSnapshot
+    ) -> Bool {
+        catalogClient?.isPreparedSelectionCurrent(prepared, snapshot: snapshot) == true
+    }
+
+    private func requireCatalogClient() throws -> MangaReaderCatalogClient {
+        guard !isRetired, !isRecovering, !isLoadingSuspended else { throw CancellationError() }
+        try bootstrap()
+        guard let catalogClient else { throw CancellationError() }
+        return catalogClient
     }
 
     func suspendLoading() {
@@ -481,6 +548,7 @@ final class MangaReaderAdapter {
         reader = nil
         manga = nil
         books = nil
+        catalogClient = nil
         progressSyncClient = nil
     }
 
