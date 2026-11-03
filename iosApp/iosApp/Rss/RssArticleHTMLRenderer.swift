@@ -57,7 +57,8 @@ enum RssArticleHTMLRenderer {
     static func userScripts(source: RssSource?, remote: Bool) -> [WKUserScript] {
         var scripts: [WKUserScript] = []
         if remote, let style = source?.style?.trimmingCharacters(in: .whitespacesAndNewlines), !style.isEmpty,
-            let data = try? JSONSerialization.data(withJSONObject: [style]), let payload = String(data: data, encoding: .utf8)
+            let data = try? JSONSerialization.data(withJSONObject: [style]),
+            let payload = String(data: data, encoding: .utf8)
         {
             let script = """
                 (function() {
@@ -96,9 +97,10 @@ enum RssArticleHTMLRenderer {
         let divider = cssColor(AndroidReplicaTheme.divider.resolvedColor(with: traits))
         let accent = cssColor(AndroidReplicaTheme.accent.resolvedColor(with: traits))
 
+        // Retain the system body size without WebKit's system-face glyph fallback.
         return """
             <style>
-            html,body{margin:0;padding:0;background:\(pageBackground);color:\(primaryText);font:-apple-system-body;line-height:1.72;word-wrap:break-word;}
+            html,body{margin:0;padding:0;background:\(pageBackground);color:\(primaryText);font:-apple-system-body;font-family:Helvetica,Arial,sans-serif;line-height:1.72;word-wrap:break-word;}
             body{box-sizing:border-box;min-height:100%;padding:18px 17px 34px;}
             img{display:block;max-width:100% !important;width:auto;height:auto;margin:10px auto;border-radius:2px;}
             video,iframe{max-width:100% !important;width:100%;height:auto;}
