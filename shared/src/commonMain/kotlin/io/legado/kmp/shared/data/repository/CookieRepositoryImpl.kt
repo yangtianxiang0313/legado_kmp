@@ -24,6 +24,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okio.ByteString.Companion.encodeUtf8
 
 class CookieRepositoryImpl(
     private val database: LegadoDatabase
@@ -95,6 +96,18 @@ class CookieRepositoryImpl(
             .sortedBy { it.url.length }
             .forEach { header = mergeRequestCookieHeader(header, it.cookie) }
         mergeRequestCookieHeader(header, SessionCookieStore.getForHost(host))
+    }
+
+    override suspend fun imageCachePartition(): String = withCookieLock {
+        val structured = cookieJson.encodeToString(
+            readJar().all().sortedWith(compareBy<StoredHttpCookie>({ it.domain }, { it.path }, { it.name }))
+        )
+        val legacy = cookieJson.encodeToString(
+            database.cookieQueries.selectAll().executeAsList().sortedBy { it.url }
+                .map { listOf(it.url, it.cookie) }
+        )
+        cookieJson.encodeToString(listOf(structured, legacy, SessionCookieStore.imageCachePartition()))
+            .encodeUtf8().sha256().hex()
     }
 
     override suspend fun replaceCookiesForHosts(snapshots: List<CookieHostSnapshot>, persistSession: Boolean) {

@@ -165,76 +165,7 @@ final class AndroidReplicaBookResultCell: UITableViewCell {
             coverImageView.image = placeholderImage
             return
         }
-        coverImageView.kf.setImage(with: url, placeholder: placeholderImage, options: [.transition(.fade(0.2)), .cacheOriginalImage])
-    }
-}
-
-final class AndroidReplicaRssArticleCell: UITableViewCell {
-    static let reuseIdentifier = "AndroidReplicaRssArticleCell"
-    private let titleLabel = UILabel()
-    private let detailLabel = UILabel()
-    private let chevronView = UIImageView(image: UIImage(systemName: "chevron.right"))
-    private let dividerView = UIView()
-
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
-        configureViews()
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        preconditionFailure("init(coder:) is unavailable")
-    }
-
-    private func configureViews() {
-        backgroundColor = AndroidReplicaTheme.background
-        contentView.backgroundColor = AndroidReplicaTheme.background
-        selectedBackgroundView = {
-            let view = UIView()
-            view.backgroundColor = AndroidReplicaTheme.activeIndicator
-            return view
-        }()
-        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        titleLabel.textColor = AndroidReplicaTheme.primaryText
-        titleLabel.numberOfLines = 2
-        detailLabel.font = .systemFont(ofSize: 12)
-        detailLabel.textColor = AndroidReplicaTheme.secondaryText
-        detailLabel.numberOfLines = 2
-        chevronView.tintColor = AndroidReplicaTheme.secondaryText
-        dividerView.backgroundColor = AndroidReplicaTheme.divider
-
-        for item in [titleLabel, detailLabel, chevronView, dividerView] {
-            item.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview(item)
-        }
-
-        NSLayoutConstraint.activate([
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: chevronView.leadingAnchor, constant: -16),
-
-            detailLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            detailLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 7),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: chevronView.leadingAnchor, constant: -16),
-            detailLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -14),
-
-            chevronView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
-            chevronView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            chevronView.widthAnchor.constraint(equalToConstant: 12),
-            chevronView.heightAnchor.constraint(equalToConstant: 18),
-
-            dividerView.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            dividerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            dividerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            dividerView.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
-        ])
-    }
-
-    func configure(title: String, detail: String?) {
-        titleLabel.text = title
-        detailLabel.text = detail
-        detailLabel.isHidden = detail?.isEmpty != false
-        accessibilityLabel = title
-        accessibilityValue = detail
+        coverImageView.kf.setImage(
+            with: url, placeholder: placeholderImage, options: [.transition(.fade(0.2)), .cacheOriginalImage])
     }
 }

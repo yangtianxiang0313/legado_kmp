@@ -3,6 +3,9 @@ package io.legado.kmp.shared.network
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okio.ByteString.Companion.encodeUtf8
 
 /** CookieJar controls source cookie handling and must never reach the wire. */
 internal fun Map<String, String>.withoutSourceCookieJarHeader(): Map<String, String> =
@@ -70,6 +73,11 @@ internal object SessionCookieStore {
     fun getForHost(host: String): String? = locked {
         cookies.entries.filter { legacyCookieMatchesHost(it.key, host) }.sortedBy { it.key.length }
             .fold(null as String?) { header, entry -> mergeRequestCookieHeader(header, entry.value) }
+    }
+
+    fun imageCachePartition(): String = locked {
+        val sortedCookies = cookies.entries.sortedBy { it.key }.associate { it.key to it.value }
+        Json.encodeToString(sortedCookies).encodeUtf8().sha256().hex()
     }
 
     fun put(domain: String, cookie: String?) = locked {

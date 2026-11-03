@@ -2,6 +2,15 @@ import shared
 import UIKit
 
 final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableViewDelegate {
+    private struct CellSizeChange {
+        weak var cell: AndroidReplicaRssArticleCell?
+        let key: RssFavoriteKey
+        let configurationID: UUID
+        let generation: UUID
+        let cellGeneration: UUID
+        let context: RssFavoriteContext
+    }
+
     private let screen = RssScreenAdapter()
     private lazy var topBar = AndroidReplicaDetailBar(
         title: L10n.RSS.favoritesTitle, target: self, backAction: #selector(handleBack))
@@ -15,6 +24,11 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
     private var subscription: FlowSubscription?
     private var bindingID = UUID()
     private var presentationID = UUID()
+    private var presentationResumeID: UUID?
+    private var cellGeneration = UUID()
+    private var cellBindings: [ObjectIdentifier: (key: RssFavoriteKey, id: UUID)] = [:]
+    private var heightUpdateID: UUID?
+    private var pendingHeightChanges: [ObjectIdentifier: CellSizeChange] = [:]
     private var hasAppeared = false
     private var suspended = false
     private var showsProgress = false
@@ -64,7 +78,7 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         hasAppeared = true
-        if hasSnapshot { tableView.reloadData() }
+        schedulePresentationResume()
         updateControls()
     }
 
@@ -141,8 +155,12 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
             let cell =
                 table.dequeueReusableCell(withIdentifier: AndroidReplicaRssArticleCell.reuseIdentifier, for: path)
                 as! AndroidReplicaRssArticleCell
+            cell.onSizeChange = nil
+            cell.cancelThumbnailLoading()
+            cell.accessibilityCustomActions = nil
             guard let self, let snapshot = self.favoritesByKey[key] else { return cell }
-            cell.configure(title: snapshot.star.title, detail: snapshot.star.pubDate)
+            cell.configure(favorite: snapshot.star)
+            self.cellBindings[ObjectIdentifier(cell)] = (key, UUID())
             let generation = self.presentationID
             let context = self.captureContext()
             cell.accessibilityCustomActions = [
@@ -241,6 +259,9 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
     }
 
     private func renderRows() {
+        cellGeneration = UUID()
+        cancelVisibleThumbnails()
+        cellBindings.removeAll()
         let rows = favorites.filter { $0.group == selectedGroup }
         var snapshot = NSDiffableDataSourceSnapshot<Int, RssFavoriteKey>()
         snapshot.appendSections([0])
@@ -248,6 +269,127 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
         dataSource.applySnapshotUsingReloadData(snapshot)
         tabs.display(groups: groups, selected: selectedGroup)
         if rows.isEmpty { stateView.showMessage(title: L10n.RSS.favoritesEmpty) } else { stateView.hide() }
+    }
+
+    private func reloadRows() {
+        cellGeneration = UUID()
+        cancelVisibleThumbnails()
+        cellBindings.removeAll()
+        tableView.reloadData()
+        resumeVisibleThumbnails()
+    }
+
+    private func schedulePresentationResume() {
+        guard hasAppeared, !suspended, presentationResumeID == nil else { return }
+        let id = UUID()
+        let generation = presentationID
+        presentationResumeID = id
+        let resume: () -> Void = { [weak self] in
+            guard let self, self.presentationResumeID == id else { return }
+            self.presentationResumeID = nil
+            guard self.presentationID == generation, self.activeContext() != nil else { return }
+            if self.hasSnapshot { self.reloadRows() }
+            self.updateControls()
+        }
+        // UIKit may retain presentation links/coordinators through viewDidAppear and transition completion.
+        let enqueue = { DispatchQueue.main.async(execute: resume) }
+        if let coordinator = transitionCoordinator,
+            coordinator.animate(alongsideTransition: nil, completion: { _ in enqueue() })
+        {
+            return
+        }
+        enqueue()
+    }
+
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        guard tableView === self.tableView, let cell = cell as? AndroidReplicaRssArticleCell else { return }
+        resumeThumbnail(for: cell, at: indexPath)
+    }
+
+    func tableView(_ tableView: UITableView, didEndDisplaying cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        guard tableView === self.tableView, let cell = cell as? AndroidReplicaRssArticleCell else { return }
+        pendingHeightChanges.removeValue(forKey: ObjectIdentifier(cell))
+        cell.onSizeChange = nil
+        cell.cancelThumbnailLoading()
+    }
+
+    private func resumeThumbnail(for cell: AndroidReplicaRssArticleCell, at indexPath: IndexPath) {
+        guard let context = activeContext(), let key = dataSource.itemIdentifier(for: indexPath),
+            cellBindings[ObjectIdentifier(cell)]?.key == key,
+            let snapshot = favoritesByKey[key], snapshot.group == selectedGroup
+        else {
+            cell.onSizeChange = nil
+            cell.cancelThumbnailLoading()
+            return
+        }
+        let generation = presentationID
+        let cellGeneration = self.cellGeneration
+        let configurationID = UUID()
+        cellBindings[ObjectIdentifier(cell)] = (key, configurationID)
+        cell.onSizeChange = { [weak self, weak cell] resizedCell in
+            guard let self, let cell, resizedCell === cell else { return }
+            self.scheduleHeightUpdate(
+                CellSizeChange(
+                    cell: cell, key: key, configurationID: configurationID, generation: generation,
+                    cellGeneration: cellGeneration, context: context))
+        }
+        cell.resumeThumbnailLoading()
+    }
+
+    private func resumeVisibleThumbnails() {
+        guard activeContext() != nil else { return }
+        for cell in tableView.visibleCells {
+            guard let cell = cell as? AndroidReplicaRssArticleCell,
+                let path = tableView.indexPath(for: cell), tableView.cellForRow(at: path) === cell,
+                cell.window === viewIfLoaded?.window, !cell.isHidden,
+                tableView.indexPathsForVisibleRows?.contains(path) == true
+            else { continue }
+            resumeThumbnail(for: cell, at: path)
+        }
+    }
+
+    private func cancelVisibleThumbnails() {
+        heightUpdateID = nil
+        pendingHeightChanges.removeAll()
+        for case let cell as AndroidReplicaRssArticleCell in tableView.visibleCells {
+            cell.onSizeChange = nil
+            cell.cancelThumbnailLoading()
+        }
+    }
+
+    private func ownsCell(_ change: CellSizeChange) -> Bool {
+        guard hasAppeared, !suspended, change.generation == presentationID,
+            change.cellGeneration == cellGeneration, change.context.matches(self, dialog: nil),
+            let cell = change.cell, let path = tableView.indexPath(for: cell),
+            let binding = cellBindings[ObjectIdentifier(cell)], binding.key == change.key,
+            binding.id == change.configurationID,
+            tableView.cellForRow(at: path) === cell, dataSource.itemIdentifier(for: path) == change.key,
+            let snapshot = favoritesByKey[change.key], snapshot.group == selectedGroup
+        else { return false }
+        return true
+    }
+
+    private func scheduleHeightUpdate(_ change: CellSizeChange) {
+        guard ownsCell(change), let cell = change.cell else { return }
+        pendingHeightChanges[ObjectIdentifier(cell)] = change
+        guard heightUpdateID == nil else { return }
+        let id = UUID()
+        heightUpdateID = id
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.heightUpdateID == id else { return }
+            self.heightUpdateID = nil
+            let changes = Array(self.pendingHeightChanges.values)
+            self.pendingHeightChanges.removeAll()
+            guard
+                changes.contains(where: { change in
+                    guard self.ownsCell(change), let cell = change.cell,
+                        cell.window === change.context.window, let path = self.tableView.indexPath(for: cell)
+                    else { return false }
+                    return self.tableView.indexPathsForVisibleRows?.contains(path) == true
+                })
+            else { return }
+            UIView.performWithoutAnimation { self.tableView.performBatchUpdates(nil) }
+        }
     }
 
     private func groupActions() -> [UIMenuElement] {
@@ -357,6 +499,7 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
                 self.operation = nil
             }
             self.updateControls()
+            self.schedulePresentationResume()
             DispatchQueue.main.async { [weak self] in self?.updateControls() }
         }
         updateControls()
@@ -515,6 +658,8 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
 
     private func invalidateActions() {
         presentationID = UUID()
+        presentationResumeID = nil
+        cancelVisibleThumbnails()
         selection = nil
         if let operation, operation.phase != .submitted {
             operation.phase = .cancelled
@@ -546,7 +691,7 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
         if let window = notification.object as? UIWindow, window !== viewIfLoaded?.window { return }
         suspended = false
         if let operation, operation.phase != .submitted, !ownsContext(operation) { invalidateActions() }
-        if activeContext() != nil { tableView.reloadData() }
+        schedulePresentationResume()
         updateControls()
     }
 
@@ -555,245 +700,4 @@ final class AndroidReplicaRssFavoritesViewController: UIViewController, UITableV
         invalidateActions()
         navigationController?.popViewController(animated: true)
     }
-}
-
-private struct RssFavoriteKey: Hashable {
-    let origin: String
-    let link: String
-    static func equal(_ lhs: String, _ rhs: String) -> Bool { lhs.utf8.elementsEqual(rhs.utf8) }
-    static func == (lhs: Self, rhs: Self) -> Bool { equal(lhs.origin, rhs.origin) && equal(lhs.link, rhs.link) }
-    func hash(into hasher: inout Hasher) { hasher.combine(Data(origin.utf8)); hasher.combine(Data(link.utf8)) }
-}
-
-private struct RssFavoriteGroup: Hashable {
-    let raw: String
-    var bytes: Data { Data(raw.utf8) }
-    var label: String { raw.isEmpty ? RssFavoriteText.emptyGroup : raw }
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.bytes == rhs.bytes }
-    func hash(into hasher: inout Hasher) { hasher.combine(bytes) }
-}
-
-private struct RssFavoriteSnapshot {
-    let star: RssStar
-    let key: RssFavoriteKey
-    let group: RssFavoriteGroup
-    let fields: [Data?]
-    init(_ star: RssStar) {
-        self.star = star
-        key = RssFavoriteKey(origin: star.origin, link: star.link)
-        group = RssFavoriteGroup(raw: star.group)
-        let values: [String?] = [
-            star.origin, star.link, star.sort, star.title, star.group, star.pubDate,
-            star.description_, star.content, star.image, star.variable,
-        ]
-        fields = values.map { $0.map { Data($0.utf8) } }
-    }
-}
-
-private enum RssFavoriteTarget {
-    case article(RssFavoriteSnapshot), group(RssFavoriteGroup), all
-    func select(from favorites: [RssFavoriteSnapshot]) -> [RssFavoriteSnapshot] {
-        switch self {
-        case .article(let snapshot): return favorites.filter { $0.key == snapshot.key }
-        case .group(let group): return favorites.filter { $0.group == group }
-        case .all: return favorites
-        }
-    }
-}
-
-@MainActor
-private final class RssFavoriteRequest {
-    enum Phase { case ready, confirming, authorized, opening, submitted, finished, cancelled }
-    let target: RssFavoriteTarget
-    let snapshots: [RssFavoriteSnapshot]
-    let context: RssFavoriteContext
-    let generation: UUID
-    var phase: Phase = .ready
-    var dialog: ReaderRestoreProgressDialogViewController?
-    init(target: RssFavoriteTarget, snapshots: [RssFavoriteSnapshot], context: RssFavoriteContext, generation: UUID) {
-        self.target = target
-        self.snapshots = snapshots
-        self.context = context
-        self.generation = generation
-    }
-}
-
-@MainActor
-private final class RssFavoriteContext {
-    weak var window: UIWindow?
-    weak var scene: UIWindowScene?
-    weak var root: UIViewController?
-    weak var navigation: UINavigationController?
-    weak var top: UIViewController?
-    let ancestry: [ObjectIdentifier]
-
-    init(
-        window: UIWindow, scene: UIWindowScene, root: UIViewController, navigation: UINavigationController,
-        top: UIViewController
-    ) {
-        self.window = window
-        self.scene = scene
-        self.root = root
-        self.navigation = navigation
-        self.top = top
-        var ancestry: [ObjectIdentifier] = []
-        var current: UIViewController? = top
-        while let controller = current { ancestry.append(ObjectIdentifier(controller)); current = controller.parent }
-        self.ancestry = ancestry
-    }
-
-    func matches(_ host: UIViewController, dialog: UIViewController?) -> Bool {
-        guard let window, let scene, let root, let navigation, let top, top === host,
-            UIApplication.shared.applicationState == .active, UIApplication.shared.isProtectedDataAvailable,
-            window.isKeyWindow, !window.isHidden, window.alpha > 0.01, window.isUserInteractionEnabled,
-            !window.accessibilityElementsHidden, window.windowScene === scene, window.rootViewController === root,
-            scene.activationState == .foregroundActive, AppLockManager.shared.isUnlocked(in: window),
-            host.viewIfLoaded?.window === window, host.navigationController === navigation,
-            navigation.topViewController === top
-        else { return false }
-        var actual: [ObjectIdentifier] = []
-        var current: UIViewController? = host
-        while let controller = current {
-            guard !controller.isBeingDismissed, !controller.isMovingFromParent, !controller.isMovingToParent else {
-                return false
-            }
-            if let modal = controller.presentedViewController, modal !== dialog { return false }
-            if let transition = controller.transitionCoordinator {
-                guard let dialog,
-                    transition.viewController(forKey: .from) === dialog
-                        || transition.viewController(forKey: .to) === dialog
-                else { return false }
-            } else if controller.isBeingPresented {
-                return false
-            }
-            if let tabs = controller as? UITabBarController, let child = actual.last,
-                tabs.selectedViewController.map(ObjectIdentifier.init) != child
-            {
-                return false
-            }
-            actual.append(ObjectIdentifier(controller))
-            current = controller.parent
-        }
-        guard actual == ancestry, actual.contains(ObjectIdentifier(root)) else { return false }
-        if let dialog, let owner = dialog.presentingViewController {
-            return ancestry.contains(ObjectIdentifier(owner)) && owner.presentedViewController === dialog
-                && dialog.presentedViewController == nil
-                && (dialog.viewIfLoaded?.window === window
-                    || (dialog.isBeingPresented && dialog.viewIfLoaded?.window == nil))
-        }
-        return dialog?.presentedViewController == nil
-            && dialog?.viewIfLoaded?.window == nil && dialog?.viewIfLoaded?.superview == nil
-    }
-}
-
-@MainActor
-private final class RssFavoriteTabs: UIScrollView {
-    var onSelect: ((RssFavoriteGroup) -> Void)?
-    private let stack = UIStackView()
-    private var displayed: [RssFavoriteGroup] = []
-    private var displayGeneration = UUID()
-    private var selected: RssFavoriteGroup?
-    private var revealSelection = false
-    private var previousSize: CGSize = .zero
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = AndroidReplicaTheme.background
-        showsHorizontalScrollIndicator = false
-        accessibilityIdentifier = "rss.favorites.tabs"
-        stack.axis = .horizontal
-        stack.alignment = .fill
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        let height = heightAnchor.constraint(equalToConstant: 48)
-        height.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            height, stack.leadingAnchor.constraint(equalTo: contentLayoutGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: contentLayoutGuide.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: contentLayoutGuide.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: contentLayoutGuide.bottomAnchor),
-            stack.heightAnchor.constraint(equalTo: frameLayoutGuide.heightAnchor),
-        ])
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { preconditionFailure("init(coder:) is unavailable") }
-
-    func display(groups: [RssFavoriteGroup], selected: RssFavoriteGroup?) {
-        isHidden = groups.count < 2
-        guard groups != displayed || selected != self.selected else { return }
-        displayGeneration = UUID()
-        let generation = displayGeneration
-        displayed = groups
-        self.selected = selected
-        revealSelection = true
-        for child in stack.arrangedSubviews { stack.removeArrangedSubview(child); child.removeFromSuperview() }
-        for group in groups {
-            let button = UIButton(type: .system)
-            button.setTitle(group.label, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
-            button.titleLabel?.lineBreakMode = .byClipping
-            button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
-            button.setContentCompressionResistancePriority(.required, for: .horizontal)
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 72).isActive = true
-            button.accessibilityLabel = group.label
-            button.accessibilityTraits = group == selected ? [.button, .selected] : [.button]
-            button.setTitleColor(
-                group == selected ? AndroidReplicaTheme.accent : AndroidReplicaTheme.primaryText, for: .normal)
-            button.addInteraction(UIToolTipInteraction(defaultToolTip: group.label))
-            button.addAction(
-                UIAction { [weak self, weak button, weak stack = self.stack] _ in
-                    guard let self, let button, let stack,
-                        self.displayGeneration == generation,
-                        self.stack === stack, stack.superview === self,
-                        button.superview === stack,
-                        stack.arrangedSubviews.contains(where: { $0 === button })
-                    else { return }
-                    self.onSelect?(group)
-                }, for: .touchUpInside)
-            if group == selected {
-                let indicator = UIView()
-                indicator.backgroundColor = AndroidReplicaTheme.accent
-                indicator.isUserInteractionEnabled = false
-                indicator.translatesAutoresizingMaskIntoConstraints = false
-                button.addSubview(indicator)
-                NSLayoutConstraint.activate([
-                    indicator.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-                    indicator.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-                    indicator.bottomAnchor.constraint(equalTo: button.bottomAnchor),
-                    indicator.heightAnchor.constraint(equalToConstant: 2),
-                ])
-            }
-            stack.addArrangedSubview(button)
-        }
-        setNeedsLayout()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard !isHidden, bounds.width > 0, revealSelection || previousSize != bounds.size else { return }
-        revealSelection = false
-        previousSize = bounds.size
-        stack.layoutIfNeeded()
-        if let index = displayed.firstIndex(where: { $0 == selected }) {
-            let button = stack.arrangedSubviews[index]
-            var rect = button.convert(button.bounds, to: self)
-            rect.size.width = min(rect.width, bounds.width)
-            scrollRectToVisible(rect, animated: false)
-        }
-    }
-}
-
-private enum RssFavoriteText {
-    private static func text(_ key: String, _ fallback: String) -> String {
-        NSLocalizedString(key, value: fallback, comment: "")
-    }
-    static let groups = text("rss.favorites.groups", "分组")
-    static let more = text("rss.favorites.more_actions", "更多操作")
-    static let emptyGroup = text("rss.favorites.empty_group", "未命名分组")
-    static let deleteGroup = text("rss.favorites.delete_group", "删除当前分组")
-    static let deleteAll = text("rss.favorites.delete_all", "删除全部收藏")
-    static let confirmArticle = text("rss.favorites.confirm_article", "确定删除收藏？\n<%@>")
-    static let confirmGroup = text("rss.favorites.confirm_group", "确定删除此分组的全部收藏？\n<%@>")
-    static let confirmAll = text("rss.favorites.confirm_all", "确定删除全部收藏？此操作无法撤销。")
 }

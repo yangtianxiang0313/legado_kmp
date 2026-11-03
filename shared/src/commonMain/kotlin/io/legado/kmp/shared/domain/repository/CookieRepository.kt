@@ -27,6 +27,8 @@ interface CookieRepository {
     suspend fun replaceCookiesForHosts(snapshots: List<CookieHostSnapshot>, persistSession: Boolean = false)
     /** Ordered HTTP header, retaining distinct paths and the opaque legacy compatibility channel. */
     suspend fun requestCookieHeader(url: String): String?
+    /** Opaque identity for the full cookie state; null forbids image-cache reuse. */
+    suspend fun imageCachePartition(): String? = null
     suspend fun get(url: String): Cookie?
     suspend fun getAll(): List<Cookie>
     suspend fun getOkHttpCookies(): List<Cookie>

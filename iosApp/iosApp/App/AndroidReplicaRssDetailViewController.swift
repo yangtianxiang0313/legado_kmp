@@ -1,4 +1,3 @@
-import Kingfisher
 import shared
 import UIKit
 
@@ -7,19 +6,12 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         case bootstrap, sorts, firstPage, more
     }
 
-    private struct ArticleIdentity: Hashable {
-        let origin: String
-        let link: String
-
-        init(_ article: RssArticle) {
-            origin = article.origin
-            link = article.link
-        }
-    }
+    private typealias ArticleIdentity = RssArticleListIdentity
 
     private let source: RssSource
     private let screen = RssScreenAdapter()
-    private lazy var topBar = AndroidReplicaDetailBar(title: source.sourceName, target: self, backAction: #selector(handleBack))
+    private lazy var topBar = AndroidReplicaDetailBar(
+        title: source.sourceName, target: self, backAction: #selector(handleBack))
     private let refreshButton = UIButton(type: .system)
     private let sortButton = UIButton(type: .system)
     private let tableView = UITableView(frame: .zero, style: .plain)
@@ -31,6 +23,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
     private var sorts: [(name: String, url: String)] = []
     private var selectedSort: (name: String, url: String)?
     private var articles: [RssArticle] = []
+    private var readInSession = Set<ArticleIdentity>()
     private var favorites: [RssStar] = []
     private var nextPageUrl: String?
     private var currentPage: Int32 = 0
@@ -41,6 +34,15 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
     private var isRendering = false
     private var isRuntimeReady = false
     private var hasLeftPage = false
+    private var hasAppeared = false
+    private var applicationSuspended = UIApplication.shared.applicationState != .active
+    private var sceneSuspended = false
+    private var protectedDataSuspended = false
+    private var thumbnailGeneration = UUID()
+    private var cellArticles: [ObjectIdentifier: RssArticle] = [:]
+    private var pendingSizeChanges: [ObjectIdentifier: () -> Bool] = [:]
+    private var sizeUpdate: DispatchWorkItem?
+    private var needsSizeUpdateOnResume = false
     private var retryAction: RetryAction?
     private var requestGeneration = 0
     private var sortsTask: Task<Void, Never>?
@@ -58,6 +60,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
     }
 
     deinit {
+        NotificationCenter.default.removeObserver(self)
+        sizeUpdate?.cancel()
         sortsTask?.cancel()
         articlesTask?.cancel()
         screen.unbind()
@@ -67,12 +71,48 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         super.viewDidLoad()
         view.backgroundColor = AndroidReplicaTheme.background
         configureViews()
+        for name in [
+            UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification,
+            UIApplication.protectedDataWillBecomeUnavailableNotification, UIScene.willDeactivateNotification,
+            UIScene.didEnterBackgroundNotification, UIScene.didDisconnectNotification,
+            UIWindow.didResignKeyNotification, UIWindow.didBecomeHiddenNotification, .appLockWillCover,
+        ] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(suspendPresentation(_:)), name: name, object: nil)
+        }
+        for name in [
+            UIApplication.didBecomeActiveNotification, UIApplication.protectedDataDidBecomeAvailableNotification,
+            UIScene.didActivateNotification, UIWindow.didBecomeKeyNotification, UIWindow.didBecomeVisibleNotification,
+            .appLockStatusDidChange,
+        ] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(resumePresentation(_:)), name: name, object: nil)
+        }
         bootstrap()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         pageNavigationController = navigationController
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        hasAppeared = true
+        sceneSuspended = view.window?.windowScene?.activationState != .foregroundActive
+        DispatchQueue.main.async { [weak self] in self?.resumeVisibleThumbnails() }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        hasAppeared = false
+        suspendThumbnails()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if canUseArticleList { resumeVisibleThumbnails() } else { suspendThumbnails() }
+        scheduleSizeUpdate()
     }
 
     override func didMove(toParent parent: UIViewController?) {
@@ -103,9 +143,67 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
     private func leavePage() {
         guard !hasLeftPage else { return }
         hasLeftPage = true
+        suspendThumbnails()
+        cellArticles.removeAll()
+        NotificationCenter.default.removeObserver(self)
         invalidateRequests()
         screen.unbind()
         isRuntimeReady = false
+    }
+
+    private var canUseArticleList: Bool {
+        hasAppeared && !hasLeftPage && !applicationSuspended && !sceneSuspended && !protectedDataSuspended
+            && RssArticleListPresentation.isActive(self)
+    }
+
+    @objc private func suspendPresentation(_ notification: Notification) {
+        if let scene = notification.object as? UIScene, scene !== viewIfLoaded?.window?.windowScene { return }
+        if let window = notification.object as? UIWindow, window !== viewIfLoaded?.window { return }
+        switch notification.name {
+        case UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification:
+            applicationSuspended = true
+        case UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification,
+            UIScene.didDisconnectNotification:
+            sceneSuspended = true
+        case UIApplication.protectedDataWillBecomeUnavailableNotification: protectedDataSuspended = true
+        default: break
+        }
+        suspendThumbnails()
+    }
+
+    @objc private func resumePresentation(_ notification: Notification) {
+        if let scene = notification.object as? UIScene, scene !== viewIfLoaded?.window?.windowScene { return }
+        if let window = notification.object as? UIWindow, window !== viewIfLoaded?.window { return }
+        switch notification.name {
+        case UIApplication.didBecomeActiveNotification: applicationSuspended = false
+        case UIScene.didActivateNotification: sceneSuspended = false
+        case UIApplication.protectedDataDidBecomeAvailableNotification: protectedDataSuspended = false
+        default: break
+        }
+        DispatchQueue.main.async { [weak self] in self?.resumeVisibleThumbnails() }
+    }
+
+    private func suspendThumbnails() {
+        thumbnailGeneration = UUID()
+        sizeUpdate?.cancel()
+        sizeUpdate = nil
+        needsSizeUpdateOnResume = needsSizeUpdateOnResume || !pendingSizeChanges.isEmpty
+        pendingSizeChanges.removeAll()
+        for case let cell as AndroidReplicaRssArticleCell in tableView.visibleCells { cell.cancelThumbnailLoading() }
+    }
+
+    private func resumeVisibleThumbnails() {
+        guard canUseArticleList else { suspendThumbnails(); return }
+        let updateSizes = needsSizeUpdateOnResume
+        needsSizeUpdateOnResume = false
+        for case let cell as AndroidReplicaRssArticleCell in tableView.visibleCells {
+            if let article = cellArticles[ObjectIdentifier(cell)], isCurrentVisibleCell(cell, article: article) {
+                cell.resumeThumbnailLoading()
+                if updateSizes { articleSizeChanged(cell, article: article) }
+            } else {
+                cell.cancelThumbnailLoading()
+            }
+        }
     }
 
     private func configureViews() {
@@ -126,15 +224,14 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         tableView.backgroundColor = AndroidReplicaTheme.background
         tableView.accessibilityIdentifier = UIIdentifiers.RSS.table
         tableView.rowHeight = UITableView.automaticDimension
-        tableView.estimatedRowHeight = 88
+        tableView.estimatedRowHeight = 100
         tableView.dataSource = self
         tableView.delegate = self
         tableView.separatorStyle = .none
         tableView.register(
             AndroidReplicaRssArticleCell.self, forCellReuseIdentifier: AndroidReplicaRssArticleCell.reuseIdentifier)
         tableView.register(
-            AndroidReplicaBookResultCell.self, forCellReuseIdentifier: AndroidReplicaBookResultCell.reuseIdentifier)
-        tableView.register(AndroidReplicaLoadMoreCell.self, forCellReuseIdentifier: AndroidReplicaLoadMoreCell.reuseIdentifier)
+            AndroidReplicaLoadMoreCell.self, forCellReuseIdentifier: AndroidReplicaLoadMoreCell.reuseIdentifier)
 
         statusBar.axis = .horizontal
         statusBar.alignment = .center
@@ -163,7 +260,9 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         let trailingSpace = UIView()
         leadingSpace.widthAnchor.constraint(equalToConstant: 8).isActive = true
         trailingSpace.widthAnchor.constraint(equalToConstant: 0).isActive = true
-        [leadingSpace, statusSpinner, statusLabel, retryButton, trailingSpace].forEach { statusBar.addArrangedSubview($0) }
+        [leadingSpace, statusSpinner, statusLabel, retryButton, trailingSpace].forEach {
+            statusBar.addArrangedSubview($0)
+        }
 
         let contentStack = UIStackView(arrangedSubviews: [topBar, statusBar, tableView])
         contentStack.axis = .vertical
@@ -225,7 +324,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
     }
 
     private func isCurrentRequest(_ generation: Int, sort: (name: String, url: String)?) -> Bool {
-        !hasLeftPage && generation == requestGeneration && selectedSort?.name == sort?.name && selectedSort?.url == sort?.url
+        !hasLeftPage && generation == requestGeneration && selectedSort?.name == sort?.name
+            && selectedSort?.url == sort?.url
     }
 
     private func clearArticles() {
@@ -282,7 +382,6 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
                 self.sortsTask = nil
                 self.isLoadingFirstPage = false
                 self.showFailure(message: error.userFacingMessage, action: .sorts)
-                self.renderArticles()
             }
         }
     }
@@ -325,15 +424,19 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         updateSortMenu()
         beginFirstPageLoad(keepingArticles: false)
         showLoading(L10n.RSS.loadingArticles)
-        loadArticles(sort: currentSort, requestURL: currentSort.url, page: 1, append: false, generation: requestGeneration)
+        loadArticles(
+            sort: currentSort, requestURL: currentSort.url, page: 1, append: false, generation: requestGeneration)
     }
 
-    private func loadArticles(sort: (name: String, url: String), requestURL: String, page: Int32, append: Bool, generation: Int) {
+    private func loadArticles(
+        sort: (name: String, url: String), requestURL: String, page: Int32, append: Bool, generation: Int
+    ) {
         guard isCurrentRequest(generation, sort: sort), articlesTask == nil, sortsTask == nil else { return }
         articlesTask = Task { @MainActor [weak self, screen, source] in
             do {
                 try Task.checkCancellation()
-                let payload = try await screen.loadArticles(sortName: sort.name, sortUrl: requestURL, source: source, page: page)
+                let payload = try await screen.loadArticles(
+                    sortName: sort.name, sortUrl: requestURL, source: source, page: page)
                 guard !Task.isCancelled, let self, self.isCurrentRequest(generation, sort: sort) else { return }
                 self.articlesTask = nil
                 self.applyArticles(payload, requestURL: requestURL, page: page, append: append)
@@ -343,12 +446,19 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
                 self.isLoadingFirstPage = false
                 self.isLoadingMore = false
                 self.showFailure(message: error.userFacingMessage, action: append ? .more : .firstPage)
-                self.renderArticles()
+                if append,
+                    let cell = self.tableView.cellForRow(at: IndexPath(row: self.articles.count, section: 0))
+                        as? AndroidReplicaLoadMoreCell
+                {
+                    self.configurePaginationCell(cell)
+                }
             }
         }
     }
 
     private func applyArticles(_ payload: RssArticlesPayload, requestURL: String, page: Int32, append: Bool) {
+        let previousCount = articles.count
+        let hadPaginationRow = showsPaginationRow
         var seen = append ? Set(articles.map { ArticleIdentity($0) }) : Set<ArticleIdentity>()
         let newArticles = payload.articles.filter { seen.insert(ArticleIdentity($0)).inserted }
         if append {
@@ -372,7 +482,11 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         } else {
             stateView.hide()
         }
-        renderArticles()
+        if append {
+            renderAppendedArticles(from: previousCount, hadPaginationRow: hadPaginationRow)
+        } else {
+            renderArticles()
+        }
     }
 
     private var usesPageTemplate: Bool {
@@ -423,7 +537,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         statusSpinner.stopAnimating()
         if articles.isEmpty {
             hideStatus()
-            stateView.showMessage(title: L10n.RSS.loadArticlesFailed, message: message, actionTitle: L10n.Common.retry) {
+            stateView.showMessage(title: L10n.RSS.loadArticlesFailed, message: message, actionTitle: L10n.Common.retry)
+            {
                 [weak self] in
                 self?.retry()
             }
@@ -447,7 +562,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
             guard let selectedSort else { return }
             beginFirstPageLoad(keepingArticles: !articles.isEmpty)
             showLoading(L10n.RSS.loadingArticles)
-            loadArticles(sort: selectedSort, requestURL: selectedSort.url, page: 1, append: false, generation: requestGeneration)
+            loadArticles(
+                sort: selectedSort, requestURL: selectedSort.url, page: 1, append: false, generation: requestGeneration)
         case .more:
             loadMore()
         case nil:
@@ -456,15 +572,107 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
     }
 
     private func renderArticles(resetOffset: Bool = false) {
+        suspendThumbnails()
+        cellArticles.removeAll()
         isRendering = true
-        defer { isRendering = false }
+        defer {
+            isRendering = false
+            resumeVisibleThumbnails()
+        }
         let offset = tableView.contentOffset
         tableView.accessibilityValue = "\(articles.count)"
         tableView.reloadData()
         view.layoutIfNeeded()
         let top = -tableView.adjustedContentInset.top
-        let bottom = max(top, tableView.contentSize.height + tableView.adjustedContentInset.bottom - tableView.bounds.height)
-        tableView.setContentOffset(CGPoint(x: 0, y: resetOffset ? top : min(max(offset.y, top), bottom)), animated: false)
+        let bottom = max(
+            top, tableView.contentSize.height + tableView.adjustedContentInset.bottom - tableView.bounds.height)
+        tableView.setContentOffset(
+            CGPoint(x: 0, y: resetOffset ? top : min(max(offset.y, top), bottom)), animated: false)
+    }
+
+    private func renderAppendedArticles(from previousCount: Int, hadPaginationRow: Bool) {
+        guard canUseArticleList else { renderArticles(); return }
+        isRendering = true
+        tableView.accessibilityValue = "\(articles.count)"
+        UIView.performWithoutAnimation {
+            tableView.performBatchUpdates {
+                if hadPaginationRow {
+                    tableView.deleteRows(at: [IndexPath(row: previousCount, section: 0)], with: .none)
+                }
+                var inserted = (previousCount..<articles.count).map { IndexPath(row: $0, section: 0) }
+                if showsPaginationRow { inserted.append(IndexPath(row: articles.count, section: 0)) }
+                if !inserted.isEmpty { tableView.insertRows(at: inserted, with: .none) }
+            }
+        }
+        isRendering = false
+        resumeVisibleThumbnails()
+        scheduleSizeUpdate()
+    }
+
+    private func configureArticleCell(_ cell: AndroidReplicaRssArticleCell, article: RssArticle) {
+        cell.onSizeChange = nil
+        cellArticles[ObjectIdentifier(cell)] = article
+        cell.configure(article: article, isRead: article.read || readInSession.contains(ArticleIdentity(article)))
+        cell.cancelThumbnailLoading()
+        cell.onSizeChange = { [weak self, weak cell] changedCell in
+            guard let self, let cell, changedCell === cell, self.isCurrentVisibleCell(cell, article: article) else {
+                return
+            }
+            self.articleSizeChanged(cell, article: article)
+        }
+    }
+
+    private func isCurrentVisibleCell(_ cell: AndroidReplicaRssArticleCell, article: RssArticle) -> Bool {
+        // Immutable Kotlin val fields: reference identity also rejects replaced origin/link/image/variable payloads.
+        guard canUseArticleList, cellArticles[ObjectIdentifier(cell)] === article,
+            let path = tableView.indexPath(for: cell), articles.indices.contains(path.row),
+            articles[path.row] === article,
+            tableView.cellForRow(at: path) === cell, tableView.indexPathsForVisibleRows?.contains(path) == true,
+            cell.window === viewIfLoaded?.window, !cell.isHidden, cell.alpha > 0.01,
+            tableView.bounds.intersects(tableView.rectForRow(at: path))
+        else { return false }
+        return true
+    }
+
+    private func articleSizeChanged(_ cell: AndroidReplicaRssArticleCell, article: RssArticle) {
+        let generation = thumbnailGeneration
+        pendingSizeChanges[ObjectIdentifier(cell)] = {
+            [
+                weak self, weak cell, weak window = cell.window, weak scene = cell.window?.windowScene,
+                weak navigation = navigationController, weak root = cell.window?.rootViewController
+            ] in
+            guard let self, let cell, let window, let scene, let navigation, let root,
+                self.thumbnailGeneration == generation, self.viewIfLoaded?.window === window,
+                window.windowScene === scene, window.rootViewController === root,
+                self.navigationController === navigation
+            else { return false }
+            return self.isCurrentVisibleCell(cell, article: article)
+        }
+        scheduleSizeUpdate()
+    }
+
+    private var canUpdateSizes: Bool {
+        canUseArticleList && !isRendering && !tableView.isTracking && !tableView.isDragging
+            && !tableView.isDecelerating && !tableView.hasUncommittedUpdates
+    }
+
+    private func scheduleSizeUpdate() {
+        guard sizeUpdate == nil, !pendingSizeChanges.isEmpty, canUpdateSizes else { return }
+        let generation = thumbnailGeneration
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.thumbnailGeneration == generation else { return }
+            self.sizeUpdate = nil
+            guard self.canUpdateSizes else { return }
+            let changes = Array(self.pendingSizeChanges.values)
+            self.pendingSizeChanges.removeAll()
+            guard changes.contains(where: { $0() }) else { return }
+            self.isRendering = true
+            UIView.performWithoutAnimation { self.tableView.performBatchUpdates(nil) }
+            self.isRendering = false
+            self.scheduleSizeUpdate()
+        }
+        sizeUpdate = work
+        DispatchQueue.main.async(execute: work)
     }
 
     func tableView(_: UITableView, numberOfRowsInSection _: Int) -> Int {
@@ -474,43 +682,57 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if showsPaginationRow, indexPath.row == articles.count {
             let cell =
-                tableView.dequeueReusableCell(withIdentifier: AndroidReplicaLoadMoreCell.reuseIdentifier, for: indexPath)
+                tableView.dequeueReusableCell(
+                    withIdentifier: AndroidReplicaLoadMoreCell.reuseIdentifier, for: indexPath)
                 as! AndroidReplicaLoadMoreCell
-            let title =
-                isLoadingMore ? L10n.RSS.loadingNextPage : (retryAction == .more ? L10n.Common.retry : L10n.Common.loadMore)
-            cell.configure(title: title)
-            cell.isAccessibilityElement = true
-            cell.accessibilityIdentifier = UIIdentifiers.RSS.loadMoreCell
-            cell.accessibilityLabel = title
-            cell.accessibilityTraits = isLoadingMore ? [.button, .notEnabled] : [.button]
+            configurePaginationCell(cell)
             return cell
         }
         let article = articles[indexPath.row]
-        if article.image?.isEmpty == false {
-            let cell =
-                tableView.dequeueReusableCell(withIdentifier: AndroidReplicaBookResultCell.reuseIdentifier, for: indexPath)
-                as! AndroidReplicaBookResultCell
-            cell.accessibilityIdentifier = UIIdentifiers.RSS.articleCell
-            cell.configure(
-                title: article.title,
-                subtitle: article.pubDate,
-                tertiary: article.description_,
-                coverURL: article.image
-            )
-            cell.onActivate = { [weak self] in self?.openArticle(article) }
-            return cell
-        }
         let cell =
             tableView.dequeueReusableCell(withIdentifier: AndroidReplicaRssArticleCell.reuseIdentifier, for: indexPath)
             as! AndroidReplicaRssArticleCell
         cell.accessibilityIdentifier = UIIdentifiers.RSS.articleCell
-        cell.configure(
-            title: article.title, detail: [article.pubDate, article.description_].compactMap { $0 }.joined(separator: "\n"))
+        configureArticleCell(cell, article: article)
         return cell
+    }
+
+    private func configurePaginationCell(_ cell: AndroidReplicaLoadMoreCell) {
+        let title =
+            isLoadingMore ? L10n.RSS.loadingNextPage : (retryAction == .more ? L10n.Common.retry : L10n.Common.loadMore)
+        cell.configure(title: title)
+        cell.isAccessibilityElement = true
+        cell.accessibilityIdentifier = UIIdentifiers.RSS.loadMoreCell
+        cell.accessibilityLabel = title
+        cell.accessibilityTraits = isLoadingMore ? [.button, .notEnabled] : [.button]
+    }
+
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        guard tableView === self.tableView, let cell = cell as? AndroidReplicaRssArticleCell,
+            articles.indices.contains(indexPath.row)
+        else { return }
+        let article = articles[indexPath.row]
+        if cellArticles[ObjectIdentifier(cell)] !== article { configureArticleCell(cell, article: article) }
+        let generation = thumbnailGeneration
+        DispatchQueue.main.async { [weak self, weak cell] in
+            guard let self, let cell, self.thumbnailGeneration == generation,
+                self.isCurrentVisibleCell(cell, article: article)
+            else { return }
+            cell.resumeThumbnailLoading()
+        }
+    }
+
+    func tableView(_: UITableView, didEndDisplaying cell: UITableViewCell, forRowAt _: IndexPath) {
+        guard let cell = cell as? AndroidReplicaRssArticleCell else { return }
+        cell.cancelThumbnailLoading()
+        cell.onSizeChange = nil
+        cellArticles.removeValue(forKey: ObjectIdentifier(cell))
+        pendingSizeChanges.removeValue(forKey: ObjectIdentifier(cell))
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard canUseArticleList else { return }
         if showsPaginationRow, indexPath.row == articles.count {
             loadMore()
         } else if articles.indices.contains(indexPath.row) {
@@ -525,8 +747,14 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         loadMore()
     }
 
+    func scrollViewDidEndDragging(_: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { scheduleSizeUpdate() }
+    }
+
+    func scrollViewDidEndDecelerating(_: UIScrollView) { scheduleSizeUpdate() }
+
     private func loadMore() {
-        guard !hasLeftPage, hasMore, !isLoadingFirstPage, !isLoadingMore,
+        guard canUseArticleList, !isRendering, hasMore, !isLoadingFirstPage, !isLoadingMore,
             sortsTask == nil, articlesTask == nil, retryAction == nil || retryAction == .more,
             let selectedSort, let nextRequestURL
         else { return }
@@ -534,16 +762,29 @@ final class AndroidReplicaRssDetailViewController: UIViewController, UITableView
         isLoadingMore = true
         retryAction = nil
         hideStatus()
-        renderArticles()
+        if let cell = tableView.cellForRow(at: IndexPath(row: articles.count, section: 0))
+            as? AndroidReplicaLoadMoreCell
+        {
+            configurePaginationCell(cell)
+        }
         loadArticles(
-            sort: selectedSort, requestURL: requestURL, page: currentPage + 1, append: true, generation: requestGeneration)
+            sort: selectedSort, requestURL: requestURL, page: currentPage + 1, append: true,
+            generation: requestGeneration)
     }
 
     private func openArticle(_ article: RssArticle) {
-        guard !hasLeftPage, navigationController?.topViewController === self, presentedViewController == nil else { return }
+        guard canUseArticleList, !isRendering, let navigation = navigationController,
+            articles.contains(where: { $0 === article })
+        else { return }
         let controller = AndroidReplicaRssArticleViewController(
             article: article, source: source, screen: screen, favorites: favorites)
         controller.hidesBottomBarWhenPushed = true
-        navigationController?.pushViewController(controller, animated: true)
+        suspendThumbnails()
+        navigation.pushViewController(controller, animated: true)
+        if navigation.topViewController === controller {
+            readInSession.insert(ArticleIdentity(article))
+            for case let cell as AndroidReplicaRssArticleCell in tableView.visibleCells
+            where cellArticles[ObjectIdentifier(cell)] === article { cell.updateReadState(true) }
+        }
     }
 }

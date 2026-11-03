@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F03113010000000000000001 /* AndroidReplicaRssArticleCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000001 /* AndroidReplicaRssArticleCell.swift */; };
+		F03113010000000000000002 /* RssFavoritePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000002 /* RssFavoritePresentation.swift */; };
+		F03113010000000000000003 /* RssFavoriteTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000003 /* RssFavoriteTabs.swift */; };
+		F03113010000000000000004 /* RssArticleListPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000004 /* RssArticleListPresentation.swift */; };
+		F03113010000000000000005 /* RssArticleThumbnailLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000005 /* RssArticleThumbnailLoader.swift */; };
 		F02B02010000000000000006 /* OpenSourceLicenses in Resources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000006 /* OpenSourceLicenses */; };
 		F02B02010000000000000005 /* OpenSourceLicenses.json in Resources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000005 /* OpenSourceLicenses.json */; };
 		F02B02010000000000000004 /* OpenSourceLicenseTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B02020000000000000004 /* OpenSourceLicenseTextViewController.swift */; };
@@ -764,6 +769,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F03113020000000000000001 /* AndroidReplicaRssArticleCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidReplicaRssArticleCell.swift; sourceTree = "<group>"; };
+		F03113020000000000000002 /* RssFavoritePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssFavoritePresentation.swift; sourceTree = "<group>"; };
+		F03113020000000000000003 /* RssFavoriteTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssFavoriteTabs.swift; sourceTree = "<group>"; };
+		F03113020000000000000004 /* RssArticleListPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleListPresentation.swift; sourceTree = "<group>"; };
+		F03113020000000000000005 /* RssArticleThumbnailLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleThumbnailLoader.swift; sourceTree = "<group>"; };
 		F02B02020000000000000006 /* OpenSourceLicenses */ = {isa = PBXFileReference; lastKnownFileType = folder; path = OpenSourceLicenses; sourceTree = "<group>"; };
 		F02B02020000000000000005 /* OpenSourceLicenses.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = OpenSourceLicenses.json; sourceTree = "<group>"; };
 		F02B02020000000000000004 /* OpenSourceLicenseTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceLicenseTextViewController.swift; sourceTree = "<group>"; };
@@ -1737,6 +1747,10 @@
 				A2000000000000000000006B /* AndroidReplicaMainChrome.swift */,
 				A2000000000000000000005B /* AndroidReplicaMainCells.swift */,
 				A2000000000000000000005C /* AndroidReplicaResultCells.swift */,
+				F03113020000000000000001 /* AndroidReplicaRssArticleCell.swift */,
+				F03113020000000000000002 /* RssFavoritePresentation.swift */,
+				F03113020000000000000003 /* RssFavoriteTabs.swift */,
+				F03113020000000000000004 /* RssArticleListPresentation.swift */,
 				A2000000000000000000005A /* AndroidReplicaOptionSheetViewController.swift */,
 				A2000000000000000000003F /* AndroidReplicaDetailViewControllers.swift */,
 				E9B400000000000000000002 /* BookDetailPreviewSeed.swift */,
@@ -1923,6 +1937,7 @@
 				F028B1020000000000000003,
 				A20000000000000000000007 /* RssViewController.swift */,
 				E20000000000000000000001 /* RssScreenAdapter.swift */,
+				F03113020000000000000005 /* RssArticleThumbnailLoader.swift */,
 				A2000000000000000000002E /* RssWebViewController.swift */,
 				A20000000000000000000032 /* RssSourceManagementViewController.swift */,
 				A20000000000000000000033 /* RssSourceEditViewController.swift */,
@@ -2600,6 +2615,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				F027F4000000000000000001 /* AudioPlaybackBar.swift in Sources */,
+				F03113010000000000000001 /* AndroidReplicaRssArticleCell.swift in Sources */,
+				F03113010000000000000002 /* RssFavoritePresentation.swift in Sources */,
+				F03113010000000000000003 /* RssFavoriteTabs.swift in Sources */,
+				F03113010000000000000004 /* RssArticleListPresentation.swift in Sources */,
+				F03113010000000000000005 /* RssArticleThumbnailLoader.swift in Sources */,
 				F02A38010000000000000001 /* HLSAudioRelay.swift in Sources */,
 				F02A38010000000000000002 /* HLSPlaylistRewriter.swift in Sources */,
 				F02A38010000000000000003 /* HLSRelayServer.swift in Sources */,
