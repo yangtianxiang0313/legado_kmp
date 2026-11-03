@@ -10,6 +10,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
 
     private let source: RssSource
     private let screen = RssScreenAdapter()
+    private lazy var directoryLoader = RssDirectoryLoadingCoordinator(screen: screen)
     private lazy var topBar = AndroidReplicaDetailBar(
         title: source.sourceName, target: self, backAction: #selector(handleBack))
     private let refreshButton = UIButton(type: .system)
@@ -36,6 +37,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     private var isPaginationFinished = true
     private var isLoadingFirstPage = false
     private var isLoadingMore = false
+    private var isShowingSavedArticles = false
     private var isRuntimeReady = false
     private var hasLeftPage = false
     private var hasAppeared = false
@@ -45,7 +47,6 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     private var retryAction: RetryAction?
     private var requestGeneration = 0
     private var sortsTask: Task<Void, Never>?
-    private var articlesTask: Task<Void, Never>?
     private weak var pageNavigationController: UINavigationController?
 
     init(source: RssSource) {
@@ -63,7 +64,6 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
         styleTask?.cancel()
         sortsTask?.cancel()
-        articlesTask?.cancel()
         screen.unbind()
     }
 
@@ -379,9 +379,8 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         // The shared continuation can complete after cancellation; invalidate UI delivery too.
         requestGeneration &+= 1
         sortsTask?.cancel()
-        articlesTask?.cancel()
+        directoryLoader.cancel()
         sortsTask = nil
-        articlesTask = nil
         isLoadingFirstPage = false
         isLoadingMore = false
     }
@@ -393,6 +392,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
 
     private func clearArticles() {
         articles = []
+        isShowingSavedArticles = false
         currentPage = 0
         nextPageUrl = nil
         visitedPageURLs = []
@@ -419,17 +419,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
                 let loadedSorts = try await screen.loadSorts(source: source, forceRefresh: forceRefresh)
                 guard !Task.isCancelled, let self, self.isCurrentRequest(generation, sort: previousSort) else { return }
                 self.sortsTask = nil
-                self.sorts = loadedSorts
-                self.selectedSort =
-                    loadedSorts.first(where: { $0.url == previousSort?.url && $0.name == previousSort?.name })
-                    ?? loadedSorts.first(where: { $0.url == previousSort?.url })
-                    ?? loadedSorts.first(where: { $0.name == previousSort?.name })
-                    ?? loadedSorts.first
-                self.updateSortMenu()
-                if self.selectedSort?.url != previousSort?.url || self.selectedSort?.name != previousSort?.name {
-                    self.clearArticles()
-                    self.renderArticles(resetOffset: true)
-                }
+                self.acceptSorts(loadedSorts, previous: previousSort)
                 guard let selectedSort = self.selectedSort else {
                     self.isLoadingFirstPage = false
                     self.clearArticles()
@@ -442,11 +432,40 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
                     sort: selectedSort, requestURL: selectedSort.url, page: 1, append: false, generation: generation)
             } catch {
                 guard !Task.isCancelled, let self, self.isCurrentRequest(generation, sort: previousSort) else { return }
-                self.sortsTask = nil
-                self.isLoadingFirstPage = false
-                self.showFailure(message: error.userFacingMessage, action: .sorts)
+                await self.restoreSavedSorts(after: error, generation: generation, previous: previousSort)
             }
         }
+    }
+
+    private func acceptSorts(_ loaded: [(name: String, url: String)], previous: (name: String, url: String)?) {
+        sorts = loaded
+        selectedSort =
+            loaded.first { $0.url == previous?.url && $0.name == previous?.name }
+            ?? loaded.first { $0.url == previous?.url } ?? loaded.first { $0.name == previous?.name } ?? loaded.first
+        updateSortMenu()
+        if selectedSort?.url != previous?.url || selectedSort?.name != previous?.name {
+            clearArticles()
+            renderArticles(resetOffset: true)
+        }
+    }
+
+    private func restoreSavedSorts(after error: Error, generation: Int, previous: (name: String, url: String)?) async {
+        do {
+            let savedSorts = try await screen.cachedSorts(source: source)
+            guard !Task.isCancelled, isCurrentRequest(generation, sort: previous) else { return }
+            if !savedSorts.isEmpty { acceptSorts(savedSorts, previous: previous) }
+            if articles.isEmpty, let sort = selectedSort {
+                let saved = try await screen.cachedArticles(source: source, sortName: sort.name, sortURL: sort.url)
+                guard !Task.isCancelled, isCurrentRequest(generation, sort: sort) else { return }
+                if !saved.isEmpty { applySavedArticles(saved) }
+            }
+        } catch {
+            guard !Task.isCancelled, !hasLeftPage, generation == requestGeneration else { return }
+        }
+        guard !Task.isCancelled, !hasLeftPage, generation == requestGeneration else { return }
+        sortsTask = nil
+        isLoadingFirstPage = false
+        showFailure(message: error.userFacingMessage, action: .sorts)
     }
 
     private func updateSortMenu() {
@@ -494,24 +513,41 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
     private func loadArticles(
         sort: (name: String, url: String), requestURL: String, page: Int32, append: Bool, generation: Int
     ) {
-        guard isCurrentRequest(generation, sort: sort), articlesTask == nil, sortsTask == nil else { return }
-        articlesTask = Task { @MainActor [weak self, screen, source] in
-            do {
-                try Task.checkCancellation()
-                let payload = try await screen.loadArticles(
-                    sortName: sort.name, sortUrl: requestURL, source: source, page: page)
-                guard !Task.isCancelled, let self, self.isCurrentRequest(generation, sort: sort) else { return }
-                self.articlesTask = nil
-                self.applyArticles(payload, requestURL: requestURL, page: page, append: append)
-            } catch {
-                guard !Task.isCancelled, let self, self.isCurrentRequest(generation, sort: sort) else { return }
-                self.articlesTask = nil
+        guard isCurrentRequest(generation, sort: sort), !directoryLoader.isLoading, sortsTask == nil else { return }
+        directoryLoader.load(
+            source: source, sort: sort, requestURL: requestURL, page: page, showSaved: !append && articles.isEmpty,
+            onSaved: { [weak self] saved in
+                guard let self, self.isCurrentRequest(generation, sort: sort), self.articles.isEmpty else { return }
+                self.applySavedArticles(saved)
+                self.showLoading(L10n.RSS.loadingArticles)
+            },
+            onSuccess: { [weak self] result in
+                guard let self, self.isCurrentRequest(generation, sort: sort) else { return }
+                self.applyArticles(
+                    RssArticlesPayload(articles: result.articles, nextPageUrl: result.nextPageUrl),
+                    requestURL: requestURL, page: page, append: append)
+                if !result.cacheRetained, self.canUseArticleList {
+                    self.showTransientMessage(L10n.RSS.directoryRetentionFailed)
+                }
+            },
+            onFailure: { [weak self] error in
+                guard let self, self.isCurrentRequest(generation, sort: sort) else { return }
                 self.isLoadingFirstPage = false
                 self.isLoadingMore = false
                 self.showFailure(message: error.userFacingMessage, action: append ? .more : .firstPage)
                 if append { self.articleList.updatePagination(self.pagination) }
-            }
-        }
+            })
+    }
+
+    private func applySavedArticles(_ saved: [RssArticle]) {
+        articles = saved
+        currentPage = 0
+        nextPageUrl = nil
+        visitedPageURLs = []
+        isPaginationFinished = true
+        isShowingSavedArticles = true
+        stateView.hide()
+        renderArticles()
     }
 
     private func applyArticles(_ payload: RssArticlesPayload, requestURL: String, page: Int32, append: Bool) {
@@ -532,6 +568,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         isPaginationFinished = newArticles.isEmpty || nextRequestURL == nil || repeatsURL || page == Int32.max
         isLoadingFirstPage = false
         isLoadingMore = false
+        isShowingSavedArticles = false
         retryAction = nil
         hideStatus()
         if articles.isEmpty {
@@ -575,12 +612,14 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
             statusSpinner.startAnimating()
             retryButton.isHidden = true
             statusBar.isHidden = false
+            statusBar.accessibilityValue = isShowingSavedArticles ? "saved-loading" : "loading"
         }
     }
 
     private func hideStatus() {
         statusSpinner.stopAnimating()
         statusBar.isHidden = true
+        statusBar.accessibilityValue = "hidden"
     }
 
     private func showEmpty(_ message: String) {
@@ -601,10 +640,14 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
             }
         } else {
             stateView.hide()
-            statusLabel.text = "\(L10n.RSS.loadArticlesFailed)\n\(message)"
+            let title =
+                isShowingSavedArticles
+                ? "\(L10n.RSS.savedArticles) · \(L10n.RSS.loadArticlesFailed)" : L10n.RSS.loadArticlesFailed
+            statusLabel.text = "\(title)\n\(message)"
             statusSpinner.isHidden = true
             retryButton.isHidden = false
             statusBar.isHidden = false
+            statusBar.accessibilityValue = isShowingSavedArticles ? "saved-error" : "error"
         }
     }
 
@@ -646,7 +689,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
 
     private func loadMore() {
         guard canUseArticleList, !articleList.isRendering, hasMore, !isLoadingFirstPage, !isLoadingMore,
-            sortsTask == nil, articlesTask == nil, retryAction == nil || retryAction == .more,
+            sortsTask == nil, !directoryLoader.isLoading, retryAction == nil || retryAction == .more,
             let selectedSort, let nextRequestURL
         else { return }
         let requestURL = usesPageTemplate ? selectedSort.url : nextRequestURL
@@ -671,6 +714,15 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         if navigation.topViewController === controller {
             readInSession.insert(ArticleIdentity(article))
             articleList.markRead(article)
+            Task { @MainActor [screen, weak controller] in
+                do { try await screen.markRead(article: article) } catch {
+                    guard let controller, controller.canPerformNavigationAction,
+                        controller.viewIfLoaded?.window?.isKeyWindow == true,
+                        AppLockManager.shared.isUnlocked(in: controller.viewIfLoaded?.window)
+                    else { return }
+                    controller.showTransientMessage(L10n.RSS.readRecordFailed)
+                }
+            }
         } else {
             articleList.resume()
         }

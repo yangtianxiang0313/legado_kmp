@@ -45,6 +45,12 @@ class CacheRepositoryImpl(
         )
     }
 
+    override suspend fun insertIfAbsent(cache: Cache): Boolean =
+        database.cacheQueries.transactionWithResult {
+            database.cacheQueries.insertIfAbsent(cache.key, cache.value, cache.deadline)
+            database.cacheQueries.selectChangedRows().executeAsOne() == 1L
+        }
+
     override suspend fun delete(key: String) {
         database.cacheQueries.deleteByKey(key)
     }

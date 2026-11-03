@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.coroutines.cancellation.CancellationException
 
 internal class RssSortCache(
     private val sourceStateStore: SourceStateStore,
@@ -24,6 +25,7 @@ internal class RssSortCache(
     suspend fun getOrLoad(
         source: RssSource,
         sortRule: String,
+        forceRefresh: Boolean = false,
         produce: suspend () -> String
     ): String {
         val sourceKey = source.sourceUrl
@@ -35,18 +37,22 @@ internal class RssSortCache(
         try {
             return loader.mutex.withLock {
                 val fingerprint = fingerprint(source, sortRule)
-                val inMemory = guard.withLock {
-                    entries[sourceKey]?.takeIf { it.fingerprint == fingerprint }?.also {
-                        entries.remove(sourceKey)
-                        entries[sourceKey] = it
+                val inMemory = if (forceRefresh) null else {
+                    guard.withLock {
+                        entries[sourceKey]?.takeIf { it.fingerprint == fingerprint }?.also {
+                            entries.remove(sourceKey)
+                            entries[sourceKey] = it
+                        }
                     }
                 }
                 if (inMemory != null) return@withLock inMemory.payload
 
-                val persisted = cacheRepository?.getValue(persistentKey(sourceKey))?.let { value ->
-                    runCatching { json.decodeFromString<Entry>(value) }.getOrNull()
-                }?.takeIf { it.fingerprint == fingerprint && it.payload.isNotBlank() }
-                val payload = persisted?.payload ?: produce()
+                val persisted = if (forceRefresh) null else {
+                    readPersistedEntry(sourceKey, fingerprint)
+                }
+                val payload = persisted?.payload ?: produce().also {
+                    check(it.isNotBlank()) { "RSS sort script returned an empty payload" }
+                }
                 guard.withLock {
                     // Clear and publication share the guard, but never wait for JS/network here.
                     if (loader.generation == generation && payload.isNotBlank()) {
@@ -74,6 +80,17 @@ internal class RssSortCache(
         }
     }
 
+    suspend fun peek(source: RssSource, sortRule: String): String? {
+        val sourceKey = source.sourceUrl
+        val fingerprint = fingerprint(source, sortRule)
+        return guard.withLock {
+            val inMemory = entries[sourceKey]?.takeIf {
+                it.fingerprint == fingerprint && it.payload.isNotBlank()
+            }
+            (inMemory ?: readPersistedEntry(sourceKey, fingerprint))?.payload
+        }
+    }
+
     suspend fun clear(source: RssSource) {
         guard.withLock {
             loaders[source.sourceUrl]?.let { it.generation++ }
@@ -83,12 +100,23 @@ internal class RssSortCache(
         }
     }
 
+    private suspend fun readPersistedEntry(sourceKey: String, fingerprint: String): Entry? {
+        return cacheRepository?.getValue(persistentKey(sourceKey))?.let { value ->
+            runCatching { json.decodeFromString<Entry>(value) }
+                .onFailure { error ->
+                    if (error is CancellationException) throw error
+                }
+                .getOrNull()
+        }?.takeIf { it.fingerprint == fingerprint && it.payload.isNotBlank() }
+    }
+
     private suspend fun fingerprint(source: RssSource, sortRule: String): String {
         val variables = sourceStateStore.getSourceVariableMap(source.sourceUrl)
             .entries.sortedBy { it.key }.associate { it.key to it.value }
         return json.encodeToString(
             Fingerprint(
-                source = source.copy(sortUrl = sortRule),
+                source = source.copy(articleStyle = 0),
+                sortRule = sortRule.takeUnless { it == source.sortUrl },
                 sourceVariable = sourceStateStore.getSourceVariable(source.sourceUrl),
                 sourceVariables = variables,
                 loginHeader = sourceStateStore.getLoginHeader(source.sourceUrl),
@@ -119,6 +147,7 @@ internal class RssSortCache(
     @Serializable
     private data class Fingerprint(
         val source: RssSource,
+        val sortRule: String? = null,
         val sourceVariable: String?,
         val sourceVariables: Map<String, String>,
         val loginHeader: String?,

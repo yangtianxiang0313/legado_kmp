@@ -4,6 +4,7 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import io.legado.kmp.shared.data.database.LegadoDatabase
 import io.legado.kmp.shared.domain.repository.RssSourceRepository
+import io.legado.kmp.shared.domain.rss.rssDirectoryCachePrefix
 import io.legado.kmp.shared.model.RssSource
 import io.legado.kmp.shared.model.SourceGroups
 import kotlinx.coroutines.Dispatchers
@@ -231,7 +232,10 @@ class RssSourceRepositoryImpl(
     }
 
     override suspend fun delete(sourceUrl: String) {
-        database.rssSourceQueries.deleteRssSourceByUrl(sourceUrl)
+        database.rssSourceQueries.transaction {
+            database.rssSourceQueries.deleteRssSourceByUrl(sourceUrl)
+            database.cacheQueries.deleteByPrefix(rssDirectoryCachePrefix(sourceUrl))
+        }
     }
 
     override suspend fun deleteDefault() {

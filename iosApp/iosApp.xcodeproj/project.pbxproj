@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F04184010000000000000001 /* RssDirectoryLoadingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04184020000000000000001; };
 		F04144010000000000000001 /* RssArticleFavoriteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04144020000000000000001; };
 		F04114010000000000000001 /* RssArticlePresentationStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04114020000000000000001 /* RssArticlePresentationStyle.swift */; };
 		F04114010000000000000002 /* RssArticleMediaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04114020000000000000002 /* RssArticleMediaView.swift */; };
@@ -775,6 +776,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F04184020000000000000001 /* RssDirectoryLoadingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssDirectoryLoadingCoordinator.swift; sourceTree = "<group>"; };
 		F04144020000000000000001 /* RssArticleFavoriteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleFavoriteCoordinator.swift; sourceTree = "<group>"; };
 		F04114020000000000000001 /* RssArticlePresentationStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticlePresentationStyle.swift; sourceTree = "<group>"; };
 		F04114020000000000000002 /* RssArticleMediaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleMediaView.swift; sourceTree = "<group>"; };
@@ -1946,6 +1948,7 @@
 				F028B1020000000000000002,
 				F030D1020000000000000001,
 				F02A31020000000000000001,
+				F04184020000000000000001 /* RssDirectoryLoadingCoordinator.swift */,
 				F04144020000000000000001 /* RssArticleFavoriteCoordinator.swift */,
 				F02A35020000000000000001,
 				F02A35020000000000000002,
@@ -2939,6 +2942,7 @@
 				F028B1010000000000000002 /* RssArticleWebSession.swift in Sources */,
 				F030D1010000000000000001 /* RssArticleNavigationCoordinator.swift in Sources */,
 				F02A31010000000000000001 /* RssArticleContentResolver.swift in Sources */,
+				F04184010000000000000001 /* RssDirectoryLoadingCoordinator.swift in Sources */,
 				F04144010000000000000001 /* RssArticleFavoriteCoordinator.swift in Sources */,
 				F02A35010000000000000001 /* RssArticleResourcePolicy.swift in Sources */,
 				F02A35010000000000000002 /* RssArticleImageCoordinator.swift in Sources */,

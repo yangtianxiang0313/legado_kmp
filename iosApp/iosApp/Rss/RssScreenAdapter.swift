@@ -4,6 +4,7 @@ import shared
 final class RssScreenAdapter {
     private let bindings = ScreenBindingController(owner: "RssScreen")
     private var facade: RssFacade?
+    private var directory: RssDirectoryFacade?
     private var lastFavoritesSignature: String?
     private(set) var currentFavorites: [RssStar] = []
     private(set) var hasFavoritesSnapshot = false
@@ -19,6 +20,14 @@ final class RssScreenAdapter {
         switch SharedRuntime.rssFacade() {
         case .success(let facade):
             self.facade = facade
+            do {
+                directory = try RssDirectoryFacade.companion.create()
+            } catch {
+                self.facade = nil
+                return .failure(
+                    SharedRuntimeError(
+                        operation: "RssDirectoryFacade.create", message: L10n.RSS.unavailable, underlying: error))
+            }
             bindings.bind(
                 facade.watchSources { [weak self] sources in
                     DispatchQueue.main.async {
@@ -57,6 +66,37 @@ final class RssScreenAdapter {
     {
         guard let facade else { throw runtimeNotReadyError() }
         return try await facade.loadArticlesAsync(sortName: sortName, sortUrl: sortUrl, source: source, page: page)
+    }
+
+    func cachedSorts(source: RssSource) async throws -> [(name: String, url: String)] {
+        guard let facade else { throw runtimeNotReadyError() }
+        let pairs: [KotlinPair<NSString, NSString>] = try await SharedAsync.value {
+            facade.cachedSorts(source: source, completionHandler: $0)
+        }
+        return pairs.map { (name: $0.first as String? ?? "", url: $0.second as String? ?? "") }
+    }
+
+    func cachedArticles(source: RssSource, sortName: String, sortURL: String) async throws -> [RssArticle] {
+        guard let directory else { throw runtimeNotReadyError() }
+        return try await SharedAsync.value {
+            directory.cachedArticles(source: source, sortName: sortName, sortUrl: sortURL, completionHandler: $0)
+        }
+    }
+
+    func loadDirectoryPage(
+        source: RssSource, sortName: String, requestURL: String, categoryURL: String, page: Int32
+    ) async throws -> RssDirectoryResult {
+        guard let directory else { throw runtimeNotReadyError() }
+        return try await SharedAsync.value {
+            directory.loadArticles(
+                source: source, sortName: sortName, sortUrl: requestURL, categoryUrl: categoryURL, page: page,
+                completionHandler: $0)
+        }
+    }
+
+    func markRead(article: RssArticle) async throws {
+        guard let directory else { throw runtimeNotReadyError() }
+        try await SharedAsync.void { directory.markRead(article: article, completionHandler: $0) }
     }
 
     func loadContent(article: RssArticle, source: RssSource) async throws -> String {

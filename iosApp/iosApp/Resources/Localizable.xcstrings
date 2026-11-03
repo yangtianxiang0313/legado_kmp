@@ -4710,6 +4710,27 @@
         }
       }
     },
+    "rss.directory_retention_failed" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Unable to save articles for offline reading" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "文章目录未能保存，请稍后刷新" } }
+      }
+    },
+    "rss.read_record_failed" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Unable to save read status" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已读状态保存失败" } }
+      }
+    },
+    "rss.saved_articles" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Saved articles" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已保存的文章" } }
+      }
+    },
     "rss.loading_articles" : {
       "extractionState" : "manual",
       "localizations" : {

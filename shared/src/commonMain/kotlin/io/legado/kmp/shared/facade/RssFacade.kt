@@ -48,10 +48,14 @@ class RssFacade(
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun loadSorts(source: RssSource, forceRefresh: Boolean = false): List<Pair<String, String>> {
         return runRecoverable("RssFacade.loadSorts") {
-            if (forceRefresh) {
-                getRssSortUrlsUseCase.clearCache(source)
-            }
-            getRssSortUrlsUseCase(source).getOrThrow()
+            getRssSortUrlsUseCase(source, forceRefresh = forceRefresh).getOrThrow()
+        }
+    }
+
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun cachedSorts(source: RssSource): List<Pair<String, String>> {
+        return runRecoverable("RssFacade.cachedSorts") {
+            getRssSortUrlsUseCase.cached(source).getOrThrow()
         }
     }
 

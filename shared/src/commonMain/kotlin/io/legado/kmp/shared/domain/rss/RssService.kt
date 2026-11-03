@@ -17,6 +17,7 @@ import io.legado.kmp.shared.scripting.LegacySourceJsRuntime
 import io.legado.kmp.shared.scripting.SourceJsRuntime
 import io.legado.kmp.shared.source.SourceStateStore
 import io.legado.kmp.shared.util.splitLegacyPayloadItems
+import kotlin.coroutines.cancellation.CancellationException
 
 class RssService(
     private val requestExecutor: SourceRequestExecutor,
@@ -28,20 +29,41 @@ class RssService(
 ) {
     private val sortCache = RssSortCache(sourceStateStore, cacheRepository)
 
-    suspend fun getSortUrls(source: RssSource): Result<List<Pair<String, String>>> = runCatching {
+    suspend fun getSortUrls(
+        source: RssSource,
+        forceRefresh: Boolean = false
+    ): Result<List<Pair<String, String>>> = runCatching {
         val raw = source.sortUrl?.trim().orEmpty()
         if (raw.isBlank()) {
             return@runCatching listOf("" to source.sourceUrl)
         }
 
         val payload = if (isJsRule(raw)) {
-            sortCache.getOrLoad(source, raw) {
+            sortCache.getOrLoad(source, raw, forceRefresh = forceRefresh) {
                 executeSortJs(source, raw)
             }
         } else {
             raw
         }
         parseSortPayload(source, payload)
+    }.onFailure { error ->
+        if (error is CancellationException) throw error
+    }
+
+    suspend fun getCachedSortUrls(source: RssSource): Result<List<Pair<String, String>>> = runCatching {
+        val raw = source.sortUrl?.trim().orEmpty()
+        if (raw.isBlank()) {
+            return@runCatching listOf("" to source.sourceUrl)
+        }
+
+        val payload = if (isJsRule(raw)) {
+            sortCache.peek(source, raw) ?: return@runCatching emptyList()
+        } else {
+            raw
+        }
+        parseSortPayload(source, payload)
+    }.onFailure { error ->
+        if (error is CancellationException) throw error
     }
 
     suspend fun clearSortCache(source: RssSource) {

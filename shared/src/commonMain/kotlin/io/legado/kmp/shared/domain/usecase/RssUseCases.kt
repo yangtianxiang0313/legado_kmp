@@ -15,7 +15,11 @@ class ObserveEnabledRssSourcesUseCase(
 class GetRssSortUrlsUseCase(
     private val service: RssService
 ) {
-    suspend operator fun invoke(source: RssSource): Result<List<Pair<String, String>>> = service.getSortUrls(source)
+    suspend operator fun invoke(
+        source: RssSource,
+        forceRefresh: Boolean = false
+    ): Result<List<Pair<String, String>>> = service.getSortUrls(source, forceRefresh = forceRefresh)
+    suspend fun cached(source: RssSource): Result<List<Pair<String, String>>> = service.getCachedSortUrls(source)
     suspend fun clearCache(source: RssSource) = service.clearSortCache(source)
 }
 

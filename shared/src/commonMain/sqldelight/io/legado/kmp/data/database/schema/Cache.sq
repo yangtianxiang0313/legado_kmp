@@ -22,6 +22,9 @@ SELECT value FROM caches WHERE key = ? AND (deadline = 0 OR deadline > ?);
 insert:
 INSERT OR REPLACE INTO caches (key, value, deadline) VALUES (?, ?, ?);
 
+insertIfAbsent:
+INSERT OR IGNORE INTO caches (key, value, deadline) VALUES (?, ?, ?);
+
 replaceValueIfUnchanged:
 UPDATE caches SET value = ? WHERE key = ? AND value IS ? AND deadline = ?;
 

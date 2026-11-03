@@ -8,6 +8,7 @@ interface CacheRepository {
     suspend fun getAll(): List<Cache>
     suspend fun getByPrefix(prefix: String): List<Cache> = getAll().filter { it.key.startsWith(prefix) }
     suspend fun insert(cache: Cache)
+    suspend fun insertIfAbsent(cache: Cache): Boolean
     suspend fun replaceValueIfUnchanged(previous: Cache, value: String): Boolean
     suspend fun delete(key: String)
     suspend fun deleteByPrefix(prefix: String) {
