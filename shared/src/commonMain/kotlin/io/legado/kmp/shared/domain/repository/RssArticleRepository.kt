@@ -11,6 +11,7 @@ interface RssArticleRepository {
     suspend fun append(vararg rssArticle: RssArticle)
     suspend fun clearOld(origin: String, sort: String, order: Long)
     suspend fun update(vararg rssArticle: RssArticle)
+    suspend fun retainContent(article: RssArticle, content: String)
     suspend fun updateOrigin(origin: String, oldOrigin: String)
     suspend fun delete(origin: String)
 }

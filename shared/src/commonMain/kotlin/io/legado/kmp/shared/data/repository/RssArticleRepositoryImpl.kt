@@ -6,7 +6,10 @@ import io.legado.kmp.shared.data.database.LegadoDatabase
 import io.legado.kmp.shared.domain.repository.RssArticleRepository
 import io.legado.kmp.shared.model.RssArticle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 
 class RssArticleRepositoryImpl(
     private val database: LegadoDatabase
@@ -80,6 +83,37 @@ class RssArticleRepositoryImpl(
                 origin = it.origin,
                 link = it.link
             )
+        }
+    }
+
+    override suspend fun retainContent(article: RssArticle, content: String): Unit = withContext(Dispatchers.Default) {
+        val context = currentCoroutineContext()
+        context.ensureActive()
+        require(content.isNotBlank()) { "RSS article content must not be blank" }
+        database.rssArticleQueries.transaction {
+            context.ensureActive()
+            // Insert only while the source exists; never replace a row's newer metadata.
+            database.rssArticleQueries.insertRssArticleContentIfSourceExists(
+                origin = article.origin,
+                sort = article.sort,
+                title = article.title,
+                sort_order = article.order,
+                link = article.link,
+                pub_date = article.pubDate,
+                description = article.description,
+                content = content,
+                image = article.image,
+                article_group = article.group,
+                read = if (article.read) 1L else 0L,
+                variable = article.variable,
+            )
+            context.ensureActive()
+            database.rssArticleQueries.retainRssArticleContent(
+                content = content,
+                origin = article.origin,
+                link = article.link,
+            )
+            context.ensureActive()
         }
     }
 

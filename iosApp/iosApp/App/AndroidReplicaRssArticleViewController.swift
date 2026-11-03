@@ -5,7 +5,7 @@ import WebKit
 final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigationDelegate, WKUIDelegate,
     NavigationBackActionHandling, UIGestureRecognizerDelegate
 {
-    private let article: RssArticle
+    private var article: RssArticle
     private var source: RssSource?
     private let screen: RssScreenAdapter
     private let initialFavorites: [RssStar]
@@ -40,15 +40,9 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     private var progressObservation: NSKeyValueObservation?
     private var contentTask: Task<Void, Never>?
     private var contentRequestID: UUID?
-    private var favoriteTask: Task<Void, Never>?
-    private var favoritesSubscription: FlowSubscription?
-    private var favoritesObservationID: UUID?
-    private var hasObservedFavorites = false
-    private var isFavoriteSynchronized = false
     private var isPageActive = false
     private var pageID = UUID()
     private var moreMenuID = UUID()
-    private var isFavorite = false
     private var renderedContent: String?
     private var contentErrorMessage: String?
     private var needsWebReload = false
@@ -63,6 +57,12 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     private var resourcePolicy: RssArticleResourcePolicy?
     private var imagePageID: UUID?
     private weak var imageLongPress: UILongPressGestureRecognizer?
+    private lazy var favoriteActions = RssArticleFavoriteCoordinator(
+        owner: self, button: favoriteButton, screen: screen, favorites: initialFavorites,
+        currentArticle: { [weak self] in self?.article },
+        currentContent: { [weak self] in self?.renderedContent },
+        currentPageID: { [weak self] in self?.pageID },
+        canUseActions: { [weak self] in self?.canUseArticleActions == true })
     private lazy var imageActions = RssArticleImageCoordinator(
         owner: self,
         prepareResource: { [weak self] url in
@@ -136,8 +136,6 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
 
     deinit {
         contentTask?.cancel()
-        favoriteTask?.cancel()
-        favoritesSubscription?.cancel()
         cookiePersistenceTask?.cancel()
         sessionResumeTask?.cancel()
         progressObservation?.invalidate()
@@ -153,7 +151,6 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
             return self.canUseArticleActions && self.isWebContentReady && self.contentErrorMessage == nil
         }
         speech.onChange = { [weak self] in self?.updateReadAloudButton() }
-        isFavorite = initialFavorites.contains { $0.origin == article.origin && $0.link == article.link }
         configureChrome()
         configureWebView()
         configureStateView()
@@ -168,8 +165,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
         isPageActive = true
-        refreshFavoriteState()
-        observeFavorites()
+        favoriteActions.activate()
         resumeArticle()
         updateReadAloudButton()
     }
@@ -184,13 +180,12 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         sessionResumeTask?.cancel()
         browser.cancel()
         imageActions.cancel()
-        stopObservingFavorites()
+        favoriteActions.deactivate()
         needsWebReload = needsWebReload || webView.isLoading || !isWebContentReady
         currentNavigation = nil
         webView.stopLoading()
         progressView.isHidden = true
         stopReadAloud()
-        updateFavoriteButton()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -207,8 +202,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         refreshButton.accessibilityLabel = L10n.RSS.articleRefresh
         refreshButton.accessibilityIdentifier = "rss.article.refresh"
         refreshButton.addTarget(self, action: #selector(refreshArticle), for: .touchUpInside)
-        favoriteButton.accessibilityIdentifier = UIIdentifiers.RSS.articleFavoriteButton
-        favoriteButton.addTarget(self, action: #selector(toggleFavorite), for: .touchUpInside)
+        favoriteActions.configureButton()
 
         readAloudButton.accessibilityIdentifier = "rss.readAloudButton"
         readAloudButton.addTarget(self, action: #selector(toggleReadAloud), for: .touchUpInside)
@@ -226,7 +220,6 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         topBar.addAction(favoriteButton)
         topBar.addAction(readAloudButton)
         topBar.addAction(moreButton)
-        updateFavoriteButton()
         updateReadAloudButton()
 
         dividerView.backgroundColor = AndroidReplicaTheme.divider
@@ -349,7 +342,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
     @objc private func refreshArticle() {
         guard canUseArticleActions else { return }
         waitsForRefresh = false
-        loadContent(refresh: true)
+        loadContent()
     }
 
     private func openSourceLogin() {
@@ -377,7 +370,7 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
             ? L10n.RSS.openInBrowser : L10n.RSS.articleExternalOpen
     }
 
-    private func loadContent(refresh: Bool = false) {
+    private func loadContent() {
         guard isPageActive, !waitsForRefresh else { return }
         articleReturnOffset = nil
         restoresArticleOffset = false
@@ -403,8 +396,16 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
             guard let self else { return }
             defer { if self.contentRequestID == requestID { self.contentTask = nil } }
             do {
+                let article = try await RssArticleContentResolver.articleForReading(article)
+                try Task.checkCancellation()
+                guard self.isPageActive, self.contentRequestID == requestID else { return }
+                self.article = article
+                self.title = self.titleText
+                self.topBar.setTitle(self.titleText)
+                self.browser.replaceArticle(article)
+                self.navigationCoordinator.replaceArticle(article)
                 let resolution = try await RssArticleContentResolver.resolve(
-                    article: article, source: self.source, refresh: refresh,
+                    article: article, source: self.source,
                     screen: screen, browser: self.browser, webView: self.webView)
                 try Task.checkCancellation()
                 guard self.isPageActive, self.contentRequestID == requestID else { return }
@@ -432,16 +433,8 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
                         return
                     }
                     self.renderHTML(content)
-                    do {
-                        let facade = try RssArticleFavoritesFacade.companion.create()
-                        try await SharedAsync.void {
-                            facade.retainContent(
-                                origin: article.origin, link: article.link, content: content, completionHandler: $0)
-                        }
-                    } catch {
-                        if !Task.isCancelled, self.isPageActive, self.contentRequestID == requestID {
-                            self.showTransientMessage(L10n.RSS.favoriteRetentionFailed)
-                        }
+                    if resolution.retentionFailed {
+                        self.showTransientMessage(L10n.RSS.favoriteRetentionFailed)
                     }
                 }
             } catch is CancellationError {} catch {
@@ -583,98 +576,6 @@ final class AndroidReplicaRssArticleViewController: UIViewController, WKNavigati
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
         gestureRecognizer === imageLongPress || otherGestureRecognizer === imageLongPress
-    }
-
-    @objc private func toggleFavorite() {
-        guard canUseArticleActions, isFavoriteSynchronized, favoriteTask == nil else { return }
-        let id = pageID
-        stopObservingFavorites()
-        let favoriteArticle = RssArticleContentResolver.favoriteArticle(article, content: renderedContent)
-        favoriteTask = Task { @MainActor [weak self, article = favoriteArticle] in
-            do {
-                let facade = try RssArticleFavoritesFacade.companion.create()
-                let existing: RssStar? = try await SharedAsync.optionalValue {
-                    facade.getFavorite(origin: article.origin, link: article.link, completionHandler: $0)
-                }
-                let star: RssStar
-                if let existing {
-                    star = existing
-                } else {
-                    star = try await SharedAsync.value {
-                        facade.saveFavorite(
-                            article: article, title: article.title, group: article.group, completionHandler: $0)
-                    }
-                }
-                let groups: [String] = try await SharedAsync.value { facade.favoriteGroups(completionHandler: $0) }
-                guard let self else { return }
-                self.favoriteTask = nil
-                self.observeFavorites()
-                guard self.pageID == id, self.canUseArticleActions else { return }
-                let editor = RssArticleFavoriteEditorViewController(star: star, groups: groups)
-                editor.onSave = { title, group in
-                    let _: RssStar = try await SharedAsync.value {
-                        facade.saveFavorite(article: article, title: title, group: group, completionHandler: $0)
-                    }
-                }
-                editor.onDelete = {
-                    try await SharedAsync.void {
-                        facade.deleteFavorite(origin: article.origin, link: article.link, completionHandler: $0)
-                    }
-                }
-                self.present(UINavigationController(rootViewController: editor), animated: true)
-            } catch {
-                guard let self else { return }
-                self.favoriteTask = nil
-                self.observeFavorites()
-                if self.pageID == id, self.canUseArticleActions { self.presentError(error) }
-            }
-        }
-        updateFavoriteButton()
-    }
-
-    private func refreshFavoriteState() {
-        if hasObservedFavorites, favoriteTask == nil {
-            isFavorite = screen.currentFavorites.contains { $0.origin == article.origin && $0.link == article.link }
-        }
-        updateFavoriteButton()
-    }
-
-    private func observeFavorites() {
-        stopObservingFavorites()
-        guard isPageActive, favoriteTask == nil else { return }
-        switch SharedRuntime.rssFacade() {
-        case .success(let facade):
-            favoriteButton.accessibilityHint = nil
-            let observationID = UUID()
-            favoritesObservationID = observationID
-            favoritesSubscription = facade.watchFavorites { [weak self] favorites in
-                DispatchQueue.main.async {
-                    guard let self, self.isPageActive, self.favoritesObservationID == observationID else { return }
-                    self.isFavorite = favorites.contains {
-                        $0.origin == self.article.origin && $0.link == self.article.link
-                    }
-                    self.hasObservedFavorites = true
-                    self.isFavoriteSynchronized = true
-                    self.updateFavoriteButton()
-                }
-            }
-        case .failure(let error):
-            favoriteButton.accessibilityHint = error.message
-        }
-        updateFavoriteButton()
-    }
-
-    private func stopObservingFavorites() {
-        favoritesObservationID = nil
-        favoritesSubscription?.cancel()
-        favoritesSubscription = nil
-        isFavoriteSynchronized = false
-    }
-
-    private func updateFavoriteButton() {
-        favoriteButton.setImage(UIImage(systemName: isFavorite ? "star.fill" : "star"), for: .normal)
-        favoriteButton.accessibilityLabel = isFavorite ? L10n.RSS.editFavoriteTitle : L10n.RSS.markFavorite
-        favoriteButton.isEnabled = isPageActive && isFavoriteSynchronized && favoriteTask == nil
     }
 
     @objc private func toggleReadAloud() {

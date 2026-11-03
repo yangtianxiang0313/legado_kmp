@@ -53,7 +53,7 @@ final class RssArticleNavigationCoordinator {
         }
     }
 
-    private let article: RssArticle
+    private var article: RssArticle
     private let browser: RssArticleWebSession
     private let isActive: @MainActor () -> Bool
     private let canUseActions: @MainActor () -> Bool
@@ -106,6 +106,11 @@ final class RssArticleNavigationCoordinator {
         generation = UUID()
         programmaticRequest = nil
         cancelPending()
+    }
+
+    func replaceArticle(_ article: RssArticle) {
+        cancel()
+        self.article = article
     }
 
     func decide(

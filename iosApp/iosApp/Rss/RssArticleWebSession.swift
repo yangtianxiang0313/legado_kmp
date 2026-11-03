@@ -4,7 +4,7 @@ import WebKit
 
 @MainActor
 final class RssArticleWebSession {
-    private let article: RssArticle
+    private var article: RssArticle
     private var nativeSession: IosRssWebNavigationSession?
     private var requests: [UUID: FlowSubscription] = [:]
     private var generation = UUID()
@@ -18,6 +18,11 @@ final class RssArticleWebSession {
     nonisolated static let safetyErrorDomain = "io.legado.rss.article.security"
 
     init(article: RssArticle) {
+        self.article = article
+    }
+
+    func replaceArticle(_ article: RssArticle) {
+        dispose()
         self.article = article
     }
 
@@ -136,7 +141,8 @@ final class RssArticleWebSession {
         let facade = try RssArticleWebFacade.companion.create()
         let prepared: RssArticleResourceRequest = try await value(generation: current) { completion in
             facade.prepareResourceRequest(
-                article: self.article, targetUrl: url.absoluteString, requestOriginUrl: self.headerOrigin?.absoluteString
+                article: self.article, targetUrl: url.absoluteString,
+                requestOriginUrl: self.headerOrigin?.absoluteString
             ) {
                 result in
                 if result.isCancelled {
@@ -202,7 +208,8 @@ final class RssArticleWebSession {
         }
         try checkActive(current)
         isPrepared = true
-        webView.customUserAgent = prepared.headers.first { $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame }?.value
+        webView.customUserAgent =
+            prepared.headers.first { $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame }?.value
     }
 
     private func activeSession(_ current: UUID) throws -> IosRssWebNavigationSession {
@@ -272,7 +279,8 @@ final class RssArticleWebSession {
     private static func sameOrigin(_ source: URL?, _ target: URL) -> Bool {
         source?.scheme?.lowercased() == target.scheme?.lowercased()
             && source?.host?.lowercased() == target.host?.lowercased()
-            && (source?.port ?? (source?.scheme == "https" ? 443 : 80)) == (target.port ?? (target.scheme == "https" ? 443 : 80))
+            && (source?.port ?? (source?.scheme == "https" ? 443 : 80))
+                == (target.port ?? (target.scheme == "https" ? 443 : 80))
     }
 
     private nonisolated static func failure(_ message: String) -> NSError {

@@ -142,6 +142,18 @@ INSERT OR IGNORE INTO rss_articles (
     description, content, image, article_group, read, variable
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+insertRssArticleContentIfSourceExists:
+INSERT OR IGNORE INTO rss_articles (
+    origin, sort, title, sort_order, link, pub_date,
+    description, content, image, article_group, read, variable
+)
+SELECT :origin, :sort, :title, :sort_order, :link, :pub_date,
+       :description, :content, :image, :article_group, :read, :variable
+WHERE EXISTS (SELECT 1 FROM rss_sources WHERE source_url = :origin);
+
+retainRssArticleContent:
+UPDATE rss_articles SET content = ? WHERE origin = ? AND link = ?;
+
 clearOldRssArticles:
 DELETE FROM rss_articles WHERE origin = ? AND sort = ? AND sort_order < ?;
 

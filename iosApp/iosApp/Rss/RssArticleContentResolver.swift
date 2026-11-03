@@ -12,6 +12,7 @@ enum RssArticleContentResolver {
     struct Resolution {
         let source: RssSource?
         let content: Content
+        var retentionFailed = false
     }
 
     static func storedBody(_ article: RssArticle) -> String? {
@@ -21,11 +22,23 @@ enum RssArticleContentResolver {
     }
 
     static func usesWebPage(article: RssArticle, source: RssSource?) -> Bool {
-        storedBody(article) == nil && source?.ruleContent?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+        storedBody(article) == nil
+            && source?.ruleContent?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+    }
+
+    static func articleForReading(_ article: RssArticle) async throws -> RssArticle {
+        do {
+            let facade = try RssArticleContentFacade.companion.create()
+            return try await SharedAsync.value { facade.loadArticle(article: article, completionHandler: $0) }
+        } catch {
+            try Task.checkCancellation()
+            guard storedBody(article) != nil else { throw error }
+            return article
+        }
     }
 
     static func resolve(
-        article: RssArticle, source initial: RssSource?, refresh: Bool,
+        article: RssArticle, source initial: RssSource?,
         screen: RssScreenAdapter, browser: RssArticleWebSession, webView: WKWebView
     ) async throws -> Resolution {
         var source = initial
@@ -35,13 +48,14 @@ enum RssArticleContentResolver {
                 source = try await screen.loadSource(sourceURL: article.origin)
             } catch {
                 try Task.checkCancellation()
-                guard stored != nil, !refresh else { throw error }
+                guard stored != nil else { throw error }
                 source = nil
             }
         }
         try Task.checkCancellation()
         let hasRule = source?.ruleContent?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        if let stored, !refresh || !hasRule {
+        // Android reads an existing description/snapshot even on refresh; a summary is not a missing body.
+        if let stored {
             if source != nil {
                 do {
                     let prepared = try await browser.prepare(navigation: false, webView: webView)
@@ -59,7 +73,20 @@ enum RssArticleContentResolver {
             if hasRule {
                 let content = try await screen.loadContent(article: article, source: prepared.source)
                 try Task.checkCancellation()
-                return Resolution(source: prepared.source, content: .html(content))
+                var resolution = Resolution(source: prepared.source, content: .html(content))
+                if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    do {
+                        let facade = try RssArticleContentFacade.companion.create()
+                        try await SharedAsync.void {
+                            facade.retainContent(article: article, content: content, completionHandler: $0)
+                        }
+                    } catch {
+                        try Task.checkCancellation()
+                        resolution.retentionFailed = true
+                    }
+                }
+                try Task.checkCancellation()
+                return resolution
             }
             return Resolution(source: prepared.source, content: .web(try browser.request(prepared)))
         }
