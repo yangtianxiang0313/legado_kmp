@@ -62,6 +62,7 @@ final class ReaderContentSearchPageView: UIView {
         summaryButton.accessibilityHint = L10n.Reader.searchInBook
         summaryButton.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.Reader.searchInBook))
         summaryLabel.lineBreakMode = .byTruncatingMiddle
+        summaryLabel.usesFallbackLineMetrics = true
         summaryLabel.numberOfLines = 1
         summaryLabel.clipsToBounds = true
         summaryLabel.isAccessibilityElement = false
@@ -72,7 +73,9 @@ final class ReaderContentSearchPageView: UIView {
         configure(
             bottomButton, image: ReaderTocAndroidIcon.bottom.image(), title: L10n.Reader.scrollToBottom,
             identifier: "reader_search_bottom")
-        for item in [statusBackground, toolbar, progressView, tableView, fastScroller, footerBackground, footer, stopButton] {
+        for item in [
+            statusBackground, toolbar, progressView, tableView, fastScroller, footerBackground, footer, stopButton,
+        ] {
             item.translatesAutoresizingMaskIntoConstraints = false
             addSubview(item)
         }
@@ -120,7 +123,7 @@ final class ReaderContentSearchPageView: UIView {
         NotificationCenter.default.addObserver(
             self, selector: #selector(updateAppearance), name: .androidReplicaThemeDidChange, object: nil)
         updateAppearance()
-        setSummary("搜索结果: 0")
+        setSummary(L10n.Reader.searchContentResultCount(0))
     }
 
     deinit {

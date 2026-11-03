@@ -89,7 +89,8 @@ final class ReaderSourceChangeActions {
         reader.present(navigation, animated: true)
     }
 
-    private func configureBookSelection(_ controller: ChangeSourceViewController, reader: ReaderContainerViewController) {
+    private func configureBookSelection(_ controller: ChangeSourceViewController, reader: ReaderContainerViewController)
+    {
         let context = ChapterContext(reader)
         let sourceURL = reader.book?.origin
         var requestID: UUID?
@@ -102,7 +103,9 @@ final class ReaderSourceChangeActions {
                     && self.pickerNavigation.map { self.ownsPicker($0, reader: reader) } == true
             },
             prepare: { [weak self, weak reader] candidate in
-                guard let self, let reader, self.matchesChapter(context), !self.isCommitting else { throw CancellationError() }
+                guard let self, let reader, self.matchesChapter(context), !self.isCommitting else {
+                    throw CancellationError()
+                }
                 let id = UUID()
                 requestID = id
                 self.operationID = id
@@ -110,7 +113,8 @@ final class ReaderSourceChangeActions {
                 reader.chapterLoadCoordinator.cancel(in: reader)
                 try await reader.screen.stopReadAloud()
                 try Task.checkCancellation()
-                return try await reader.screen.prepareSourceChange(candidateBookUrl: candidate.bookUrl, sourceUrl: candidate.sourceUrl)
+                return try await reader.screen.prepareSourceChange(
+                    candidateBookUrl: candidate.bookUrl, sourceUrl: candidate.sourceUrl)
             },
             commit: { [weak self, weak reader] prepared in
                 guard let self, let reader, let id = requestID, self.operationID == id,
@@ -136,7 +140,8 @@ final class ReaderSourceChangeActions {
                 guard self.isActive(reader), reader.bookURL == result.book.bookUrl else { return }
                 reader.loadingIndicator.stopAnimating()
                 reader.chapterLoadCoordinator.load(
-                    in: reader, index: Int(result.book.durChapterIndex), restorePosition: Int(result.book.durChapterPos),
+                    in: reader, index: Int(result.book.durChapterIndex),
+                    restorePosition: Int(result.book.durChapterPos),
                     successMessage: L10n.Reader.changeSourceSuccess)
             })
     }
@@ -157,7 +162,7 @@ final class ReaderSourceChangeActions {
             }
             do {
                 guard let result = try await reader.screen.autoChangeSource(chapterIndex: reader.chapterIndex) else {
-                    if isActive(reader) { reader.showToast("自动换源失败\n没有有效源") }
+                    if isActive(reader) { reader.showToast(SourceChangeText.autoChangeNoSources.value) }
                     return
                 }
                 reader.adoptSourceChangeResult(result)
@@ -168,7 +173,9 @@ final class ReaderSourceChangeActions {
                     restorePosition: Int(result.book.durChapterPos),
                     successMessage: L10n.Reader.changeSourceSuccess)
             } catch {
-                if isActive(reader) { reader.showToast("自动换源失败\n\(error.userFacingMessage)") }
+                if isActive(reader) {
+                    reader.showToast("\(SourceChangeText.autoChangeFailed.value)\n\(error.userFacingMessage)")
+                }
             }
         }
     }
@@ -179,7 +186,9 @@ final class ReaderSourceChangeActions {
     }
 
     private func ownsPicker(_ picker: UINavigationController, reader: ReaderContainerViewController) -> Bool {
-        guard let presenter = picker.presentingViewController, presenter.presentedViewController === picker else { return false }
+        guard let presenter = picker.presentingViewController, presenter.presentedViewController === picker else {
+            return false
+        }
         var page: UIViewController? = reader
         while let current = page {
             if current === presenter { return true }
@@ -245,7 +254,9 @@ final class ReaderSourceChangeActions {
                 guard let self, let reader, let id = requestID else { return }
                 if self.operationID == id { self.operationID = nil }
                 requestID = nil
-                guard self.matchesChapter(context), reader.book?.origin == sourceURL, self.isActive(reader) else { return }
+                guard self.matchesChapter(context), reader.book?.origin == sourceURL, self.isActive(reader) else {
+                    return
+                }
                 reader.setMenuVisible(false)
                 reader.chapterLoadCoordinator.load(
                     in: reader, index: context.index, restorePosition: reader.currentCharacterOffset(),

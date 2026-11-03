@@ -345,6 +345,7 @@ final class AndroidSearchMenuView: UIView {
     }
 
     private func updateFonts() {
+        infoLabel.usesFallbackLineMetrics = true
         infoLabel.font = ReaderAndroidDefaultFont.scaledFont(
             size: 12, textStyle: .caption1, compatibleWith: traitCollection)
         for button in [resultsButton, mainMenuButton, exitButton] {
@@ -368,7 +369,7 @@ final class AndroidSearchMenuView: UIView {
     }
 
     private func updateInfo() {
-        let text = "搜索结果: \(results.count) / 当前章节: \(displayedChapterTitle)"
+        let text = L10n.Reader.searchContentChapterSummary(count: results.count, chapterTitle: displayedChapterTitle)
         if infoLabel.accessibilityLabel != text {
             infoLabel.text = text
             // ReaderTocSingleLineLabel transforms display text, never the raw chapter title for AX.

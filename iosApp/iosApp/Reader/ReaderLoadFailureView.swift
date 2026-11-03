@@ -243,7 +243,7 @@ final class ReaderLoadFailureView: UIView, UIGestureRecognizerDelegate {
         var actions: [UIAccessibilityCustomAction] = []
         if presentation.kind == .failure {
             actions.append(
-                UIAccessibilityCustomAction(name: "刷新") { [weak self] _ in
+                UIAccessibilityCustomAction(name: L10n.Reader.menuRefresh) { [weak self] _ in
                     self?.performRetry(interactionID: id) ?? false
                 })
             messageView.onEscape = { [weak self] in
@@ -251,7 +251,7 @@ final class ReaderLoadFailureView: UIView, UIGestureRecognizerDelegate {
             }
         }
         actions.append(
-            UIAccessibilityCustomAction(name: "阅读菜单") { [weak self] _ in
+            UIAccessibilityCustomAction(name: L10n.Reader.loadFailureReadingMenu) { [weak self] _ in
                 self?.openMenu(interactionID: id) ?? false
             })
         accessibilityCustomActions = actions

@@ -207,7 +207,9 @@ enum L10n {
             format("bookshelf.batch_result", "成功 %1$d 本，失败 %2$d 本", successCount, failedCount)
         }
         static func changeSourceResult(updatedCount: Int, skippedCount: Int, failedCount: Int) -> String {
-            format("bookshelf.change_source_result", "换源 %1$d 本，跳过 %2$d 本，失败 %3$d 本", updatedCount, skippedCount, failedCount)
+            format(
+                "bookshelf.change_source_result", "换源 %1$d 本，跳过 %2$d 本，失败 %3$d 本", updatedCount, skippedCount,
+                failedCount)
         }
         static func manageFilterHint(_ groupName: String) -> String {
             format("bookshelf.manage_filter_hint", "筛选 · %@", groupName)
@@ -258,7 +260,8 @@ enum L10n {
         static let historyOpenDetail = text("search.history_open_detail", "打开书详情")
         static let historySearchInstead = text("search.history_search_instead", "搜索")
         static let historyBookOnShelfTitle = text("search.history_book_on_shelf_title", "书架中已有此书")
-        static let historyBookOnShelfMessage = text("search.history_book_on_shelf_message", "\u{201C}%@\u{201D}已在书架中，要打开书详情还是继续搜索？")
+        static let historyBookOnShelfMessage = text(
+            "search.history_book_on_shelf_message", "\u{201C}%@\u{201D}已在书架中，要打开书详情还是继续搜索？")
         static let scopeMultiGroupPrefix = text("search.scope_multi_group_prefix", "多组")
     }
 
@@ -278,7 +281,8 @@ enum L10n {
         static let txtTocRuleTitle = text("settings.txt_toc_rule_title", "TXT目录规则")
         static let txtTocRuleDetail = text("settings.txt_toc_rule_detail", "TXT目录识别与分章规则")
         static let txtTocRuleListEmptyTitle = text("settings.txt_toc_rule_list_empty_title", "还没有目录规则")
-        static let txtTocRuleListEmptyDetail = text("settings.txt_toc_rule_list_empty_detail", "新增正则后，本地 TXT 会按已启用规则识别目录并分章。")
+        static let txtTocRuleListEmptyDetail = text(
+            "settings.txt_toc_rule_list_empty_detail", "新增正则后，本地 TXT 会按已启用规则识别目录并分章。")
         static let txtTocRuleAddAction = text("settings.txt_toc_rule_add_action", "新增规则")
         static let txtTocRuleEditTitle = text("settings.txt_toc_rule_edit_title", "编辑目录规则")
         static let txtTocRuleCreateTitle = text("settings.txt_toc_rule_create_title", "新增目录规则")
@@ -318,7 +322,8 @@ enum L10n {
         static let themeModeRootDetail = text("settings.theme_mode_root_detail", "选择主题模式")
         static let webServiceTitle = text("settings.web_service_title", "Web服务")
         static let webServiceDetail = text("settings.web_service_detail", "局域网访问与传输")
-        static let webServiceMessage = text("settings.web_service_message", "iOS 端保留局域网传输入口；本地书导入可从书架页或系统文件分享进入，远程文件通过 WebDAV 文件管理同步。")
+        static let webServiceMessage = text(
+            "settings.web_service_message", "iOS 端保留局域网传输入口；本地书导入可从书架页或系统文件分享进入，远程文件通过 WebDAV 文件管理同步。")
         static let themeSettingRootTitle = text("settings.theme_setting_root_title", "主题设置")
         static let themeSettingRootDetail = text("settings.theme_setting_root_detail", "主题模式、主题预设与外观")
         static let backupTitle = text("settings.backup_title", "备份恢复")
@@ -419,7 +424,9 @@ enum L10n {
         static let aboutRateApp = text("settings.about_rate_app", "给应用评分")
         static let aboutShareApp = text("settings.about_share_app", "分享应用")
         static let aboutShareText = text("settings.about_share_text", "随身阅读器")
-        static let aboutDisclaimerContent = text("settings.about_disclaimer_content", "本应用是阅读工具。使用书源、订阅、网页或网络媒体时，请确认您有权访问和使用相关内容，并遵守内容提供方的条款。导入规则不代表已取得内容授权，免责声明也不能替代必要授权。")
+        static let aboutDisclaimerContent = text(
+            "settings.about_disclaimer_content",
+            "本应用是阅读工具。使用书源、订阅、网页或网络媒体时，请确认您有权访问和使用相关内容，并遵守内容提供方的条款。导入规则不代表已取得内容授权，免责声明也不能替代必要授权。")
         static let showDiscoveryTitle = text("settings.show_discovery_title", "显示发现")
         static let showRssTitle = text("settings.show_rss_title", "显示订阅")
         static let defaultHomeTitle = text("settings.default_home_title", "默认首页")
@@ -456,7 +463,8 @@ enum L10n {
         static let languageSimplifiedChinese = text("settings.language_simplified_chinese", "简体中文")
         static let languageTraditionalChinese = text("settings.language_traditional_chinese", "繁體中文")
         static let languageEnglish = text("settings.language_english", "English")
-        static let languageGoToSystemSettings = text("settings.language_go_to_system_settings", "iOS 需要在系统设置中切换语言。点击确定将跳转到系统设置。")
+        static let languageGoToSystemSettings = text(
+            "settings.language_go_to_system_settings", "iOS 需要在系统设置中切换语言。点击确定将跳转到系统设置。")
         // F108: 应用密码（应用锁）
         static let appLockTitle = text("settings.app_lock_title", "应用密码")
         static let appLockDetail = text("settings.app_lock_detail", "设置应用启动密码")
@@ -483,7 +491,8 @@ enum L10n {
         static let vacuumDatabaseTitle = text("settings.vacuum_database_title", "压缩数据库")
         static let vacuumDatabaseDetail = text("settings.vacuum_database_detail", "压缩并优化数据库文件")
         static let vacuumDatabaseConfirmTitle = text("settings.vacuum_database_confirm_title", "压缩数据库")
-        static let vacuumDatabaseConfirmMessage = text("settings.vacuum_database_confirm_message", "执行 VACUUM 操作将压缩数据库文件，回收未使用的空间。操作期间请勿关闭应用。")
+        static let vacuumDatabaseConfirmMessage = text(
+            "settings.vacuum_database_confirm_message", "执行 VACUUM 操作将压缩数据库文件，回收未使用的空间。操作期间请勿关闭应用。")
         static let vacuumDatabaseSuccess = text("settings.vacuum_database_success", "数据库压缩完成")
         static let vacuumDatabaseProcessing = text("settings.vacuum_database_processing", "正在压缩数据库…")
     }
@@ -530,8 +539,11 @@ enum L10n {
         static let exploreDisabledBadge = text("source_management.explore_disabled_badge", "探索关")
         static let loginRequiredBadge = text("source_management.login_required_badge", "需登录")
         static let groupNamePlaceholder = text("source_management.group_name_placeholder", "输入分组名")
-        static let helpMessage = text("source_management.help_message", "支持 legado 风格的导入、筛选、排序、单源编辑和批量操作。搜索框也支持启用、禁用、需登录、无分组、启用探索、禁用探索以及 group:分组名。")
-        static let qrDeferredMessage = text("source_management.qr_deferred_message", "二维码导入入口已保留，本轮先交付可用的 JSON、文件和 URL 导入链路。")
+        static let helpMessage = text(
+            "source_management.help_message",
+            "支持 legado 风格的导入、筛选、排序、单源编辑和批量操作。搜索框也支持启用、禁用、需登录、无分组、启用探索、禁用探索以及 group:分组名。")
+        static let qrDeferredMessage = text(
+            "source_management.qr_deferred_message", "二维码导入入口已保留，本轮先交付可用的 JSON、文件和 URL 导入链路。")
         static let groupByDomainAction = text("source_management.group_by_domain_action", "按域名分组")
         static let groupManageAction = text("source_management.group_manage_action", "管理分组")
         static let groupManageTitle = text("source_management.group_manage_title", "书源分组")
@@ -548,12 +560,14 @@ enum L10n {
         static let empty = text("source_management.empty", "还没有书源，先点右上角导入。")
         static let noMatch = text("source_management.no_match", "没有匹配的书源。")
         static let emptyStateTitle = text("source_management.empty_state_title", "还没有书源")
-        static let emptyStateMessage = text("source_management.empty_state_message", "可以先导入内置默认书源，确认搜索和阅读链路跑通后，再导入其他书源。")
+        static let emptyStateMessage = text(
+            "source_management.empty_state_message", "可以先导入内置默认书源，确认搜索和阅读链路跑通后，再导入其他书源。")
         static let importBundledAction = text("source_management.import_bundled_action", "导入内置书源")
         static let importBundledLoading = text("source_management.import_bundled_loading", "正在导入内置书源…")
         static let importBundledFailed = text("source_management.import_bundled_failed", "导入内置书源失败")
         static let importBundledDoneTitle = text("source_management.import_bundled_done_title", "内置书源已导入")
-        static let importBundledDoneMessage = text("source_management.import_bundled_done_message", "现在可以直接去搜索，确认从书源到阅读页的主链路。")
+        static let importBundledDoneMessage = text(
+            "source_management.import_bundled_done_message", "现在可以直接去搜索，确认从书源到阅读页的主链路。")
         static let stayHere = text("source_management.stay_here", "留在这里")
         static let goSearch = text("source_management.go_search", "去搜索")
 
@@ -588,7 +602,8 @@ enum L10n {
         static let scanQrCode = text("source_mgmt.scan_qr_code", "扫码导入")
         static let scanQrCodeTitle = text("source_mgmt.scan_qr_code_title", "扫描二维码")
         static let cameraPermissionDeniedTitle = text("source_mgmt.camera_permission_denied_title", "相机权限未开启")
-        static let cameraPermissionDeniedMessage = text("source_mgmt.camera_permission_denied_message", "请在系统设置中开启相机权限，以便扫描二维码导入书源。")
+        static let cameraPermissionDeniedMessage = text(
+            "source_mgmt.camera_permission_denied_message", "请在系统设置中开启相机权限，以便扫描二维码导入书源。")
         static let cameraUnavailableTitle = text("source_mgmt.camera_unavailable_title", "相机不可用")
         static let cameraUnavailableMessage = text("source_mgmt.camera_unavailable_message", "无法访问相机设备。")
         static let openSettings = text("source_mgmt.open_settings", "前往设置")
@@ -614,7 +629,8 @@ enum L10n {
         static let loginAction = text("source_edit.login_action", "登录")
         static let searchAction = text("source_edit.search_action", "搜索该源")
         static let variableHelpAction = text("source_edit.variable_help_action", "书源变量/帮助")
-        static let variableHelpMessage = text("source_edit.variable_help_message", "这里显示当前书源的变量说明；如果书源没有填写变量注释，就只保留帮助入口。")
+        static let variableHelpMessage = text(
+            "source_edit.variable_help_message", "这里显示当前书源的变量说明；如果书源没有填写变量注释，就只保留帮助入口。")
         static let qrDeferredMessage = text("source_edit.qr_deferred_message", "二维码分享入口已保留，本轮先交付真实 JSON 复制和分享。")
         static let loginExecutedMessage = text("source_edit.login_executed_message", "shared 已执行登录脚本并刷新登录态。")
         static let loginUnavailableMessage = text("source_edit.login_unavailable_message", "当前书源没有可跳转的登录地址。")
@@ -666,10 +682,12 @@ enum L10n {
         static let urlPlaceholder = text("source_import.url_placeholder", "https://example.com/book-sources.json")
         static let filePlaceholder = text("source_import.file_placeholder", "未选择文件")
         static let chooseFile = text("source_import.choose_file", "选择文件")
-        static let helperPayload = text("source_import.helper_payload", "支持粘贴单个书源对象、书源数组 JSON，或填写远程书源 JSON 地址。导入后会写入 shared 数据库，搜索页直接可用。")
+        static let helperPayload = text(
+            "source_import.helper_payload", "支持粘贴单个书源对象、书源数组 JSON，或填写远程书源 JSON 地址。导入后会写入 shared 数据库，搜索页直接可用。")
         static let helperUrl = text("source_import.helper_url", "填写远程书源 JSON 地址。shared 会先拉取内容，再做书源解析和入库。")
         static let helperJson = text("source_import.helper_json", "粘贴单个书源对象或书源数组 JSON。导入后会写入 shared 数据库，搜索页直接可用。")
-        static let helperFile = text("source_import.helper_file", "选择本地 .json 或 .txt 书源文件。iOS 只读取文本内容，实际解析和入库仍统一走 shared。")
+        static let helperFile = text(
+            "source_import.helper_file", "选择本地 .json 或 .txt 书源文件。iOS 只读取文本内容，实际解析和入库仍统一走 shared。")
         static let importAction = text("source_import.import_action", "导入")
         static let cancelAction = text("source_import.cancel_action", "取消")
         static let resultPanelTitle = text("source_import.result_panel_title", "导入结果")
@@ -711,7 +729,8 @@ enum L10n {
         static let layoutSectionDetail = text("reader_appearance.layout_section_detail", "字距、行距、段距即时生效。")
         static let pageSectionTitle = text("reader_appearance.page_section_title", "翻页与共享排版")
         static let pageSectionDetail = text("reader_appearance.page_section_detail", "翻页动画和共享排版与阅读页同步。")
-        static let behaviorSectionDetail = text("reader_appearance.behavior_section_detail", "阅读内方向、亮度栏布局和点击区域直接回写到当前 iOS Reader 配置。")
+        static let behaviorSectionDetail = text(
+            "reader_appearance.behavior_section_detail", "阅读内方向、亮度栏布局和点击区域直接回写到当前 iOS Reader 配置。")
         static let presetHint = text("reader_appearance.preset_hint", "点按切换样式，长按可重命名、删除或细调配色。")
         static let fontWeightQuickTitle = text("reader_appearance.font_weight_quick_title", "字重")
         static let fontQuickTitle = text("reader_appearance.font_quick_title", "字体")
@@ -1003,7 +1022,8 @@ enum L10n {
         static let emptyChapters = text("book_detail.empty_chapters", "目录为空，点击\u{201C}刷新目录\u{201D}拉取。")
         static let emptyChaptersTitle = text("book_detail.empty_chapters_title", "暂无目录")
         static let emptyChaptersActionDetail = text("book_detail.empty_chapters_action_detail", "点击这里拉取目录并定位当前章节。")
-        static let refreshChaptersFailedPlaceholder = text("book_detail.refresh_chapters_failed_placeholder", "目录拉取失败，点击\u{201C}继续阅读\u{201D}或\u{201C}刷新目录\u{201D}重试。")
+        static let refreshChaptersFailedPlaceholder = text(
+            "book_detail.refresh_chapters_failed_placeholder", "目录拉取失败，点击\u{201C}继续阅读\u{201D}或\u{201C}刷新目录\u{201D}重试。")
         static let shelfUpdateLoading = text("book_detail.shelf_update_loading", "正在更新书架状态…")
         static let shelfUpdateFailed = text("book_detail.shelf_update_failed", "书架操作失败")
         static let refreshInfoLoading = text("book_detail.refresh_info_loading", "正在刷新书籍信息…")
@@ -1105,7 +1125,8 @@ enum L10n {
         static let defaultCover = text("book_detail.default_cover", "默认封面")
         static let changeCoverStopSearch = text("book_detail.change_cover_stop_search", "停止搜索")
         static let changeCoverRestartSearch = text("book_detail.change_cover_restart_search", "重新搜索")
-        static let changeCoverSearchProgress = text("book_detail.change_cover_search_progress", "已搜索 %d/%d 书源，找到 %d 个封面")
+        static let changeCoverSearchProgress = text(
+            "book_detail.change_cover_search_progress", "已搜索 %d/%d 书源，找到 %d 个封面")
         static let changeCoverSearchComplete = text("book_detail.change_cover_search_complete", "搜索完成，共找到 %d 个封面")
         static let changeCoverEmpty = text("book_detail.change_cover_empty", "未找到可用封面")
         static let changeCoverLoading = text("book_detail.change_cover_loading", "加载中…")
@@ -1114,6 +1135,41 @@ enum L10n {
 
     enum Reader {
         static let title = text("reader.title", "阅读")
+        static let chapterLoading = text("reader.chapter_loading", "加载数据中…")
+        static let loadFailureReadingMenu = text("reader.load_failure_reading_menu", "阅读菜单")
+        static let searchContentEmpty = text("reader.search_content_empty", "搜索内容为空，请检查净化或简繁设置")
+        static let searchContentSourceInvalidated = text("reader.search_content_source_invalidated", "书籍已变化，请重新打开正文搜索")
+        static func searchContentResultCount(_ count: Int) -> String {
+            format("reader.search_content_result_count", "搜索结果: %d", count)
+        }
+        static func searchContentErrorSummary(count: Int, error: String) -> String {
+            format("reader.search_content_error_summary", "搜索结果: %1$d，%2$@", count, error)
+        }
+        static func searchContentChapterSummary(count: Int, chapterTitle: String) -> String {
+            format("reader.search_content_chapter_summary", "搜索结果: %1$d / 当前章节: %2$@", count, chapterTitle)
+        }
+        static let sourceMenuLocalBookMessage = text(
+            "reader.source_menu_local_book_message", "本地书：可复制文件/书籍路径，书源登录、付费、Cookie、换源等网络源操作不可用。")
+        static let sourceMenuNoSourceMessage = text(
+            "reader.source_menu_no_source_message", "当前书籍没有关联书源，无法执行登录、付费、清 Cookie 或换源。")
+        static let sourceLocalBookUnavailable = text("reader.source_local_book_unavailable", "本地书不关联网络书源")
+        static let searchClosePanelFirst = text("reader.search_close_panel_first", "请先关闭当前面板后再搜索正文")
+        static let searchContentChanged = text("reader.search_content_changed", "正文已变化，请重新搜索")
+        static let downloadChoiceEmpty = text("reader.download.choice.empty", "当前没有可下载的章节")
+        static let downloadAlreadyRunning = text("reader.download_already_running", "本书正在缓存，可在书架的缓存/导出中查看或停止")
+        static let refreshNoChapters = text("reader.refresh_no_chapters", "当前没有可刷新的章节")
+        static let readAloudVoiceConfigUnavailable = text(
+            "reader.read_aloud_voice_config_unavailable", "朗读配置尚未加载，无法保存音色")
+        static let readAloudNotStarted = text("reader.read_aloud_not_started", "朗读尚未开始")
+        static let readAloudFirstParagraph = text("reader.read_aloud_first_paragraph", "已经是本章第一段")
+        static let readAloudLastParagraph = text("reader.read_aloud_last_paragraph", "已经是本章最后一段")
+        static let readAloudPaginationPending = text("reader.read_aloud_pagination_pending", "当前章节尚未分页完成，稍后再试")
+        static let readAloudNoChapterContent = text("reader.read_aloud_no_chapter_content", "当前章节没有正文内容，无法朗读")
+        static let readAloudNoPageParagraphs = text("reader.read_aloud_no_page_paragraphs", "当前页没有可朗读的正文段落")
+        static let readAloudBackgroundEnabled = text("reader.read_aloud_background_enabled", "已允许朗读后台播放")
+        static let readAloudBackgroundDisabled = text("reader.read_aloud_background_disabled", "已关闭朗读后台播放")
+        static let readAloudDefaultVoiceSelected = text("reader.read_aloud_default_voice_selected", "已切换为系统默认音色")
+        static let readAloudVoiceChanged = text("reader.read_aloud_voice_changed", "朗读音色已切换")
         static let titleBarInfoUnavailable = text("reader.title_bar_info_unavailable", "来源地址待提供")
         static let chapterListTitle = text("reader.chapter_list_title", "目录")
         static let chapterSearchPlaceholder = text("reader.chapter_search_placeholder", "搜索章节")
@@ -1183,9 +1239,11 @@ enum L10n {
         static let sourceMenuPay = text("reader.source_menu_pay", "章节付费")
         static let sourceMenuEdit = text("reader.source_menu_edit", "编辑书源")
         static let sourceMenuDisable = text("reader.source_menu_disable", "禁用书源")
-        static let sourceClearCookieConfirmMessage = text("reader.source_clear_cookie_confirm_message", "清除当前书源 Cookie 后，下一次加载可能需要重新登录。")
+        static let sourceClearCookieConfirmMessage = text(
+            "reader.source_clear_cookie_confirm_message", "清除当前书源 Cookie 后，下一次加载可能需要重新登录。")
         static let sourceCookiesCleared = text("reader.source_cookies_cleared", "书源 Cookie 已清理")
-        static let sourceDisableConfirmMessage = text("reader.source_disable_confirm_message", "禁用后该书源不会再参与搜索、换源或章节加载，确认继续吗？")
+        static let sourceDisableConfirmMessage = text(
+            "reader.source_disable_confirm_message", "禁用后该书源不会再参与搜索、换源或章节加载，确认继续吗？")
         static let sourceDisableSuccess = text("reader.source_disable_success", "已禁用该书源")
         static let sourceDisableNextStep = text("reader.source_disable_next_step", "当前阅读仍会停留在本书，可继续换源或进入书源管理。")
         static let copySourceUrl = text("reader.copy_source_url", "复制书源地址")
@@ -1250,15 +1308,19 @@ enum L10n {
         static let readAloudToc = text("reader.read_aloud_toc", "朗读目录")
         static let readAloudSettings = text("reader.read_aloud_settings", "朗读设置")
         static let readAloudIgnoreAudioFocusTitle = text("reader.read_aloud_ignore_audio_focus_title", "忽略音频焦点")
-        static let readAloudIgnoreAudioFocusSummary = text("reader.read_aloud_ignore_audio_focus_summary", "允许与其他应用同时播放音频")
+        static let readAloudIgnoreAudioFocusSummary = text(
+            "reader.read_aloud_ignore_audio_focus_summary", "允许与其他应用同时播放音频")
         static let readAloudPausePhoneCallsTitle = text("reader.read_aloud_pause_phone_calls_title", "来电期间暂停朗读")
-        static let readAloudPausePhoneCallsSummary = text("reader.read_aloud_pause_phone_calls_summary", "在通话期间暂停朗读，需要读取手机状态权限")
+        static let readAloudPausePhoneCallsSummary = text(
+            "reader.read_aloud_pause_phone_calls_summary", "在通话期间暂停朗读，需要读取手机状态权限")
         static let readAloudStreamAudioTitle = text("reader.read_aloud_stream_audio_title", "流式播放音频")
-        static let readAloudStreamAudioSummary = text("reader.read_aloud_stream_audio_summary", "即边下边播，网络不好时播放会断断续续，仅TTS源有效")
+        static let readAloudStreamAudioSummary = text(
+            "reader.read_aloud_stream_audio_summary", "即边下边播，网络不好时播放会断断续续，仅TTS源有效")
         static let readAloudSpeakEngineTitle = text("reader.read_aloud_speak_engine_title", "朗读引擎")
         static let readAloudSystemTts = text("reader.read_aloud_system_tts", "系统 TTS")
         static let readAloudSystemTtsConfigTitle = text("reader.read_aloud_system_tts_config_title", "系统 TTS 设置")
-        static let readAloudSystemTtsConfigSummary = text("reader.read_aloud_system_tts_config_summary", "打开系统 TTS 设置界面")
+        static let readAloudSystemTtsConfigSummary = text(
+            "reader.read_aloud_system_tts_config_summary", "打开系统 TTS 设置界面")
         static let readAloudFollowSystem = text("reader.read_aloud_follow_system", "跟随系统语速")
         static let readAloudVoiceTitle = text("reader.read_aloud_voice_title", "音色")
         static let readAloudVoiceSystemDefault = text("reader.read_aloud_voice_system_default", "系统默认")
@@ -1310,22 +1372,29 @@ enum L10n {
         static let brightnessAutoEnabled = text("reader.brightness_auto_enabled", "自动")
         static let brightnessAutoDisabled = text("reader.brightness_auto_disabled", "手动")
         static let brightnessModeTitle = text("reader.brightness_mode_title", "亮度跟随系统")
-        static let brightnessModeAutoSubtitle = text("reader.brightness_mode_auto_subtitle", "进入阅读页时跟随系统亮度，菜单亮度条只做临时调节。")
-        static let brightnessModeManualSubtitle = text("reader.brightness_mode_manual_subtitle", "保留阅读页自己的亮度值，适合夜间或固定环境阅读。")
+        static let brightnessModeAutoSubtitle = text(
+            "reader.brightness_mode_auto_subtitle", "进入阅读页时跟随系统亮度，菜单亮度条只做临时调节。")
+        static let brightnessModeManualSubtitle = text(
+            "reader.brightness_mode_manual_subtitle", "保留阅读页自己的亮度值，适合夜间或固定环境阅读。")
         static let brightnessModeAutoDetail = text("reader.brightness_mode_auto_detail", "跟随系统亮度，打开菜单后仍可临时拖动亮度条")
-        static let brightnessModeManualDetail = text("reader.brightness_mode_manual_detail", "使用阅读页独立亮度，切换书籍和章节时保持当前手动值")
+        static let brightnessModeManualDetail = text(
+            "reader.brightness_mode_manual_detail", "使用阅读页独立亮度，切换书籍和章节时保持当前手动值")
         static let brightnessPositionTitle = text("reader.brightness_position_title", "亮度条位置")
         static let brightnessPositionLeft = text("reader.brightness_position_left", "左侧")
         static let brightnessPositionRight = text("reader.brightness_position_right", "右侧")
-        static let brightnessPositionLeftSubtitle = text("reader.brightness_position_left_subtitle", "亮度条靠左，右手翻页时不遮挡主要触控区。")
-        static let brightnessPositionRightSubtitle = text("reader.brightness_position_right_subtitle", "亮度条靠右，左手持机时更容易调节。")
+        static let brightnessPositionLeftSubtitle = text(
+            "reader.brightness_position_left_subtitle", "亮度条靠左，右手翻页时不遮挡主要触控区。")
+        static let brightnessPositionRightSubtitle = text(
+            "reader.brightness_position_right_subtitle", "亮度条靠右，左手持机时更容易调节。")
         static let brightnessPositionLeftDetail = text("reader.brightness_position_left_detail", "亮度条显示在左侧，避开右侧翻页点击区域")
-        static let brightnessPositionRightDetail = text("reader.brightness_position_right_detail", "亮度条显示在右侧，适合左手持机或右侧调节习惯")
+        static let brightnessPositionRightDetail = text(
+            "reader.brightness_position_right_detail", "亮度条显示在右侧，适合左手持机或右侧调节习惯")
         static let progressBehaviorTitle = text("reader.progress_behavior_title", "进度条行为")
         static let progressBehaviorPage = text("reader.progress_behavior_page", "调整本章页数")
         static let progressBehaviorChapter = text("reader.progress_behavior_chapter", "调整章节位置")
         static let progressBehaviorPageDetail = text("reader.progress_behavior_page_detail", "底部进度条按当前分页拖动，细粒度定位到页")
-        static let progressBehaviorChapterDetail = text("reader.progress_behavior_chapter_detail", "底部进度条按章节跨度拖动，适合快速跨章定位")
+        static let progressBehaviorChapterDetail = text(
+            "reader.progress_behavior_chapter_detail", "底部进度条按章节跨度拖动，适合快速跨章定位")
         static func progressPreview(page: String, chapter: String) -> String {
             format("reader.progress_preview", "页数 %@ · 章节 %@", page, chapter)
         }
@@ -1335,10 +1404,13 @@ enum L10n {
         static let tapZoneConfigDetail = text("reader.tap_zone_config_detail", "阅读内调整")
         static let tapZoneConfigPrompt = text("reader.tap_zone_config_prompt", "配置九宫格点击区域动作")
         static let screenOrientationSystemDetail = text("reader.screen_orientation_system_detail", "沿用系统方向锁定和设备当前方向")
-        static let screenOrientationPortraitDetail = text("reader.screen_orientation_portrait_detail", "阅读页固定竖屏，适合手机单手连续阅读")
-        static let screenOrientationLandscapeDetail = text("reader.screen_orientation_landscape_detail", "阅读页固定横屏，适合双页或大屏阅读")
+        static let screenOrientationPortraitDetail = text(
+            "reader.screen_orientation_portrait_detail", "阅读页固定竖屏，适合手机单手连续阅读")
+        static let screenOrientationLandscapeDetail = text(
+            "reader.screen_orientation_landscape_detail", "阅读页固定横屏，适合双页或大屏阅读")
         static let screenOrientationAutoDetail = text("reader.screen_orientation_auto_detail", "允许阅读页跟随重力感应自动旋转")
-        static let screenOrientationReversePortraitDetail = text("reader.screen_orientation_reverse_portrait_detail", "阅读页固定反向竖屏，适合充电或支架场景")
+        static let screenOrientationReversePortraitDetail = text(
+            "reader.screen_orientation_reverse_portrait_detail", "阅读页固定反向竖屏，适合充电或支架场景")
         // F124: 滑动翻页阈值
         static let pageTouchSlopTitle = text("reader.page_touch_slop_title", "滑动翻页阈值")
         static let pageTouchSlopDialogTitle = text("reader.page_touch_slop_dialog_title", "滑动翻页阈值（0 = 系统默认值）")
@@ -1373,7 +1445,8 @@ enum L10n {
         static let operationClearCacheDetail = text("reader.operation_clear_cache_detail", "清除本书已缓存章节内容，之后阅读会重新加载")
         static let operationBookDetailDetail = text("reader.operation_book_detail_detail", "查看书籍详情、目录与书籍信息")
         static let operationReadAloudDetail = text("reader.operation_read_aloud_detail", "打开朗读控制、语速、定时和后台朗读设置")
-        static let operationRefreshChaptersDetail = text("reader.operation_refresh_chapters_detail", "重新同步目录，并尽量定位到当前章节")
+        static let operationRefreshChaptersDetail = text(
+            "reader.operation_refresh_chapters_detail", "重新同步目录，并尽量定位到当前章节")
         static let operationBookmarkListDetail = text("reader.operation_bookmark_list_detail", "查看和管理当前书籍书签")
         static let operationSyncProgressDetail = text("reader.operation_sync_progress_detail", "与云端阅读进度对齐")
         static let operationSearchDetail = text("reader.operation_search_detail", "在当前章节或全书正文中搜索")
@@ -1381,14 +1454,17 @@ enum L10n {
         static let operationReplaceRuleDetail = text("reader.operation_replace_rule_detail", "开启/关闭替换规则，或查看当前生效规则")
         static let operationReverseContentDetail = text("reader.operation_reverse_content_detail", "会改写当前章节正文缓存的段落顺序")
         static let operationReSegmentDetail = text("reader.operation_re_segment_detail", "切换后会刷新当前章节排版")
-        static let operationRemoveDuplicateTitleDetail = text("reader.operation_remove_duplicate_title_detail", "过滤正文中重复出现的章节标题")
+        static let operationRemoveDuplicateTitleDetail = text(
+            "reader.operation_remove_duplicate_title_detail", "过滤正文中重复出现的章节标题")
         static let operationDeleteRubyTagDetail = text("reader.operation_delete_ruby_tag_detail", "过滤 Ruby 注音标签后重新渲染")
         static let operationDeleteHTagDetail = text("reader.operation_delete_h_tag_detail", "过滤 HTML 标题标签后重新渲染")
         static let operationCharsetDetail = text("reader.operation_charset_detail", "重新识别文本编码并刷新目录/正文")
         static let operationImageStyleDetail = text("reader.operation_image_style_detail", "调整正文图片显示方式")
         static let operationAddToBookshelfDetail = text("reader.operation_add_to_bookshelf_detail", "加入书架后可同步进度与管理缓存")
-        static let reverseContentConfirmMessage = text("reader.reverse_content_confirm_message", "将反转并保存当前章节正文缓存的段落顺序。需要恢复时可刷新当前章节重新拉取原文。")
-        static let clearCacheConfirmReaderMessage = text("reader.clear_cache_confirm_reader_message", "会移除本书已缓存章节内容，当前阅读位置不会删除；后续打开章节时将重新从书源加载。")
+        static let reverseContentConfirmMessage = text(
+            "reader.reverse_content_confirm_message", "将反转并保存当前章节正文缓存的段落顺序。需要恢复时可刷新当前章节重新拉取原文。")
+        static let clearCacheConfirmReaderMessage = text(
+            "reader.clear_cache_confirm_reader_message", "会移除本书已缓存章节内容，当前阅读位置不会删除；后续打开章节时将重新从书源加载。")
         static let readerOperationTitle = text("reader.operation_title", "阅读操作")
         static let hideStatusBarDetail = text("reader.hide_status_bar_detail", "菜单收起后隐藏状态栏")
         static let hideNavigationBarDetail = text("reader.hide_navigation_bar_detail", "阅读时隐藏系统导航栏")
@@ -1424,7 +1500,8 @@ enum L10n {
         static let screenTimeoutAlways = text("reader.screen_timeout_always", "常亮")
         static let screenTimeoutDefaultDetail = text("reader.screen_timeout_default_detail", "跟随系统屏幕超时")
         static let screenTimeoutOneMinuteDetail = text("reader.screen_timeout_one_minute_detail", "阅读时 1 分钟无操作后允许熄屏")
-        static let screenTimeoutFiveMinutesDetail = text("reader.screen_timeout_five_minutes_detail", "阅读时 5 分钟无操作后允许熄屏")
+        static let screenTimeoutFiveMinutesDetail = text(
+            "reader.screen_timeout_five_minutes_detail", "阅读时 5 分钟无操作后允许熄屏")
         static let screenTimeoutTenMinutesDetail = text("reader.screen_timeout_ten_minutes_detail", "阅读时 10 分钟无操作后允许熄屏")
         static let screenTimeoutAlwaysDetail = text("reader.screen_timeout_always_detail", "阅读期间保持屏幕常亮")
         static let textSelectableTitle = text("reader.text_selectable_title", "长按选择文本")
@@ -1437,11 +1514,16 @@ enum L10n {
         static let doublePageHorizontalSinglePage = text("reader.double_page_horizontal_single_page", "全局单页")
         static let doublePageHorizontalDoublePage = text("reader.double_page_horizontal_double_page", "全局双页")
         static let doublePageHorizontalLandscape = text("reader.double_page_horizontal_landscape", "横屏双页")
-        static let doublePageHorizontalTabletOrLandscape = text("reader.double_page_horizontal_tablet_or_landscape", "平板或横屏双页")
-        static let doublePageHorizontalSinglePageDetail = text("reader.double_page_horizontal_single_page_detail", "始终按单页分页与显示")
-        static let doublePageHorizontalDoublePageDetail = text("reader.double_page_horizontal_double_page_detail", "始终左右并排显示两页")
-        static let doublePageHorizontalLandscapeDetail = text("reader.double_page_horizontal_landscape_detail", "仅在横屏阅读时启用双页")
-        static let doublePageHorizontalTabletOrLandscapeDetail = text("reader.double_page_horizontal_tablet_or_landscape_detail", "平板设备或横屏阅读时启用双页")
+        static let doublePageHorizontalTabletOrLandscape = text(
+            "reader.double_page_horizontal_tablet_or_landscape", "平板或横屏双页")
+        static let doublePageHorizontalSinglePageDetail = text(
+            "reader.double_page_horizontal_single_page_detail", "始终按单页分页与显示")
+        static let doublePageHorizontalDoublePageDetail = text(
+            "reader.double_page_horizontal_double_page_detail", "始终左右并排显示两页")
+        static let doublePageHorizontalLandscapeDetail = text(
+            "reader.double_page_horizontal_landscape_detail", "仅在横屏阅读时启用双页")
+        static let doublePageHorizontalTabletOrLandscapeDetail = text(
+            "reader.double_page_horizontal_tablet_or_landscape_detail", "平板设备或横屏阅读时启用双页")
         static let selectionMore = text("reader.selection_more", "更多")
         static let refreshingChapters = text("reader.refreshing_chapters", "正在刷新章节 %1$d/%2$d …")
         static let refreshComplete = text("reader.refresh_complete", "已刷新 %d 个章节")
@@ -1689,7 +1771,8 @@ enum L10n {
         static let chapterChangeSourceSelectChapter = text("reader.chapter_change_source_select_chapter", "选择候选章节")
         static let chapterChangeSourceReplacing = text("reader.chapter_change_source_replacing", "正在替换当前章节…")
         static let chapterChangeSourceEmptyToc = text("reader.chapter_change_source_empty_toc", "候选源目录为空")
-        static let chapterChangeSourceCurrentFormat = text("reader.chapter_change_source_current_format", "当前：%d/%d  %@")
+        static let chapterChangeSourceCurrentFormat = text(
+            "reader.chapter_change_source_current_format", "当前：%d/%d  %@")
         static let chapterChangeSourceSuccess = text("reader.chapter_change_source_success", "章节换源成功")
         // F161: 漫画菜单
         static let comicMenu = text("reader.comic_menu", "漫画设置")
@@ -1757,7 +1840,8 @@ enum L10n {
         // F20: 清除阅读记录
         static let clearReadRecords = text("rss.clear_read_records", "清除阅读记录")
         static let clearReadRecordsConfirmTitle = text("rss.clear_read_records_confirm_title", "清除阅读记录")
-        static let clearReadRecordsConfirmMessage = text("rss.clear_read_records_confirm_message", "确定清除全部 RSS 阅读记录？清除后文章将重新显示为未读状态。")
+        static let clearReadRecordsConfirmMessage = text(
+            "rss.clear_read_records_confirm_message", "确定清除全部 RSS 阅读记录？清除后文章将重新显示为未读状态。")
         static let clearReadRecordsSuccess = text("rss.clear_read_records_success", "阅读记录已清除")
         // F21: 收藏编辑
         static let editFavoriteTitle = text("rss.edit_favorite_title", "编辑收藏")
@@ -1823,7 +1907,8 @@ enum L10n {
         static let sourceManagementGroupFilter = text("rss.source_management_group_filter", "分组")
         static let sourceManagementAllGroups = text("rss.source_management_all_groups", "全部分组")
         static let sourceManagementImportTitle = text("rss.source_management_import_title", "导入 RSS 源")
-        static let sourceManagementImportPlaceholder = text("rss.source_management_import_placeholder", "粘贴 RSS 源 JSON 数据")
+        static let sourceManagementImportPlaceholder = text(
+            "rss.source_management_import_placeholder", "粘贴 RSS 源 JSON 数据")
         static func sourceManagementImportSuccess(_ count: Int32) -> String {
             format("rss.source_management_import_success", "已导入 %d 个 RSS 源", Int(count))
         }

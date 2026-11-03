@@ -30,7 +30,7 @@ final class ReaderChapterMessageCoordinator {
         guard let reader else { return }
         let context = begin(index: index, in: reader)
         reader.loadFailureView.showLoading(
-            message: message ?? NSLocalizedString("加载数据中…", comment: "Reader chapter loading message"),
+            message: message ?? L10n.Reader.chapterLoading,
             theme: reader.readerRenderTheme(),
             onMenu: { [weak self] in
                 self?.openMenu(for: context, isFailure: false)

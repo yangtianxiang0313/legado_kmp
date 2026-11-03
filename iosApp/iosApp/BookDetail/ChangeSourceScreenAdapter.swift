@@ -200,6 +200,9 @@ enum SourceChangeText: String {
     case typeTitle = "source_change.type_title"
     case typeMessage = "source_change.type_message"
     case loadingToc = "source_change.loading_toc"
+    case loadTocFailed = "source_change.load_toc_failed"
+    case autoChangeFailed = "source_change.auto_change_failed"
+    case autoChangeNoSources = "source_change.auto_change_no_sources"
     case loadingContent = "source_change.loading_content"
     case replacingContent = "source_change.replacing_content"
     case cannotCancel = "source_change.cannot_cancel"
@@ -279,6 +282,9 @@ enum SourceChangeText: String {
         case .typeTitle: return ("Different types of books", "书籍类型不一样")
         case .typeMessage: return ("Confirm source change?", "是否确认换源")
         case .loadingToc: return ("Loading chapters", "正在加载目录")
+        case .loadTocFailed: return ("Failed to load chapters for source change", "换源获取目录出错")
+        case .autoChangeFailed: return ("Automatic source change failed", "自动换源失败")
+        case .autoChangeNoSources: return ("Automatic source change failed\nNo valid source", "自动换源失败\n没有有效源")
         case .loadingContent: return ("Loading chapter content", "正在加载正文")
         case .replacingContent: return ("Replacing chapter content", "正在替换正文")
         case .cannotCancel: return ("Cannot cancel while saving", "正在保存，暂不可取消")

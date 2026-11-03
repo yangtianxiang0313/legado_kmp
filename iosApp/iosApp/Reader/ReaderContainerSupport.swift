@@ -162,10 +162,10 @@ extension ReaderContainerViewController {
 
     func sourceMenuMessage(origin: String, chapterURL: String, isLocalBook: Bool) -> String {
         if isLocalBook {
-            return "本地书：可复制文件/书籍路径，书源登录、付费、Cookie、换源等网络源操作不可用。"
+            return L10n.Reader.sourceMenuLocalBookMessage
         }
         if origin.isEmpty {
-            return "当前书籍没有关联书源，无法执行登录、付费、清 Cookie 或换源。"
+            return L10n.Reader.sourceMenuNoSourceMessage
         }
         if let chapterURL = chapterURL.nilIfEmpty {
             return chapterURL
@@ -175,7 +175,7 @@ extension ReaderContainerViewController {
 
     func sourceUnavailableReason(origin: String, isLocalBook: Bool) -> String {
         if isLocalBook {
-            return "本地书不关联网络书源"
+            return L10n.Reader.sourceLocalBookUnavailable
         }
         if origin.isEmpty {
             return L10n.BookDetail.editSourceUnavailable
@@ -183,7 +183,9 @@ extension ReaderContainerViewController {
         return L10n.Reader.unavailable
     }
 
-    func disabledSourceAction(title: String, systemImage: String, reason: String) -> AndroidSourceMenuSheetViewController.Action {
+    func disabledSourceAction(title: String, systemImage: String, reason: String)
+        -> AndroidSourceMenuSheetViewController.Action
+    {
         .init(
             title: title,
             systemImage: systemImage,
@@ -195,7 +197,7 @@ extension ReaderContainerViewController {
 
     func validateRemoteSourceOperation(origin: String) -> Bool {
         if book?.isLocal == true {
-            showToast("本地书不关联网络书源")
+            showToast(L10n.Reader.sourceLocalBookUnavailable)
             return false
         }
         if origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -260,7 +262,7 @@ extension ReaderContainerViewController {
         focusedResultIndex: Int? = nil
     ) {
         guard presentedViewController == nil else {
-            showToast("请先关闭当前面板后再搜索正文")
+            showToast(L10n.Reader.searchClosePanelFirst)
             return
         }
         jumpNavigationCoordinator.prepareSearch(in: self)
@@ -330,7 +332,7 @@ extension ReaderContainerViewController {
         let shouldJump = searchResultNeedsJump
         searchResultNeedsJump = false
         guard let range = ReaderSearchSelectionMapper.range(for: result, content: chapterContent, pages: pages) else {
-            if shouldJump { showToast("正文已变化，请重新搜索") }
+            if shouldJump { showToast(L10n.Reader.searchContentChanged) }
             return nil
         }
         pendingSearchSelectionRange = range
@@ -455,7 +457,9 @@ extension ReaderContainerViewController {
         }
         let currentTitle = chapterTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if currentTitle.isEmpty == false,
-            let matched = refreshedChapters.first(where: { $0.title.trimmingCharacters(in: .whitespacesAndNewlines) == currentTitle })
+            let matched = refreshedChapters.first(where: {
+                $0.title.trimmingCharacters(in: .whitespacesAndNewlines) == currentTitle
+            })
         {
             return min(max(Int(matched.index), 0), refreshedChapters.count - 1)
         }
@@ -468,7 +472,7 @@ extension ReaderContainerViewController {
             return
         }
         guard chapters.isEmpty == false else {
-            showToast("当前没有可下载的章节")
+            showToast(L10n.Reader.downloadChoiceEmpty)
             return
         }
         let safeStartIndex = min(max(startIndex, 0), chapters.count - 1)
@@ -481,13 +485,13 @@ extension ReaderContainerViewController {
         if CacheDownloadCoordinator.shared.start(book: book, startIndex: safeStartIndex, endIndex: safeEndIndex) {
             showToast(L10n.Reader.downloadStarted)
         } else {
-            showToast("本书正在缓存，可在书架的缓存/导出中查看或停止")
+            showToast(L10n.Reader.downloadAlreadyRunning)
         }
     }
 
     func refreshChapterCacheFromCurrent() {
         guard chapters.indices.contains(chapterIndex) else {
-            showToast("当前没有可刷新的章节")
+            showToast(L10n.Reader.refreshNoChapters)
             return
         }
         loadingIndicator.startAnimating()
@@ -511,7 +515,7 @@ extension ReaderContainerViewController {
 
     func refreshAllChapterCache() {
         guard chapters.isEmpty == false else {
-            showToast("当前没有可刷新的章节")
+            showToast(L10n.Reader.refreshNoChapters)
             return
         }
         loadingIndicator.startAnimating()
@@ -552,7 +556,8 @@ extension ReaderContainerViewController {
                 }
                 try await self.screen.updateReadAloudSpeechRate(
                     followSystem: followSystem,
-                    value: Self.normalizedReadAloudSpeechRate(followSystem: followSystem, sliderValue: normalizedSliderValue)
+                    value: Self.normalizedReadAloudSpeechRate(
+                        followSystem: followSystem, sliderValue: normalizedSliderValue)
                 )
             } catch is CancellationError {
                 return
@@ -584,7 +589,7 @@ extension ReaderContainerViewController {
 
     func updateReadAloudVoice(_ identifier: String?) {
         guard let config = runtimeConfig?.reader else {
-            showToast("朗读配置尚未加载，无法保存音色")
+            showToast(L10n.Reader.readAloudVoiceConfigUnavailable)
             return
         }
         readAloudService.updateVoiceIdentifier(identifier)
@@ -638,7 +643,7 @@ extension ReaderContainerViewController {
 
     func skipReadAloudParagraph(previous: Bool) {
         guard readAloudState?.status == .running || readAloudState?.status == .paused else {
-            showToast("朗读尚未开始")
+            showToast(L10n.Reader.readAloudNotStarted)
             return
         }
         let blocks = chapterReadAloudBlocks()
@@ -649,11 +654,11 @@ extension ReaderContainerViewController {
         if let currentBlockIndex = readAloudState?.progress.blockIndex {
             let orderedBlockIndexes = blocks.map { Int($0.blockIndex) }.sorted()
             if previous, orderedBlockIndexes.first == Int(currentBlockIndex) {
-                showToast("已经是本章第一段")
+                showToast(L10n.Reader.readAloudFirstParagraph)
                 return
             }
             if previous == false, orderedBlockIndexes.last == Int(currentBlockIndex) {
-                showToast("已经是本章最后一段")
+                showToast(L10n.Reader.readAloudLastParagraph)
                 return
             }
         }
@@ -669,22 +674,23 @@ extension ReaderContainerViewController {
 
     func readAloudEmptyContentMessage() -> String {
         if pages.isEmpty {
-            return "当前章节尚未分页完成，稍后再试"
+            return L10n.Reader.readAloudPaginationPending
         }
         if chapterContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "当前章节没有正文内容，无法朗读"
+            return L10n.Reader.readAloudNoChapterContent
         }
-        return "当前页没有可朗读的正文段落"
+        return L10n.Reader.readAloudNoPageParagraphs
     }
 
     func setReadAloudBackgroundPlaybackFromSheet(_ enabled: Bool) {
         runReadAloudTask { try await $0.setReadAloudBackgroundPlayback(enabled: enabled) }
-        showToast(enabled ? "已允许朗读后台播放" : "已关闭朗读后台播放")
+        showToast(enabled ? L10n.Reader.readAloudBackgroundEnabled : L10n.Reader.readAloudBackgroundDisabled)
     }
 
     func saveReadAloudSpeechRateFromSheet(followSystem: Bool, value: Float) {
         let normalizedSliderValue = min(max(value, 0), 45)
-        readAloudService.updateSpeechRate(Self.normalizedReadAloudSpeechRate(followSystem: followSystem, sliderValue: normalizedSliderValue))
+        readAloudService.updateSpeechRate(
+            Self.normalizedReadAloudSpeechRate(followSystem: followSystem, sliderValue: normalizedSliderValue))
         saveReadAloudSpeechRate(followSystem: followSystem, value: normalizedSliderValue)
     }
 
@@ -695,7 +701,9 @@ extension ReaderContainerViewController {
     func updateReadAloudVoiceFromSheet(_ identifier: String?) {
         readAloudService.updateVoiceIdentifier(identifier)
         updateReadAloudVoice(identifier)
-        showToast(identifier?.nilIfEmpty == nil ? "已切换为系统默认音色" : "朗读音色已切换")
+        showToast(
+            identifier?.nilIfEmpty == nil
+                ? L10n.Reader.readAloudDefaultVoiceSelected : L10n.Reader.readAloudVoiceChanged)
     }
 
     static func normalizedReadAloudSpeechRate(followSystem: Bool, sliderValue: Float) -> Float {

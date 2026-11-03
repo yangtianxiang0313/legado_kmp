@@ -1,3 +1,4 @@
+import CoreText
 import UIKit
 import shared
 
@@ -298,6 +299,14 @@ final class ReaderTocChapterCell: UITableViewCell {
 
 /// Shared by the chapter and bookmark cells to preserve Android's single-line TextView box.
 final class ReaderTocSingleLineLabel: UILabel {
+    var usesFallbackLineMetrics = false {
+        didSet {
+            fallbackLineHeight = nil
+            invalidateIntrinsicContentSize()
+            setNeedsDisplay()
+        }
+    }
+    private var fallbackLineHeight: CGFloat?
     var endPadding: CGFloat = 0 {
         didSet {
             invalidateIntrinsicContentSize()
@@ -307,6 +316,7 @@ final class ReaderTocSingleLineLabel: UILabel {
 
     override var font: UIFont! {
         didSet {
+            fallbackLineHeight = nil
             invalidateIntrinsicContentSize()
             setNeedsDisplay()
         }
@@ -318,6 +328,7 @@ final class ReaderTocSingleLineLabel: UILabel {
             // SingleLineTransformationMethod:27-28; keep the source in cell accessibility.
             super.text = newValue?.replacingOccurrences(of: "\n", with: " ")
                 .replacingOccurrences(of: "\r", with: "\u{FEFF}")
+            fallbackLineHeight = nil
             invalidateIntrinsicContentSize()
             setNeedsDisplay()
         }
@@ -325,6 +336,20 @@ final class ReaderTocSingleLineLabel: UILabel {
 
     private var fontPadding: UIEdgeInsets {
         AndroidExploreTextMetrics.padding(font: font, scale: traitCollection.displayScale)
+    }
+
+    private var minimumLineHeight: CGFloat {
+        guard usesFallbackLineMetrics, let text, !text.isEmpty else { return font.lineHeight }
+        if let fallbackLineHeight { return fallbackLineHeight }
+        // Mixed-script fallback faces can extend above or below Roboto's own line box.
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font as Any]))
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+        let height = max(font.lineHeight, ascent + descent + max(0, leading))
+        fallbackLineHeight = height
+        return height
     }
 
     override var intrinsicContentSize: CGSize {
@@ -346,7 +371,7 @@ final class ReaderTocSingleLineLabel: UILabel {
         return CGSize(
             width: ceil((max(0, size.width) + endPadding) * scale) / scale,
             // Empty titles retain one line; round the complete includeFontPadding box up.
-            height: ceil((max(font.lineHeight, size.height) + padding.top + padding.bottom) * scale) / scale)
+            height: ceil((max(minimumLineHeight, size.height) + padding.top + padding.bottom) * scale) / scale)
     }
 
     override func drawText(in rect: CGRect) {

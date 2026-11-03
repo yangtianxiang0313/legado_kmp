@@ -43270,6 +43270,482 @@
           }
         }
       }
+    },
+    "reader.search_content_result_count": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索结果: %d"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search results: %d"
+          }
+        }
+      }
+    },
+    "reader.search_content_empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索内容为空，请检查净化或简繁设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No search results. Check text cleanup or simplified/traditional Chinese settings."
+          }
+        }
+      }
+    },
+    "reader.search_content_source_invalidated": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍已变化，请重新打开正文搜索"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The book has changed. Reopen in-book search."
+          }
+        }
+      }
+    },
+    "reader.search_content_error_summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索结果: %1$d，%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search results: %1$d, %2$@"
+          }
+        }
+      }
+    },
+    "reader.search_content_chapter_summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索结果: %1$d / 当前章节: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search results: %1$d / Current chapter: %2$@"
+          }
+        }
+      }
+    },
+    "reader.chapter_loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载数据中…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading…"
+          }
+        }
+      }
+    },
+    "source_change.load_toc_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "换源获取目录出错"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to load chapters for source change"
+          }
+        }
+      }
+    },
+    "source_change.auto_change_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动换源失败"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic source change failed"
+          }
+        }
+      }
+    },
+    "reader.source_menu_local_book_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地书：可复制文件/书籍路径，书源登录、付费、Cookie、换源等网络源操作不可用。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local book: you can copy the file or book path. Online source actions such as signing in, paying for chapters, managing cookies, and switching sources are unavailable."
+          }
+        }
+      }
+    },
+    "reader.source_menu_no_source_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前书籍没有关联书源，无法执行登录、付费、清 Cookie 或换源。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book has no linked source. Signing in, paying for chapters, clearing cookies, and switching sources are unavailable."
+          }
+        }
+      }
+    },
+    "reader.source_local_book_unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地书不关联网络书源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local books are not linked to online sources"
+          }
+        }
+      }
+    },
+    "reader.search_close_panel_first": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先关闭当前面板后再搜索正文"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close the current panel before searching the book text"
+          }
+        }
+      }
+    },
+    "reader.search_content_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正文已变化，请重新搜索"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text has changed. Search again."
+          }
+        }
+      }
+    },
+    "reader.download_already_running": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本书正在缓存，可在书架的缓存/导出中查看或停止"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book is already being cached. View or stop it in Cache / Export on the bookshelf."
+          }
+        }
+      }
+    },
+    "reader.refresh_no_chapters": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前没有可刷新的章节"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No chapters are available to refresh"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_voice_config_unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "朗读配置尚未加载，无法保存音色"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read-aloud settings have not loaded. The voice cannot be saved."
+          }
+        }
+      }
+    },
+    "reader.read_aloud_not_started": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "朗读尚未开始"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read aloud has not started"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_first_paragraph": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经是本章第一段"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already at the first paragraph of this chapter"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_last_paragraph": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经是本章最后一段"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already at the last paragraph of this chapter"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_pagination_pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前章节尚未分页完成，稍后再试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This chapter is still being paginated. Try again shortly."
+          }
+        }
+      }
+    },
+    "reader.read_aloud_no_chapter_content": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前章节没有正文内容，无法朗读"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This chapter has no body text to read aloud"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_no_page_paragraphs": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前页没有可朗读的正文段落"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This page has no body paragraphs to read aloud"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_background_enabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已允许朗读后台播放"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background playback for read aloud is enabled"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_background_disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已关闭朗读后台播放"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background playback for read aloud is disabled"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_default_voice_selected": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已切换为系统默认音色"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switched to the system default voice"
+          }
+        }
+      }
+    },
+    "reader.read_aloud_voice_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "朗读音色已切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read-aloud voice changed"
+          }
+        }
+      }
+    },
+    "reader.load_failure_reading_menu": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读菜单"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading menu"
+          }
+        }
+      }
+    },
+    "source_change.auto_change_no_sources": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动换源失败\n没有有效源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic source change failed\nNo valid source"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

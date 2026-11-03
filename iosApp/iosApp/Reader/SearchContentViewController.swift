@@ -264,7 +264,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         let menu = ReaderOverflowMenuView(
             items: [
                 .init(
-                    identifier: "reader_search_replace_enabled", title: "替换",
+                    identifier: "reader_search_replace_enabled", title: L10n.Reader.quickReplaceAction,
                     isChecked: options.replaceEnabled
                 ) { [weak self] in
                     guard let self, self.canUseControls, !self.isSourceInvalidated,
@@ -361,7 +361,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         message = nil
         if results.isEmpty, let completion {
             switch completion {
-            case .finished: message = "搜索内容为空，请检查净化或简繁设置"
+            case .finished: message = L10n.Reader.searchContentEmpty
             case .stopped: break
             case .failed(let error): message = error
             }
@@ -446,9 +446,10 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
     }
 
     private func updateSummary() {
-        let count = "搜索结果: \(results.count)"
+        let count = L10n.Reader.searchContentResultCount(results.count)
         switch completion {
-        case .failed(let error): page.setSummary("\(count)，\(error)", isError: true)
+        case .failed(let error):
+            page.setSummary(L10n.Reader.searchContentErrorSummary(count: results.count, error: error), isError: true)
         default: page.setSummary(count)
         }
     }
@@ -459,7 +460,7 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
         isSourceInvalidated = true
         needsResultReset = true
         needsDelivery = true
-        completion = .failed("书籍已变化，请重新打开正文搜索")
+        completion = .failed(L10n.Reader.searchContentSourceInvalidated)
         refreshInteractionAvailability()
     }
 
@@ -731,7 +732,8 @@ final class SearchContentViewController: UIViewController, UITextFieldDelegate, 
                 UIApplication.shared.applicationState == .active, scene?.activationState == .foregroundActive
             else { return }
             delegate?.searchContentDidSelectResult(
-                selection.result, at: selection.row, allResults: snapshot, options: options, resultOptions: resultOptions)
+                selection.result, at: selection.row, allResults: snapshot, options: options,
+                resultOptions: resultOptions)
         }
     }
 }

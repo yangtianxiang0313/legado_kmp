@@ -21,7 +21,10 @@ final class WholeBookSourceChangeCoordinator {
 
     var isBusy: Bool { operationID != nil }
 
-    init(host: UIViewController, currentBook: Book?, selection: WholeBookSourceSelection, onBusyChange: @escaping (Bool) -> Void) {
+    init(
+        host: UIViewController, currentBook: Book?, selection: WholeBookSourceSelection,
+        onBusyChange: @escaping (Bool) -> Void
+    ) {
         self.host = host
         self.currentBook = currentBook
         self.selection = selection
@@ -64,7 +67,9 @@ final class WholeBookSourceChangeCoordinator {
                 }
             }
             do {
-                if let currentBook, SourceChangeBookTypePolicy.requiresConfirmation(candidate: candidate, current: currentBook) {
+                if let currentBook,
+                    SourceChangeBookTypePolicy.requiresConfirmation(candidate: candidate, current: currentBook)
+                {
                     guard await confirmType(id), accepts(id) else { return }
                 }
                 try Task.checkCancellation()
@@ -77,12 +82,18 @@ final class WholeBookSourceChangeCoordinator {
                     host.present(dialog, animated: true) { continuation.resume() }
                 }
                 try Task.checkCancellation()
-                guard accepts(id), dialog.presentingViewController != nil, !dialog.isBeingDismissed else { throw CancellationError() }
+                guard accepts(id), dialog.presentingViewController != nil, !dialog.isBeingDismissed else {
+                    throw CancellationError()
+                }
                 let prepared = try await selection.prepare(candidate)
                 try Task.checkCancellation()
-                guard accepts(id), dialog.presentingViewController != nil, !dialog.isBeingDismissed else { throw CancellationError() }
+                guard accepts(id), dialog.presentingViewController != nil, !dialog.isBeingDismissed else {
+                    throw CancellationError()
+                }
                 guard !prepared.chapters.isEmpty else {
-                    throw NSError(domain: "io.legado.sourceChange", code: 1, userInfo: [NSLocalizedDescriptionKey: L10n.Reader.chapterChangeSourceEmptyToc])
+                    throw NSError(
+                        domain: "io.legado.sourceChange", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: L10n.Reader.chapterChangeSourceEmptyToc])
                 }
                 phase = .committing
                 dialog.setCancellationEnabled(false)
@@ -94,7 +105,8 @@ final class WholeBookSourceChangeCoordinator {
             } catch {
                 await finishWait()
                 guard !(error is CancellationError), !Task.isCancelled, accepts(id) else { return }
-                let message = "换源获取目录出错\n\(error.userFacingMessage)"
+                let title = phase == .preparing ? SourceChangeText.loadTocFailed.value : L10n.Reader.changeSourceFailed
+                let message = "\(title)\n\(error.userFacingMessage)"
                 SharedRuntime.log(message)
                 host.showTransientMessage(message)
             }
