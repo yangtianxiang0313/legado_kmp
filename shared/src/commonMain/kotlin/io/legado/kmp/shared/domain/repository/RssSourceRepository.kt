@@ -30,6 +30,8 @@ interface RssSourceRepository {
 
     suspend fun insert(vararg rssSource: RssSource)
     suspend fun update(vararg rssSource: RssSource)
+    /** Updates only article style and returns the current source, or null if it was deleted. */
+    suspend fun setArticleStyle(sourceUrl: String, articleStyle: Int): RssSource?
     suspend fun delete(vararg rssSource: RssSource)
     suspend fun delete(sourceUrl: String)
     suspend fun deleteDefault()

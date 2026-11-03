@@ -15,6 +15,8 @@ import io.legado.kmp.shared.model.RssArticle
 import io.legado.kmp.shared.model.RssSource
 import io.legado.kmp.shared.model.RssStar
 import io.legado.kmp.shared.model.SourceGroups
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 
 data class RssArticlesPayload(
@@ -146,6 +148,16 @@ class RssFacade(
     suspend fun setRssSourceEnabled(sourceUrl: String, enabled: Boolean) {
         runRecoverable("RssFacade.setRssSourceEnabled") {
             rssSourceRepository.enable(sourceUrl, enabled)
+        }
+    }
+
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun setArticleStyle(sourceUrl: String, articleStyle: Int): RssSource? {
+        return runRecoverable("RssFacade.setArticleStyle") {
+            require(articleStyle in 0..2) { "RSS article style must be in 0..2" }
+            withContext(Dispatchers.Default) {
+                rssSourceRepository.setArticleStyle(sourceUrl, articleStyle)
+            }
         }
     }
 

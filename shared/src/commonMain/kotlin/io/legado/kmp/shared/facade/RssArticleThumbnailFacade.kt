@@ -100,7 +100,7 @@ class RssArticleThumbnailFacade(
                     currentCoroutineContext().ensureActive()
                     validateCacheImage(decoded)
                     val latestSource = sources.getByKey(article.origin)
-                    if (source?.let { Json.encodeToString(it) } != latestSource?.let { Json.encodeToString(it) }) {
+                    if (imageConfiguration(source) != imageConfiguration(latestSource)) {
                         return@withKey null
                     }
                     // Response/decoder scripts may update cookies or variables. Keep the original cache partition.
@@ -123,7 +123,7 @@ class RssArticleThumbnailFacade(
         val partition = cookies.imageCachePartition()
         val context = listOf(
             "rss-thumbnail-v1", article.origin, article.link, image, article.variable,
-            source?.let { Json.encodeToString(it) },
+            imageConfiguration(source),
             source?.let { state.getSourceVariable(it.sourceUrl) },
             source?.let {
                 Json.encodeToString(state.getSourceVariableMap(it.sourceUrl).entries.sortedBy { entry -> entry.key }
@@ -139,4 +139,8 @@ class RssArticleThumbnailFacade(
             Json.encodeToString(listOf(configuration, it)).encodeUtf8().sha256().hex()
         })
     }
+
+    // Presentation does not reach the image transport's BookSource shim; credentials and rules still do.
+    private fun imageConfiguration(source: RssSource?): String? =
+        source?.let { Json.encodeToString(it.copy(articleStyle = 0)) }
 }

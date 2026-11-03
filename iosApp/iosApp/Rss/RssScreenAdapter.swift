@@ -52,7 +52,9 @@ final class RssScreenAdapter {
         }
     }
 
-    func loadArticles(sortName: String, sortUrl: String, source: RssSource, page: Int32) async throws -> RssArticlesPayload {
+    func loadArticles(sortName: String, sortUrl: String, source: RssSource, page: Int32) async throws
+        -> RssArticlesPayload
+    {
         guard let facade else { throw runtimeNotReadyError() }
         return try await facade.loadArticlesAsync(sortName: sortName, sortUrl: sortUrl, source: source, page: page)
     }
@@ -65,6 +67,13 @@ final class RssScreenAdapter {
     func loadSource(sourceURL: String) async throws -> RssSource? {
         guard let facade else { throw runtimeNotReadyError() }
         return try await facade.getSourceAsync(sourceUrl: sourceURL)
+    }
+
+    func setArticleStyle(sourceURL: String, style: Int32) async throws -> RssSource? {
+        guard let facade else { throw runtimeNotReadyError() }
+        return try await SharedAsync.optionalValue { completion in
+            facade.setArticleStyle(sourceUrl: sourceURL, articleStyle: style, completionHandler: completion)
+        }
     }
 
     func toggleFavorite(article: RssArticle) async throws -> Bool {

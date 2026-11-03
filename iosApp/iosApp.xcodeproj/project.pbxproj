@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F04114010000000000000001 /* RssArticlePresentationStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04114020000000000000001 /* RssArticlePresentationStyle.swift */; };
+		F04114010000000000000002 /* RssArticleMediaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04114020000000000000002 /* RssArticleMediaView.swift */; };
+		F04114010000000000000003 /* RssArticleWideCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04114020000000000000003 /* RssArticleWideCell.swift */; };
+		F04114010000000000000004 /* RssArticleGridCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04114020000000000000004 /* RssArticleGridCell.swift */; };
+		F04114010000000000000005 /* RssArticleListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04114020000000000000005 /* RssArticleListController.swift */; };
 		F03113010000000000000001 /* AndroidReplicaRssArticleCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000001 /* AndroidReplicaRssArticleCell.swift */; };
 		F03113010000000000000002 /* RssFavoritePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000002 /* RssFavoritePresentation.swift */; };
 		F03113010000000000000003 /* RssFavoriteTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03113020000000000000003 /* RssFavoriteTabs.swift */; };
@@ -769,6 +774,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F04114020000000000000001 /* RssArticlePresentationStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticlePresentationStyle.swift; sourceTree = "<group>"; };
+		F04114020000000000000002 /* RssArticleMediaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleMediaView.swift; sourceTree = "<group>"; };
+		F04114020000000000000003 /* RssArticleWideCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleWideCell.swift; sourceTree = "<group>"; };
+		F04114020000000000000004 /* RssArticleGridCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleGridCell.swift; sourceTree = "<group>"; };
+		F04114020000000000000005 /* RssArticleListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssArticleListController.swift; sourceTree = "<group>"; };
 		F03113020000000000000001 /* AndroidReplicaRssArticleCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidReplicaRssArticleCell.swift; sourceTree = "<group>"; };
 		F03113020000000000000002 /* RssFavoritePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssFavoritePresentation.swift; sourceTree = "<group>"; };
 		F03113020000000000000003 /* RssFavoriteTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssFavoriteTabs.swift; sourceTree = "<group>"; };
@@ -1747,6 +1757,11 @@
 				A2000000000000000000006B /* AndroidReplicaMainChrome.swift */,
 				A2000000000000000000005B /* AndroidReplicaMainCells.swift */,
 				A2000000000000000000005C /* AndroidReplicaResultCells.swift */,
+				F04114020000000000000001 /* RssArticlePresentationStyle.swift */,
+				F04114020000000000000002 /* RssArticleMediaView.swift */,
+				F04114020000000000000003 /* RssArticleWideCell.swift */,
+				F04114020000000000000004 /* RssArticleGridCell.swift */,
+				F04114020000000000000005 /* RssArticleListController.swift */,
 				F03113020000000000000001 /* AndroidReplicaRssArticleCell.swift */,
 				F03113020000000000000002 /* RssFavoritePresentation.swift */,
 				F03113020000000000000003 /* RssFavoriteTabs.swift */,
@@ -2615,6 +2630,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				F027F4000000000000000001 /* AudioPlaybackBar.swift in Sources */,
+				F04114010000000000000001 /* RssArticlePresentationStyle.swift in Sources */,
+				F04114010000000000000002 /* RssArticleMediaView.swift in Sources */,
+				F04114010000000000000003 /* RssArticleWideCell.swift in Sources */,
+				F04114010000000000000004 /* RssArticleGridCell.swift in Sources */,
+				F04114010000000000000005 /* RssArticleListController.swift in Sources */,
 				F03113010000000000000001 /* AndroidReplicaRssArticleCell.swift in Sources */,
 				F03113010000000000000002 /* RssFavoritePresentation.swift in Sources */,
 				F03113010000000000000003 /* RssFavoriteTabs.swift in Sources */,

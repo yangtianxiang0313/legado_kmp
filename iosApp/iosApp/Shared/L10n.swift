@@ -1843,6 +1843,9 @@ enum L10n {
         static let openInBrowser = text("rss.open_in_browser", "在浏览器中打开")
         // F12: 列表布局样式
         static let switchLayout = text("rss.switch_layout", "切换布局")
+        static let articleLayoutCompact = text("rss.article_layout_compact", "紧凑列表")
+        static let articleLayoutLargeImage = text("rss.article_layout_large_image", "大图列表")
+        static let articleLayoutGrid = text("rss.article_layout_grid", "网格")
         static let layoutTitleOnly = text("rss.layout_title_only", "仅标题")
         static let layoutTitleDescription = text("rss.layout_title_description", "标题+描述")
         static let layoutTitleImageDescription = text("rss.layout_title_image_description", "标题+图片+描述")

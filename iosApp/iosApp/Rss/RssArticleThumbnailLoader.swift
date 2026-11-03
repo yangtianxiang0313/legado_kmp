@@ -17,9 +17,12 @@ enum RssArticleThumbnailLoader {
     }
 
     @MainActor
-    static func loadImage(article: RssArticle, cacheOnly: Bool = false) async throws -> UIImage? {
+    static func loadImage(
+        article: RssArticle, cacheOnly: Bool = false, maximumPixelSize: Int = 330
+    ) async throws -> UIImage? {
         try Task.checkCancellation()
         guard hasNonBlankImage(article.image) else { return nil }
+        let maximumPixelSize = min(max(maximumPixelSize, 330), 2048)
         let facade = try RssArticleThumbnailFacade.companion.create()
         let result: RssArticleThumbnailResult = try await SharedCancellableAsync.value { completion in
             facade.loadImage(article: article, cacheOnly: cacheOnly) { result in
@@ -42,7 +45,7 @@ enum RssArticleThumbnailLoader {
                 let options: [CFString: Any] = [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
                     kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 330,
+                    kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize,
                     kCGImageSourceShouldCacheImmediately: true,
                 ]
                 guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {

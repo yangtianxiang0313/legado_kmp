@@ -141,6 +141,9 @@ SET source_name = ?, source_icon = ?, source_group = ?, source_comment = ?,
     style = ?, enable_js = ?, load_with_base_url = ?, inject_js = ?, last_update_time = ?, custom_order = ?
 WHERE source_url = ?;
 
+updateRssSourceArticleStyle:
+UPDATE rss_sources SET article_style = ? WHERE source_url = ?;
+
 deleteRssSourceByUrl:
 DELETE FROM rss_sources WHERE source_url = ?;
 

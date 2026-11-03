@@ -7,6 +7,8 @@ import io.legado.kmp.shared.domain.repository.RssSourceRepository
 import io.legado.kmp.shared.model.RssSource
 import io.legado.kmp.shared.model.SourceGroups
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -203,6 +205,24 @@ class RssSourceRepositoryImpl(
                 custom_order = it.customOrder.toLong(),
                 source_url = it.sourceUrl
             )
+        }
+    }
+
+    override suspend fun setArticleStyle(sourceUrl: String, articleStyle: Int): RssSource? {
+        require(articleStyle in 0..2) { "RSS article style must be in 0..2" }
+        val context = currentCoroutineContext()
+        context.ensureActive()
+        return database.rssSourceQueries.transactionWithResult {
+            context.ensureActive()
+            database.rssSourceQueries.updateRssSourceArticleStyle(
+                article_style = articleStyle.toLong(),
+                source_url = sourceUrl,
+            )
+            context.ensureActive()
+            val source = database.rssSourceQueries.selectRssSourceByKey(sourceUrl, mapper = ::mapSource)
+                .executeAsOneOrNull()
+            context.ensureActive()
+            source
         }
     }
 
