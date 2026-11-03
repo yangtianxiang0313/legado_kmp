@@ -61,6 +61,8 @@ data class BuiltUrl(
         mergedHeaders.putAllUserAgentAware(headers)
         val requestBody = when {
             method == HttpMethod.POST && rawBody -> body.orEmpty()
+            method == HttpMethod.POST && encodedForm == null && body != null &&
+                mergedHeaders.hasHeader(CONTENT_TYPE) -> body
             method == HttpMethod.POST && (encodedForm != null || body.isNullOrBlank()) -> encodedForm.orEmpty()
             else -> encodedForm ?: body
         }

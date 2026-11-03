@@ -96,7 +96,7 @@ class AnalyzeUrl(
         absoluteUrl = urlAfterOptionJs
 
         val charset = option?.charset
-        val body = option?.body?.takeIf { it.isNotBlank() }
+        val body = option?.body
         val method = option?.method?.uppercase()?.let {
             runCatching { HttpMethod.valueOf(it) }.getOrNull()
         } ?: if (!body.isNullOrBlank()) {
@@ -365,6 +365,7 @@ class AnalyzeUrl(
             return ""
         }
         val trimmed = expression.trim()
+        if (trimmed == "true" || trimmed == "false") return trimmed
 
         if (simpleIdentifierPattern.matches(trimmed)) {
             return resolveLegacyVariable(trimmed, baseUrl)?.let(::variableToString) ?: ""
@@ -514,7 +515,8 @@ class AnalyzeUrl(
         val element = runCatching {
             json.decodeFromString(JsonElement.serializer(), trimmed)
         }.getOrNull() ?: return null
-        return replaceLegacyAliasesInJsonElement(element).toString()
+        val replaced = replaceLegacyAliasesInJsonElement(element)
+        return if (replaced == element) text else replaced.toString()
     }
 
     private fun replaceLegacyAliasesInJsonElement(element: JsonElement): JsonElement {
@@ -592,8 +594,12 @@ class AnalyzeUrl(
     }
 
     private suspend fun evalInlineJs(script: String, baseUrl: String, result: String?): String {
+        val jsResult = evaluateJs(script, baseUrl, result)
+        // Android's inline interpolation uses evalJS(...) ?: "", unlike standalone URL scripts.
+        if (jsResult is JsResult.JsNull || jsResult is JsResult.JsUndefined) return ""
+        if (jsResult is JsResult.JsString) return jsResult.value
         return formatJsResult(
-            jsResult = evaluateJs(script, baseUrl, result),
+            jsResult = jsResult,
             fallback = null,
             inlineWholeNumberCompat = true,
         )
@@ -624,7 +630,7 @@ class AnalyzeUrl(
             }
             is JsResult.JsNumber -> {
                 val value = if (inlineWholeNumberCompat && jsResult.value % 1.0 == 0.0) {
-                    jsResult.value.toLong().toString()
+                    formatInlineWholeNumber(jsResult.value)
                 } else {
                     jsResult.value.toString()
                 }
@@ -635,6 +641,18 @@ class AnalyzeUrl(
                 if (value.isNotBlank()) value else (fallback ?: "")
             }
         }
+    }
+
+    private fun formatInlineWholeNumber(value: Double): String {
+        val text = value.toString()
+        val exponentIndex = text.indexOf('E', ignoreCase = true)
+        if (exponentIndex < 0) return text.substringBefore('.')
+        val coefficient = text.substring(0, exponentIndex)
+        val magnitude = coefficient.removePrefix("-")
+        val point = magnitude.indexOf('.').takeIf { it >= 0 } ?: magnitude.length
+        val length = point + text.substring(exponentIndex + 1).toInt()
+        val digits = magnitude.replace(".", "").take(length).padEnd(length, '0')
+        return if (coefficient.startsWith('-')) "-$digits" else digits
     }
 
     private suspend fun executeLegacyJsResult(
@@ -1048,9 +1066,10 @@ class AnalyzeUrl(
         }
 
         private fun resolveUrl(baseUrl: String, ruleUrl: String): String {
-            if (ruleUrl.startsWith("http://") || ruleUrl.startsWith("https://")) return ruleUrl
-            if (baseUrl.isBlank()) return ruleUrl
-            return join(baseUrl, ruleUrl)
+            val address = ruleUrl.trim()
+            if (address.startsWith("http://") || address.startsWith("https://")) return address
+            if (baseUrl.isBlank()) return address
+            return join(baseUrl, address)
         }
 
         /**
