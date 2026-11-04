@@ -6,6 +6,8 @@ import io.legado.kmp.shared.data.database.LegadoDatabase
 import io.legado.kmp.shared.domain.repository.TxtTocRuleRepository
 import io.legado.kmp.shared.model.TxtTocRule
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -57,6 +59,31 @@ class TxtTocRuleRepositoryImpl(
 
     override suspend fun getMaxOrder(): Int {
         return database.txtTocRuleQueries.maxOrder().executeAsOne().toInt()
+    }
+
+    override suspend fun ensureDefaultsIfEmpty(rules: List<TxtTocRule>): Boolean {
+        val context = currentCoroutineContext()
+        context.ensureActive()
+        if (rules.isEmpty()) return false
+        return database.txtTocRuleQueries.transactionWithResult {
+            context.ensureActive()
+            if (database.txtTocRuleQueries.countAll().executeAsOne() != 0L) {
+                return@transactionWithResult false
+            }
+            rules.forEach { rule ->
+                context.ensureActive()
+                database.txtTocRuleQueries.insert(
+                    id = rule.id,
+                    name = rule.name,
+                    rule = rule.rule,
+                    example = rule.example,
+                    serial_number = rule.serialNumber.toLong(),
+                    enable = if (rule.enable) 1L else 0L
+                )
+            }
+            context.ensureActive()
+            true
+        }
     }
 
     override suspend fun insert(rule: TxtTocRule) {

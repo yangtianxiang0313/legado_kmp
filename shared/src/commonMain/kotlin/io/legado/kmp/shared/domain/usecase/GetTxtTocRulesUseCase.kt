@@ -1,5 +1,6 @@
 package io.legado.kmp.shared.domain.usecase
 
+import io.legado.kmp.shared.domain.localbook.DefaultTxtTocRules
 import io.legado.kmp.shared.domain.repository.TxtTocRuleRepository
 import io.legado.kmp.shared.model.TxtTocRule
 import kotlinx.coroutines.flow.Flow
@@ -9,7 +10,10 @@ class GetTxtTocRulesUseCase(
 ) {
     operator fun invoke(): Flow<List<TxtTocRule>> = repository.observeAll()
     suspend fun getAll(): List<TxtTocRule> = repository.getAll()
-    suspend fun getEnabled(): List<TxtTocRule> = repository.getEnabled()
+    suspend fun getEnabled(): List<TxtTocRule> {
+        repository.ensureDefaultsIfEmpty(DefaultTxtTocRules.all())
+        return repository.getEnabled()
+    }
     suspend fun getDisabled(): List<TxtTocRule> = repository.getDisabled()
     suspend fun count(): Int = repository.count()
     suspend fun get(id: Long): TxtTocRule? = repository.get(id)

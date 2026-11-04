@@ -12,6 +12,7 @@ interface TxtTocRuleRepository {
     suspend fun get(id: Long): TxtTocRule?
     suspend fun getMinOrder(): Int
     suspend fun getMaxOrder(): Int
+    suspend fun ensureDefaultsIfEmpty(rules: List<TxtTocRule>): Boolean
     suspend fun insert(rule: TxtTocRule)
     suspend fun update(rule: TxtTocRule)
     suspend fun delete(id: Long)
