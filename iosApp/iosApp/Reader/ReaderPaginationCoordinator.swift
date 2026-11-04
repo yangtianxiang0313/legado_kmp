@@ -177,9 +177,23 @@ final class ReaderPaginationCoordinator {
                     return
                 }
 
+                let imageSizes = try await ReaderPaginationImageSizes.load(
+                    bookURL: chapter.bookURL, layout: chapterLayout)
+                guard !Task.isCancelled, self.requestID == requestID,
+                    self.chapter == chapter, self.matchesChapter(in: controller)
+                else { return }
+                guard controller.view.window != nil,
+                    controller.renderView.bounds == bounds,
+                    controller.currentReaderSafeAreaPolicy() == safeAreaPolicy,
+                    controller.doubleHorizontalPageMode(in: bounds) == doublePageMode
+                else {
+                    self.needsPagination = true
+                    controller.view.setNeedsLayout()
+                    return
+                }
                 let pagination = try await self.layoutEngine.paginateAsync(
                     layout: chapterLayout, in: paginationBounds, theme: renderTheme,
-                    traits: controller.traitCollection)
+                    traits: controller.traitCollection, imageSizes: imageSizes)
                 guard !Task.isCancelled, self.requestID == requestID,
                     self.chapter == chapter, self.matchesChapter(in: controller)
                 else { return }

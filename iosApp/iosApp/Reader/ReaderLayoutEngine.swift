@@ -311,7 +311,9 @@ final class ReaderLayoutEngine {
     func paginate(
         layout: ReaderChapterLayout,
         in bounds: CGRect,
-        theme: ReaderThemeController
+        theme: ReaderThemeController,
+        imageSizes: [String: CGSize] = [:],
+        imageScale: CGFloat = 1
     ) -> PaginationResult {
         let pageGeometry = ReaderPageGeometry.estimated(bounds: bounds, theme: theme)
         let key = ReaderPaginationCacheKey(
@@ -319,7 +321,9 @@ final class ReaderLayoutEngine {
             bounds: bounds,
             pageGeometry: pageGeometry,
             theme: theme,
-            imageStyle: layout.normalizedImageStyle
+            imageStyle: layout.normalizedImageStyle,
+            imageSizes: imageSizes,
+            imageScale: imageScale
         )
         if let cached = cache.value(for: key) {
             return cached
@@ -332,7 +336,9 @@ final class ReaderLayoutEngine {
             layout: layout,
             contentSize: contentSize,
             theme: theme,
-            imageStyle: layout.normalizedImageStyle
+            imageStyle: layout.normalizedImageStyle,
+            imageSizes: imageSizes,
+            imageScale: imageScale
         )
         let result = PaginationResult(
             pages: pages.isEmpty
@@ -348,11 +354,13 @@ final class ReaderLayoutEngine {
         layout: ReaderChapterLayout,
         in bounds: CGRect,
         theme: ReaderThemeController,
-        traits: UITraitCollection? = nil
+        traits: UITraitCollection? = nil,
+        imageSizes: [String: CGSize] = [:]
     ) async throws -> PaginationResult {
         try Task.checkCancellation()
         let input = ReaderPaginationInput.frozen(
-            layout: layout, bounds: bounds, theme: theme, traits: traits ?? UITraitCollection.current)
+            layout: layout, bounds: bounds, theme: theme, traits: traits ?? UITraitCollection.current,
+            imageSizes: imageSizes)
         let result = try await worker.paginate(input)
         // Cancellation may arrive after the worker resumes us but before MainActor runs again.
         try Task.checkCancellation()

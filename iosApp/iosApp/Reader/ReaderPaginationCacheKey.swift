@@ -57,6 +57,8 @@ struct ReaderPaginationCacheKey: Hashable {
     private let textColor: UIColor
     private let backgroundColor: UIColor
     private let imageStyle: String
+    private let imageSizesSignature: Int
+    private let imageScale: CGFloat
     private let layoutSignature: Int
 
     init(
@@ -65,6 +67,8 @@ struct ReaderPaginationCacheKey: Hashable {
         pageGeometry: ReaderPageGeometry,
         theme: ReaderThemeController,
         imageStyle: String,
+        imageSizes: [String: CGSize] = [:],
+        imageScale: CGFloat = 1,
         isCancelled: () -> Bool = { false }
     ) {
         chapterIndex = Int(layout.chapterIndex)
@@ -124,6 +128,8 @@ struct ReaderPaginationCacheKey: Hashable {
         textColor = theme.textColor
         backgroundColor = theme.backgroundColor
         self.imageStyle = imageStyle
+        self.imageScale = imageScale
+        imageSizesSignature = paginationImageSizesSignature(imageSizes, isCancelled: isCancelled)
         layoutSignature = layout.layoutSignature(isCancelled: isCancelled)
     }
 }
@@ -165,6 +171,38 @@ extension ReaderChapterLayout {
         }
         return hasher.finalize()
     }
+}
+
+// Sort fixed-size entry digests, not potentially long raw rules. Enumeration,
+// rule hashing, sorting and final combination all cooperate with cancellation.
+// Like the chapter digest, a partial image digest must never reach cache lookup.
+private func paginationImageSizesSignature(_ sizes: [String: CGSize], isCancelled: () -> Bool) -> Int {
+    var hasher = Hasher()
+    var entries: [Int] = []
+    for (rule, size) in sizes {
+        guard !isCancelled() else { return hasher.finalize() }
+        var entry = Hasher()
+        guard combinePaginationText(rule, into: &entry, isCancelled: isCancelled) else {
+            return hasher.finalize()
+        }
+        entry.combine(size.width)
+        entry.combine(size.height)
+        entries.append(entry.finalize())
+    }
+    do {
+        try entries.sort { lhs, rhs in
+            guard !isCancelled() else { throw CancellationError() }
+            return lhs < rhs
+        }
+    } catch {
+        return hasher.finalize()
+    }
+    hasher.combine(entries.count)
+    for entry in entries {
+        guard !isCancelled() else { return hasher.finalize() }
+        hasher.combine(entry)
+    }
+    return hasher.finalize()
 }
 
 // Bound time between cancellation checks even for a chapter with one huge text

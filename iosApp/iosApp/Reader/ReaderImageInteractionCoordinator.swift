@@ -124,6 +124,7 @@ final class ReaderImageInteractionCoordinator {
                 case .refresh:
                     reader.renderView.cacheLoadedImage(image, for: selected.imageURL)
                     reader.scrollPagerView.cacheLoadedImage(image, for: selected.imageURL)
+                    reader.repaginate(restoreLocation: reader.currentCharacterOffset())
                     reader.showToast(ReaderImageActionText.refreshed)
                 case .save:
                     self.exporter?.save(

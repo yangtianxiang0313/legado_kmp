@@ -20,7 +20,9 @@ final class ReaderLayoutRenderer {
         layout: ReaderChapterLayout,
         contentSize: CGSize,
         theme: ReaderThemeController,
-        imageStyle: String
+        imageStyle: String,
+        imageSizes: [String: CGSize] = [:],
+        imageScale: CGFloat = 1
     ) -> [ReaderPageLayout] {
         guard !isCancelled else { return [] }
         var pages: [ReaderPageLayout] = []
@@ -91,11 +93,14 @@ final class ReaderLayoutRenderer {
                         chapterTitle: layout.chapterTitle,
                         contentSize: contentSize,
                         theme: theme,
-                        imageStyle: imageStyle
+                        imageStyle: imageStyle,
+                        imageSizes: imageSizes,
+                        imageScale: imageScale
                     )
 
                 case .spacer:
                     flushTextFragments()
+                    if imageStyle == "SINGLE", page.isEmpty { continue }
                     appendSpacerFragment(
                         fragment,
                         to: &page,
@@ -372,7 +377,9 @@ final class ReaderLayoutRenderer {
         chapterTitle: String,
         contentSize: CGSize,
         theme: ReaderThemeController,
-        imageStyle: String
+        imageStyle: String,
+        imageSizes: [String: CGSize],
+        imageScale: CGFloat
     ) {
         guard !isCancelled else { return }
         guard let urlString = fragment.imageUrl,
@@ -380,30 +387,47 @@ final class ReaderLayoutRenderer {
                 ?? urlString.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)
                 .flatMap({ URL(string: $0) })
         else { return }
-        let imageHeight = imageFrameHeight(style: imageStyle, contentSize: contentSize, theme: theme)
-        let imageWidth = imageFrameWidth(style: imageStyle, contentSize: contentSize, height: imageHeight, theme: theme)
-        preparePageForContent(
-            height: imageHeight,
-            sourceLocation: Int(fragment.chapterStartPosition),
-            to: &page,
-            pages: &pages,
-            chapterTitle: chapterTitle,
+        let geometry = ReaderImageLayoutGeometry(
+            style: imageStyle,
+            pixelSize: imageSizes[urlString],
+            imageScale: imageScale,
             contentSize: contentSize,
-            theme: theme
+            bodyLineHeight: theme.bodyLineHeight
         )
+        if geometry.occupiesWholePage {
+            if !page.isEmpty {
+                pages.append(page.build(chapterTitle: chapterTitle, bottomJustify: theme.prefersBottomAlignedContent))
+            }
+            page = ReaderPageBuildState(contentSize: contentSize, bodyLineAdvance: theme.bodyLineHeight)
+        } else {
+            preparePageForContent(
+                height: geometry.size.height,
+                sourceLocation: Int(fragment.chapterStartPosition),
+                to: &page,
+                pages: &pages,
+                chapterTitle: chapterTitle,
+                contentSize: contentSize,
+                theme: theme
+            )
+        }
         guard !isCancelled else { return }
-        let imageX = max((contentSize.width - imageWidth) / 2, 0)
         page.appendAttachment(
             sourceRange: NSRange(
                 location: Int(fragment.chapterStartPosition),
                 length: max(Int(fragment.chapterEndPosition - fragment.chapterStartPosition), 1)),
-            frame: CGRect(x: imageX, y: page.cursorY, width: imageWidth, height: imageHeight),
-            contentMode: imageStyle == "FULL" ? .scaleAspectFill : .scaleAspectFit,
+            frame: geometry.frame(cursorY: page.cursorY),
+            contentMode: .scaleAspectFit,
             source: .remoteImage(url: url, altText: fragment.imageAlt),
             previewText: fragment.imageAlt,
             requestRule: urlString
         )
-        page.pendingBlockSpacing = max(theme.paragraphSpacing, 0)
+        if geometry.occupiesWholePage {
+            // Commit the centered image without justification or synthetic source coordinates.
+            pages.append(page.build(chapterTitle: chapterTitle, bottomJustify: false))
+            page = ReaderPageBuildState(contentSize: contentSize, bodyLineAdvance: theme.bodyLineHeight)
+        } else {
+            page.pendingBlockSpacing = max(theme.paragraphSpacing, 0)
+        }
     }
 
     private func appendSpacerFragment(
@@ -630,28 +654,6 @@ final class ReaderLayoutRenderer {
             adjusted.addAttribute(.paragraphStyle, value: mutableStyle.copy(), range: range)
         }
         return NSAttributedString(attributedString: adjusted)
-    }
-}
-
-private func imageFrameHeight(style: String, contentSize: CGSize, theme: ReaderThemeController) -> CGFloat {
-    switch style {
-    case "TEXT":
-        return max(theme.bodyLineHeight, 24)
-    case "FULL":
-        return min(contentSize.height, max(contentSize.height * 0.72, theme.bodyLineHeight * 8))
-    case "SINGLE":
-        return contentSize.height
-    default:
-        return min(max(theme.bodyLineHeight * 6, 120), contentSize.height)
-    }
-}
-
-private func imageFrameWidth(style: String, contentSize: CGSize, height: CGFloat, theme _: ReaderThemeController) -> CGFloat {
-    switch style {
-    case "TEXT":
-        return min(max(height * 1.4, 32), contentSize.width)
-    default:
-        return contentSize.width
     }
 }
 

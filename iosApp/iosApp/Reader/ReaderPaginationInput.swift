@@ -11,13 +11,16 @@ struct ReaderPaginationInput: @unchecked Sendable {
     let bounds: CGRect
     let pageGeometry: ReaderPageGeometry
     let theme: ReaderThemeController
+    let imageSizes: [String: CGSize]
+    let imageScale: CGFloat
 
     @MainActor
     static func frozen(
         layout: ReaderChapterLayout,
         bounds: CGRect,
         theme: ReaderThemeController,
-        traits: UITraitCollection
+        traits: UITraitCollection,
+        imageSizes: [String: CGSize] = [:]
     ) -> ReaderPaginationInput {
         func resolved(_ color: UIColor) -> UIColor {
             UIColor(cgColor: color.resolvedColor(with: traits).cgColor)
@@ -28,11 +31,14 @@ struct ReaderPaginationInput: @unchecked Sendable {
         frozenTheme.tipColor = resolved(theme.tipColor)
         frozenTheme.tipDividerColor = resolved(theme.tipDividerColor)
         frozenTheme.selectionColor = resolved(theme.selectionColor)
+        let displayScale = traits.displayScale
         return ReaderPaginationInput(
             layout: layout,
             bounds: bounds,
             pageGeometry: ReaderPageGeometry.estimated(bounds: bounds, theme: frozenTheme),
-            theme: frozenTheme
+            theme: frozenTheme,
+            imageSizes: imageSizes,
+            imageScale: displayScale.isFinite && displayScale > 0 ? displayScale : 1
         )
     }
 }
