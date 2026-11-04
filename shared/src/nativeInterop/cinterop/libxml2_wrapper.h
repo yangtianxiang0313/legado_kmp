@@ -162,6 +162,59 @@ static inline xmlChar *legado_xml_node_content(xmlNodePtr node) {
     return node == NULL ? NULL : xmlNodeGetContent(node);
 }
 
+static inline int legado_xml_ascii_name_part_equal(
+    const char *name, const xmlChar *part, size_t length
+) {
+    for (size_t index = 0; index < length; index++) {
+        unsigned char left = (unsigned char)name[index];
+        unsigned char right = part[index];
+        if (left >= 'A' && left <= 'Z') left += 'a' - 'A';
+        if (right >= 'A' && right <= 'Z') right += 'a' - 'A';
+        if (left != right) return 0;
+    }
+    return 1;
+}
+
+/* Compare the full lexical QName, not its namespace URI. */
+static inline int legado_xml_attribute_name_matches(
+    const char *qualifiedName, const xmlChar *prefix, const xmlChar *localName
+) {
+    if (localName == NULL) return 0;
+    size_t nameLength = strlen(qualifiedName);
+    size_t localLength = strlen((const char *)localName);
+    if (prefix == NULL || prefix[0] == '\0') {
+        return nameLength == localLength &&
+            legado_xml_ascii_name_part_equal(qualifiedName, localName, localLength);
+    }
+    size_t prefixLength = strlen((const char *)prefix);
+    return nameLength == prefixLength + 1 + localLength &&
+        qualifiedName[prefixLength] == ':' &&
+        legado_xml_ascii_name_part_equal(qualifiedName, prefix, prefixLength) &&
+        legado_xml_ascii_name_part_equal(qualifiedName + prefixLength + 1, localName, localLength);
+}
+
+/* Returns an owned copy (including empty values); free with legado_xml_free_ptr.
+ * NULL means absent/invalid input or allocation failure; no document pointer escapes. */
+static inline xmlChar *legado_xml_attribute_value(xmlNodePtr node, const char *qualifiedName) {
+    if (node == NULL || node->type != XML_ELEMENT_NODE || qualifiedName == NULL) return NULL;
+    for (xmlAttrPtr attr = node->properties; attr != NULL; attr = attr->next) {
+        const xmlChar *prefix = attr->ns == NULL ? NULL : attr->ns->prefix;
+        if (legado_xml_attribute_name_matches(qualifiedName, prefix, attr->name)) {
+            xmlChar *value = xmlNodeListGetString(node->doc, attr->children, 1);
+            return value == NULL ? xmlStrdup((const xmlChar *)"") : value;
+        }
+    }
+    /* Namespace declarations are local nsDef entries, never inherited attributes. */
+    for (xmlNsPtr ns = node->nsDef; ns != NULL; ns = ns->next) {
+        const xmlChar *prefix = ns->prefix == NULL ? NULL : (const xmlChar *)"xmlns";
+        const xmlChar *name = ns->prefix == NULL ? (const xmlChar *)"xmlns" : ns->prefix;
+        if (legado_xml_attribute_name_matches(qualifiedName, prefix, name)) {
+            return xmlStrdup(ns->href == NULL ? (const xmlChar *)"" : ns->href);
+        }
+    }
+    return NULL;
+}
+
 static inline xmlChar *legado_xml_node_dump(xmlDocPtr document, xmlNodePtr node) {
     if (document == NULL || node == NULL) {
         return NULL;

@@ -15,6 +15,7 @@ import io.legado.kmp.shared.libxml2.LEGADO_XPATH_BOOLEAN
 import io.legado.kmp.shared.libxml2.LEGADO_XPATH_NODESET
 import io.legado.kmp.shared.libxml2.LEGADO_XPATH_NUMBER
 import io.legado.kmp.shared.libxml2.LEGADO_XPATH_STRING
+import io.legado.kmp.shared.libxml2.legado_xml_attribute_value
 import io.legado.kmp.shared.libxml2.legado_xml_element_path
 import io.legado.kmp.shared.libxml2.legado_xml_free_doc
 import io.legado.kmp.shared.libxml2.legado_xml_free_ptr
@@ -98,6 +99,7 @@ private class IosXPathBackend : XPathBackend {
             return emptyList()
         }
         if (content is List<*>) return content.filterNotNull().flatMap { getElements(it, xPath) }
+        parseXPathAttributeSelection(xPath)?.let { return projectAttributes(content, it) }
         val preprocessed = preProcessXPath(normalizeTerminalAttributeSuffix(xPath))
         return evaluate(content, preprocessed.cleanXPath) { document, result, source ->
             if (legado_xpath_result_type(result) != LEGADO_XPATH_NODESET.toInt()) {
@@ -123,6 +125,7 @@ private class IosXPathBackend : XPathBackend {
             return emptyList()
         }
         if (content is List<*>) return content.filterNotNull().flatMap { getStringList(it, xPath) }
+        parseXPathAttributeSelection(xPath)?.let { return projectAttributes(content, it) }
         val preprocessed = preProcessXPath(normalizeTerminalAttributeSuffix(xPath))
         return evaluate(content, preprocessed.cleanXPath) { document, result, _ ->
             when (legado_xpath_result_type(result)) {
@@ -143,6 +146,28 @@ private class IosXPathBackend : XPathBackend {
                     legado_xpath_number_value(result).toString()
                 )
                 else -> emptyList()
+            }
+        }
+    }
+
+    // JsoupXPath projects every owner, including those without the requested attribute.
+    private fun projectAttributes(content: Any, selection: XPathAttributeSelection): List<String> {
+        return evaluate(content, selection.ownerXPath) { _, result, _ ->
+            if (legado_xpath_result_type(result) != LEGADO_XPATH_NODESET.toInt()) {
+                emptyList()
+            } else {
+                buildList {
+                    for (index in 0 until legado_xpath_nodes_count(result)) {
+                        val node = legado_xpath_node_at(result, index) ?: continue
+                        val value = legado_xml_attribute_value(node, selection.attributeName)
+                        val text = if (value == null) "" else try {
+                            value.reinterpret<ByteVar>().toKString()
+                        } finally {
+                            legado_xml_free_ptr(value)
+                        }
+                        add(text)
+                    }
+                }
             }
         }
     }
