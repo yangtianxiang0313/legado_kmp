@@ -51,12 +51,22 @@ final class MangaReaderExitFlow {
     func cancelPendingWork() { task?.cancel() }
 
     private func presentPrompt(_ book: Book) {
-        guard let owner else { failed(CancellationError()); return }
-        let prompt = UIAlertController(title: "加入书架", message: "是否将《\(book.name)》放入书架？", preferredStyle: .alert)
-        for (title, add) in [("加入并返回", true), ("不加入并返回", false)] {
+        guard let owner else {
+            failed(CancellationError())
+            return
+        }
+        let prompt = UIAlertController(
+            title: L10n.Reader.addToBookshelfTitle, message: L10n.Reader.addToBookshelfMessage(book.name), preferredStyle: .alert)
+        for (title, add) in [
+            (L10n.text("manga.flow.exit.add_and_return", "加入并返回"), true),
+            (L10n.text("manga.flow.exit.skip_and_return", "不加入并返回"), false),
+        ] {
             prompt.addAction(
                 UIAlertAction(title: title, style: .default) { [weak self] _ in
-                    guard let self, self.canNavigate() else { self?.failed(CancellationError()); return }
+                    guard let self, self.canNavigate() else {
+                        self?.failed(CancellationError())
+                        return
+                    }
                     self.task = Task { [weak self] in
                         guard let self else { return }
                         defer { self.task = nil }
@@ -64,7 +74,7 @@ final class MangaReaderExitFlow {
                     }
                 })
         }
-        prompt.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in self?.failed(CancellationError()) })
+        prompt.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.failed(CancellationError()) })
         owner.present(prompt, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
@@ -87,8 +97,9 @@ final class MangaReaderExitFlow {
         isExiting = false
         stateDidChange(false)
         guard !(error is CancellationError), canNavigate(), let owner, owner.presentedViewController == nil else { return }
-        let alert = UIAlertController(title: "进度尚未保存", message: error.localizedDescription, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        let alert = UIAlertController(
+            title: L10n.text("manga.flow.exit.progress_unsaved", "进度尚未保存"), message: error.localizedDescription, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
         owner.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 }

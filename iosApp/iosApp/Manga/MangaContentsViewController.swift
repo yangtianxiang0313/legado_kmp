@@ -26,7 +26,7 @@ final class MangaContentsViewController: UITableViewController, UISearchResultsU
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "目录"
+        title = L10n.text("manga.ui.contents.title", "目录")
         overrideUserInterfaceStyle = .dark
         tableView.backgroundColor = .black
         tableView.rowHeight = UITableView.automaticDimension
@@ -36,7 +36,7 @@ final class MangaContentsViewController: UITableViewController, UISearchResultsU
             barButtonSystemItem: .close, target: self, action: #selector(close))
         search.obscuresBackgroundDuringPresentation = false
         search.searchResultsUpdater = self
-        search.searchBar.placeholder = "搜索章节"
+        search.searchBar.placeholder = L10n.text("manga.ui.contents.search", "搜索章节")
         navigationItem.searchController = search
         navigationItem.hidesSearchBarWhenScrolling = false
         definesPresentationContext = true

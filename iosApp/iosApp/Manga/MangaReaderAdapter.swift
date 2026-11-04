@@ -93,7 +93,7 @@ final class MangaReaderAdapter {
         let book = try await books.resolveBookAsync(bookUrl: bookURL)
         try Task.checkCancellation()
         guard recoveryGeneration == generation, !isRecovering, !isRetired else { throw CancellationError() }
-        guard let book else { throw failure("书籍不存在或已被移除") }
+        guard let book else { throw failure(L10n.text("manga.flow.error.book_missing", "书籍不存在或已被移除")) }
         let requestedIndex = index ?? Int(book.durChapterIndex)
         let requestedPosition = position ?? (requestedIndex == Int(book.durChapterIndex) ? Int(book.durChapterPos) : 0)
         return try await load(index: requestedIndex, position: requestedPosition, refresh: refresh)
@@ -142,7 +142,10 @@ final class MangaReaderAdapter {
                             nil,
                             NSError(
                                 domain: "io.legado.manga", code: -1,
-                                userInfo: [NSLocalizedDescriptionKey: result.errorMessage ?? "漫画章节加载失败"]))
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: result.errorMessage
+                                        ?? L10n.text("manga.flow.error.chapter_load_failed", "漫画章节加载失败")
+                                ]))
                     } else {
                         completion(result.payload, nil)
                     }
@@ -159,7 +162,7 @@ final class MangaReaderAdapter {
                     payload: payload, chapterPosition: Int32(clamping: position), completionHandler: completion)
             }
             try requests.check(ticket)
-            guard prepared.book.bookUrl == bookURL else { throw failure("漫画书籍状态已变化") }
+            guard prepared.book.bookUrl == bookURL else { throw failure(L10n.text("manga.flow.error.book_changed", "漫画书籍状态已变化")) }
             if let catalogSelection {
                 try await requireCatalogClient().validate(prepared, selection: catalogSelection)
                 try requests.check(ticket)
@@ -204,7 +207,7 @@ final class MangaReaderAdapter {
                     reader.computeSimulatedChapterSize(
                         readConfig: original.readConfig, realChapterSize: Int32(clamping: directory.count)))
                     == identity.entries.count
-            else { throw failure("漫画邻章书籍或可读范围已变化") }
+            else { throw failure(L10n.text("manga.flow.error.neighbor_book_changed", "漫画邻章书籍或可读范围已变化")) }
             let payload: ReaderChapterPayload = try await SharedCancellableAsync.value { completion in
                 let subscription = ticket.facade.prepareChapterRequest(
                     bookUrl: ticket.bookURL, chapterIndex: Int32(clamping: index), refreshContent: false
@@ -217,7 +220,10 @@ final class MangaReaderAdapter {
                             nil,
                             NSError(
                                 domain: "io.legado.manga", code: -1,
-                                userInfo: [NSLocalizedDescriptionKey: result.errorMessage ?? "漫画邻章加载失败"]))
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: result.errorMessage
+                                        ?? L10n.text("manga.flow.error.neighbor_load_failed", "漫画邻章加载失败")
+                                ]))
                     } else {
                         completion(result.payload, nil)
                     }
@@ -231,7 +237,7 @@ final class MangaReaderAdapter {
                 Int(payload.chapter.index) == index,
                 MangaChapterWindowIdentity.Entry(payload.chapter) == identity.entries[index],
                 payload.chapters.map(MangaChapterWindowIdentity.Entry.init) == directory
-            else { throw failure("漫画邻章目录已变化，请重新加载当前章节") }
+            else { throw failure(L10n.text("manga.flow.error.neighbor_directory_changed", "漫画邻章目录已变化，请重新加载当前章节")) }
             let prepared: MangaReaderChapter = try await SharedAsync.value { completion in
                 manga.prepareReaderChapter(payload: payload, chapterPosition: 0, completionHandler: completion)
             }
@@ -249,7 +255,7 @@ final class MangaReaderAdapter {
                     reader.computeSimulatedChapterSize(
                         readConfig: latest.readConfig, realChapterSize: Int32(clamping: directory.count)))
                     == identity.entries.count
-            else { throw failure("漫画邻章书籍或可读范围已变化") }
+            else { throw failure(L10n.text("manga.flow.error.neighbor_book_changed", "漫画邻章书籍或可读范围已变化")) }
             return prepared
         } catch {
             try checkNeighbor(id, generation: generation, identity: identity)
@@ -397,7 +403,7 @@ final class MangaReaderAdapter {
         guard !isRetired, isRecovering, recoveryGeneration == generation else { throw CancellationError() }
         if let progressError { throw progressError }
         if let readTimeError { throw readTimeError }
-        guard !isReading, !needsReadTimeSettlement else { throw failure("阅读时长尚未保存，请稍后重试") }
+        guard !isReading, !needsReadTimeSettlement else { throw failure(L10n.text("manga.flow.error.read_time_unsaved", "阅读时长尚未保存，请稍后重试")) }
     }
 
     func pause() async {

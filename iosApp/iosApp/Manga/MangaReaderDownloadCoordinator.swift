@@ -63,39 +63,43 @@ final class MangaReaderDownloadCoordinator {
         }
         let index = Int(chapter.chapterIndex)
         guard chapter.chapters.indices.contains(index) else {
-            onFeedback?("当前没有可下载的章节")
+            onFeedback?(L10n.Reader.downloadChoiceEmpty)
             return
         }
         let context = Context(
             book: chapter.book, chapterIndex: index, chapterCount: chapter.chapters.count,
             isCurrent: isCurrent)
-        let alert = UIAlertController(title: "漫画离线缓存", message: nil, preferredStyle: .actionSheet)
+        let alert = UIAlertController(title: L10n.text("manga.flow.cache.title", "漫画离线缓存"), message: nil, preferredStyle: .actionSheet)
         alert.overrideUserInterfaceStyle = .dark
-        let current = UIAlertAction(title: "缓存本章", style: .default) { [weak self, weak presenter, weak alert] _ in
+        let current = UIAlertAction(title: L10n.text("manga.flow.cache.current", "缓存本章"), style: .default) {
+            [weak self, weak presenter, weak alert] _ in
             self?.afterDismissal(of: alert, from: presenter, context: context) { [weak self] _ in
                 self?.start(context: context, startIndex: index, endIndex: index)
             }
         }
-        let remaining = UIAlertAction(title: "缓存本章及后续", style: .default) { [weak self, weak presenter, weak alert] _ in
+        let remaining = UIAlertAction(title: L10n.text("manga.flow.cache.from_current", "缓存本章及后续"), style: .default) {
+            [weak self, weak presenter, weak alert] _ in
             self?.afterDismissal(of: alert, from: presenter, context: context) { [weak self] _ in
                 self?.start(context: context, startIndex: index, endIndex: context.chapterCount - 1)
             }
         }
-        let range = UIAlertAction(title: "选择章节范围…", style: .default) { [weak self, weak presenter, weak alert] _ in
+        let range = UIAlertAction(title: L10n.text("manga.flow.cache.select_range", "选择章节范围…"), style: .default) {
+            [weak self, weak presenter, weak alert] _ in
             self?.afterDismissal(of: alert, from: presenter, context: context) { [weak self] presenter in
                 self?.presentRange(from: presenter, context: context)
             }
         }
-        let stop = UIAlertAction(title: "停止本书缓存", style: .destructive) { [weak self, weak presenter, weak alert] _ in
+        let stop = UIAlertAction(title: L10n.text("manga.flow.cache.stop", "停止本书缓存"), style: .destructive) {
+            [weak self, weak presenter, weak alert] _ in
             self?.afterDismissal(of: alert, from: presenter, context: context) { [weak self] _ in
                 guard let self, self.downloads.snapshots[self.bookURL]?.phase == .running else { return }
                 self.downloads.stop(bookURL: self.bookURL)
-                self.onFeedback?("正在停止本书缓存，已缓存内容将保留")
+                self.onFeedback?(L10n.text("manga.flow.cache.stopping_retained", "正在停止本书缓存，已缓存内容将保留"))
             }
         }
         for action in [current, remaining, range, stop] { alert.addAction(action) }
         alert.addAction(
-            UIAlertAction(title: "返回阅读", style: .cancel) { [weak self] _ in
+            UIAlertAction(title: L10n.text("manga.flow.cache.return_to_reading", "返回阅读"), style: .cancel) { [weak self] _ in
                 self?.clearOptions()
             })
         if let popover = alert.popoverPresentationController {
@@ -103,7 +107,8 @@ final class MangaReaderDownloadCoordinator {
             popover.sourceRect = anchor.bounds
         }
         options = alert
-        optionsHeading = "\(chapter.book.name)\n当前第 \(index + 1) / \(context.chapterCount) 章"
+        optionsHeading = L10n.format(
+            "manga.flow.cache.heading", "%1$@\n当前第 %2$d / %3$d 章", chapter.book.name, index + 1, context.chapterCount)
         downloadActions = [current, remaining, range]
         stopAction = stop
         updateOptions()
@@ -114,16 +119,20 @@ final class MangaReaderDownloadCoordinator {
         guard let snapshot else { return nil }
         let fallback: String
         switch snapshot.phase {
-        case .running: fallback = snapshot.hasProgress ? "正在缓存图片" : "正在准备下载…"
-        case .stopping: fallback = "正在停止下载"
-        case .completed: fallback = "所选范围图片缓存完成"
-        case .failed: fallback = "缓存失败"
-        case .stopped: fallback = "缓存已停止，已缓存内容已保留"
+        case .running:
+            fallback =
+                snapshot.hasProgress
+                ? L10n.text("manga.flow.cache.running", "正在缓存图片")
+                : L10n.text("manga.flow.cache.preparing", "正在准备下载…")
+        case .stopping: fallback = L10n.Reader.downloadProgressCancelling
+        case .completed: fallback = L10n.text("manga.flow.cache.completed", "所选范围图片缓存完成")
+        case .failed: fallback = L10n.text("manga.flow.cache.failed", "缓存失败")
+        case .stopped: fallback = L10n.text("manga.flow.cache.stopped_retained", "缓存已停止，已缓存内容已保留")
         }
         var message = snapshot.message ?? fallback
         if snapshot.hasProgress {
             // CacheDownloadCoordinator reports whole-book measured counts, not this range's length.
-            message += "\n全书已缓存 \(snapshot.cached) / \(snapshot.total) 章"
+            message += "\n" + L10n.Reader.downloadProgressCount(cached: snapshot.cached, total: snapshot.total)
         }
         return Status(message: message, isActive: snapshot.isActive, failed: snapshot.phase == .failed)
     }
@@ -191,13 +200,15 @@ final class MangaReaderDownloadCoordinator {
             startIndex >= 0, startIndex <= endIndex, endIndex < context.chapterCount,
             Int32(exactly: startIndex) != nil, Int32(exactly: endIndex) != nil
         else {
-            onFeedback?("章节状态已变化，请重新选择缓存范围")
+            onFeedback?(L10n.text("manga.flow.cache.range_changed", "章节状态已变化，请重新选择缓存范围"))
             return
         }
         if downloads.start(book: context.book, startIndex: startIndex, endIndex: endIndex) {
-            onFeedback?("已提交第 \(startIndex + 1) - \(endIndex + 1) 章缓存，正在准备下载")
+            onFeedback?(
+                L10n.format(
+                    "manga.flow.cache.submitted", "已提交第 %1$d - %2$d 章缓存，正在准备下载", startIndex + 1, endIndex + 1))
         } else {
-            onFeedback?(status?.message ?? "缓存任务未能启动，请重新打开缓存入口后重试")
+            onFeedback?(status?.message ?? L10n.text("manga.flow.cache.start_failed", "缓存任务未能启动，请重新打开缓存入口后重试"))
         }
         // Only the shared coordinator owns the job; neither dialog dismissal nor reader exit stops it.
     }

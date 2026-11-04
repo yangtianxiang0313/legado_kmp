@@ -141,9 +141,9 @@ final class MangaProgressSyncCoordinator {
 
     func menuElements() -> [UIMenuElement] {
         [
-            action("同步阅读进度", icon: "arrow.triangle.2.circlepath", intent: .merge),
-            action("获取云端进度", icon: "icloud.and.arrow.down", intent: .read),
-            action("上传本地进度", icon: "icloud.and.arrow.up", intent: .upload),
+            action(L10n.Settings.syncBookProgressTitle, icon: "arrow.triangle.2.circlepath", intent: .merge),
+            action(L10n.WebDav.getProgressTitle, icon: "icloud.and.arrow.down", intent: .read),
+            action(L10n.text("manga.flow.progress.upload_local", "上传本地进度"), icon: "icloud.and.arrow.up", intent: .upload),
         ]
     }
 
@@ -174,7 +174,12 @@ final class MangaProgressSyncCoordinator {
         requestID = id
         request = Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { if self.requestID == id { self.requestID = nil; self.request = nil } }
+            defer {
+                if self.requestID == id {
+                    self.requestID = nil
+                    self.request = nil
+                }
+            }
             do {
                 let baseline = try await self.adapter.progressSyncSnapshot()
                 try self.check(id, selected: selected, revision: selectedRevision)
@@ -229,11 +234,12 @@ final class MangaProgressSyncCoordinator {
         let index = Int(remote.durChapterIndex)
         guard remote.name == baseline.name, remote.author == baseline.author, remote.durChapterPos >= 0,
             selected.chapter.chapters.indices.contains(index), !selected.chapter.chapters[index].isVolume
-        else { throw failure("云端进度无效或超出当前可读范围") }
+        else { throw failure(L10n.text("manga.flow.progress.invalid", "云端进度无效或超出当前可读范围")) }
         let alert = UIAlertController(
-            title: "确认阅读进度",
-            message: "本地：第\(Int(baseline.durChapterIndex) + 1)章，第\(Int(baseline.durChapterPos) + 1)张\n"
-                + "云端：第\(index + 1)章，第\(Int(remote.durChapterPos) + 1)张\n\n选择要保留的位置。",
+            title: L10n.text("manga.flow.progress.confirm_title", "确认阅读进度"),
+            message: L10n.format(
+                "manga.flow.progress.confirm_message", "本地：第%1$d章，第%2$d张\n云端：第%3$d章，第%4$d张\n\n选择要保留的位置。",
+                Int(baseline.durChapterIndex) + 1, Int(baseline.durChapterPos) + 1, index + 1, Int(remote.durChapterPos) + 1),
             preferredStyle: .alert)
         for (title, keepLocal) in [(L10n.Reader.syncProgressApplyServer, false), (L10n.Reader.syncProgressKeepLocal, true)] {
             alert.addAction(
@@ -263,12 +269,20 @@ final class MangaProgressSyncCoordinator {
         _ remote: BookProgress, baseline: Book, selected: MangaProgressSyncContext, revision: UUID, keepLocal: Bool
     ) {
         guard self.revision == revision, usableContext == selected else { return }
-        if keepLocal { start(.upload); return }
+        if keepLocal {
+            start(.upload)
+            return
+        }
         let id = UUID()
         requestID = id
         request = Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { if self.requestID == id { self.requestID = nil; self.request = nil } }
+            defer {
+                if self.requestID == id {
+                    self.requestID = nil
+                    self.request = nil
+                }
+            }
             do {
                 try await self.prepareAndApply(remote, baseline: baseline, selected: selected, revision: revision)
             } catch is CancellationError {
@@ -323,7 +337,12 @@ final class MangaProgressSyncCoordinator {
     func networkChanged(available: Bool) {
         let previous = networkAvailable
         networkAvailable = available
-        if !available { invalidateContext() } else if previous == false { needsSync = true; refresh() }
+        if !available {
+            invalidateContext()
+        } else if previous == false {
+            needsSync = true
+            refresh()
+        }
     }
 
     private func flushOnPause() {
@@ -341,7 +360,10 @@ final class MangaProgressSyncCoordinator {
                 lease.begin()
                 defer {
                     lease.finish()
-                    if self?.departureID == id { self?.departure = nil; self?.departureID = nil }
+                    if self?.departureID == id {
+                        self?.departure = nil
+                        self?.departureID = nil
+                    }
                 }
                 do { try await work() } catch is CancellationError {} catch {
                     SharedRuntime.log("离开漫画阅读页同步未完成：\(error.userFacingMessage)")
@@ -354,7 +376,12 @@ final class MangaProgressSyncCoordinator {
     private func feedback(_ message: String) { owner?.showTransientMessage(message, duration: 3) }
 
     private func report(_ message: String, manual: Bool) {
-        if manual { feedback(message) } else { lastAutomaticFailure = message; SharedRuntime.log("漫画自动进度同步未完成：\(message)") }
+        if manual {
+            feedback(message)
+        } else {
+            lastAutomaticFailure = message
+            SharedRuntime.log("漫画自动进度同步未完成：\(message)")
+        }
     }
 
     private func failure(_ message: String) -> NSError {
@@ -370,13 +397,17 @@ private final class MangaProgressSyncBackgroundLease {
     func begin() {
         identifier = UIApplication.shared.beginBackgroundTask(withName: "Manga cloud progress") { [weak self] in
             Task { @MainActor in
-                self?.task?.cancel(); self?.finish()
+                self?.task?.cancel()
+                self?.finish()
             }
         }
     }
 
     func finish() {
         task = nil
-        if identifier != .invalid { UIApplication.shared.endBackgroundTask(identifier); identifier = .invalid }
+        if identifier != .invalid {
+            UIApplication.shared.endBackgroundTask(identifier)
+            identifier = .invalid
+        }
     }
 }

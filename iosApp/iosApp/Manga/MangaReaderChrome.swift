@@ -15,7 +15,8 @@ final class MangaReaderChrome: UIView {
     private let more = UIButton(type: .system)
     private let download = UIButton(type: .system)
     private let settings = UIButton(type: .system)
-    private let downloadToolTip = UIToolTipInteraction(defaultToolTip: "离线缓存")
+    private let downloadToolTip = UIToolTipInteraction(
+        defaultToolTip: L10n.text("manga.ui.chrome.offline_cache", "离线缓存"))
     private let back = UIButton(type: .system)
     private let infoBar = MangaReaderInfoBar()
     private var canPrevious = false
@@ -58,25 +59,33 @@ final class MangaReaderChrome: UIView {
         titles.spacing = 3
         titles.translatesAutoresizingMaskIntoConstraints = false
         topBar.addSubview(titles)
-        configure(back, icon: "chevron.left", label: "返回", action: #selector(goBack))
-        configure(more, icon: "ellipsis", label: "更多", action: nil)
+        configure(back, icon: "chevron.left", label: L10n.text("manga.ui.chrome.back", "返回"), action: #selector(goBack))
+        configure(more, icon: "ellipsis", label: L10n.text("manga.ui.chrome.more", "更多"), action: nil)
         more.accessibilityIdentifier = "manga.reader.more"
-        more.addInteraction(UIToolTipInteraction(defaultToolTip: "更多"))
+        more.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.text("manga.ui.chrome.more", "更多")))
         more.showsMenuAsPrimaryAction = true
         more.menu = UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak self] completion in
                 Task { @MainActor in completion(await self?.menuProvider?() ?? []) }
             }
         ])
-        configure(download, icon: "arrow.down.circle", label: "离线缓存", action: #selector(showDownloads))
+        configure(
+            download, icon: "arrow.down.circle", label: L10n.text("manga.ui.chrome.offline_cache", "离线缓存"),
+            action: #selector(showDownloads))
         download.accessibilityIdentifier = "manga.reader.download"
         download.addInteraction(downloadToolTip)
-        configure(settings, icon: "slider.horizontal.3", label: "漫画设置", action: #selector(showSettings))
+        configure(
+            settings, icon: "slider.horizontal.3", label: L10n.text("manga.ui.settings.title", "漫画设置"),
+            action: #selector(showSettings))
         settings.accessibilityIdentifier = "manga.reader.settings"
-        settings.addInteraction(UIToolTipInteraction(defaultToolTip: "漫画设置"))
-        configure(previous, icon: "backward.end", label: "上一章", action: #selector(previousChapter))
-        configure(contents, icon: "list.bullet", label: "目录", action: #selector(showContents))
-        configure(nextButton, icon: "forward.end", label: "下一章", action: #selector(nextChapter))
+        settings.addInteraction(UIToolTipInteraction(defaultToolTip: L10n.text("manga.ui.settings.title", "漫画设置")))
+        configure(
+            previous, icon: "backward.end", label: L10n.text("manga.ui.chrome.previous_chapter", "上一章"),
+            action: #selector(previousChapter))
+        configure(contents, icon: "list.bullet", label: L10n.text("manga.ui.contents.title", "目录"), action: #selector(showContents))
+        configure(
+            nextButton, icon: "forward.end", label: L10n.text("manga.ui.chrome.next_chapter", "下一章"),
+            action: #selector(nextChapter))
         topBar.addSubview(back)
         topBar.addSubview(more)
         topBar.addSubview(download)
@@ -98,7 +107,7 @@ final class MangaReaderChrome: UIView {
         seek.minimumTrackTintColor = .white
         seek.maximumTrackTintColor = .darkGray
         seek.thumbTintColor = .white
-        seek.accessibilityLabel = "图片页码"
+        seek.accessibilityLabel = L10n.text("manga.ui.chrome.image_page_number", "图片页码")
         seek.translatesAutoresizingMaskIntoConstraints = false
         seek.addTarget(self, action: #selector(seekChanged), for: .valueChanged)
         seek.addTarget(self, action: #selector(seekFinished), for: [.touchUpInside, .touchUpOutside])
@@ -195,7 +204,7 @@ final class MangaReaderChrome: UIView {
             ? "exclamationmark.circle" : (status?.isActive == true ? "arrow.down.circle.fill" : "arrow.down.circle")
         download.setImage(UIImage(systemName: icon), for: .normal)
         download.accessibilityValue = status?.message
-        downloadToolTip.defaultToolTip = status?.message ?? "离线缓存"
+        downloadToolTip.defaultToolTip = status?.message ?? L10n.text("manga.ui.chrome.offline_cache", "离线缓存")
     }
 
     func setControlsVisible(_ visible: Bool, animated: Bool) {

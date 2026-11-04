@@ -29,7 +29,7 @@ struct MangaReaderCatalogSnapshot {
 }
 
 // Freeze values separately: Kotlin's ReadConfig is mutable even when Book is retained by a snapshot.
-fileprivate struct MangaReaderCatalogBookSignature: Equatable {
+private struct MangaReaderCatalogBookSignature: Equatable {
     let bookURL: String
     let origin: String
     let tocURL: String
@@ -116,7 +116,7 @@ final class MangaReaderCatalogClient {
             before.book.durChapterTime == after.book.durChapterTime,
             ReaderCatalogSnapshot.signature(items.map(\.chapter)) == after.directorySignature,
             items.allSatisfy({ $0.isCurrent == ($0.chapter.index == after.book.durChapterIndex) })
-        else { throw failure("漫画进度或目录已变化，请重新打开目录") }
+        else { throw failure(L10n.text("manga.flow.error.progress_directory_changed", "漫画进度或目录已变化，请重新打开目录")) }
         return MangaReaderCatalogSnapshot(
             book: after.book, items: Array(items.prefix(after.readableCount)), owner: owner,
             generation: generation, directory: after.chapters)
@@ -127,10 +127,10 @@ final class MangaReaderCatalogClient {
         guard snapshot.items.indices.contains(index), position >= 0,
             Int32(exactly: index) != nil, Int32(exactly: position) != nil,
             Int(snapshot.items[index].chapter.index) == index
-        else { throw failure("漫画章节或图片页码超出范围") }
+        else { throw failure(L10n.text("manga.flow.error.chapter_image_out_of_range", "漫画章节或图片页码超出范围")) }
         let current = try await persistedCatalog(generation: snapshot.generation)
         try checkSnapshot(snapshot)
-        guard current.matches(snapshot) else { throw failure("漫画书籍或目录已变化，请重新打开目录") }
+        guard current.matches(snapshot) else { throw failure(L10n.text("manga.flow.error.book_directory_changed", "漫画书籍或目录已变化，请重新打开目录")) }
         return Selection(snapshot: snapshot, index: index, position: position)
     }
 
@@ -172,7 +172,7 @@ final class MangaReaderCatalogClient {
                 && Self.matchesDirectory(current.chapters, expected: snapshot.directory, updatedIndex: selection.index)
             : current.matches(snapshot)
         guard snapshot.owner == owner, matches else {
-            throw failure("漫画书籍或目录已变化，请重新打开目录")
+            throw failure(L10n.text("manga.flow.error.book_directory_changed", "漫画书籍或目录已变化，请重新打开目录"))
         }
     }
 
@@ -184,7 +184,7 @@ final class MangaReaderCatalogClient {
             Int(payload.chapter.index) == selection.index,
             ReaderCatalogSnapshot.signature([payload.chapter])
                 == ReaderCatalogSnapshot.signature([payload.chapters[selection.index]])
-        else { throw failure("漫画加载结果与目录快照不一致") }
+        else { throw failure(L10n.text("manga.flow.error.catalog_result_mismatch", "漫画加载结果与目录快照不一致")) }
     }
 
     func validate(_ prepared: MangaReaderChapter, selection: Selection) async throws {
@@ -195,13 +195,13 @@ final class MangaReaderCatalogClient {
             Self.matchesDirectory(
                 prepared.chapters, expected: snapshot.items.map(\.chapter), updatedIndex: selection.index),
             prepared.isVolume == snapshot.items[selection.index].chapter.isVolume
-        else { throw failure("漫画加载结果与目录快照不一致") }
+        else { throw failure(L10n.text("manga.flow.error.catalog_result_mismatch", "漫画加载结果与目录快照不一致")) }
         // The shared parser clamps positions. Reject the original invalid value instead of accepting that clamp.
         let validPosition =
             prepared.pages.indices.contains(selection.position)
             || (prepared.isVolume && prepared.pages.isEmpty && selection.position == 0)
         guard validPosition, Int(prepared.chapterPosition) == selection.position else {
-            throw failure("漫画图片页码已超出当前章节")
+            throw failure(L10n.text("manga.flow.error.image_out_of_chapter", "漫画图片页码已超出当前章节"))
         }
         try await validate(selection, allowingContentUpdates: true)
         preparedChapter = prepared
@@ -216,9 +216,11 @@ final class MangaReaderCatalogClient {
         guard signature == MangaReaderCatalogBookSignature(after),
             let size = Int32(exactly: chapters.count),
             chapters.enumerated().allSatisfy({ $0.element.bookUrl == bookURL && Int($0.element.index) == $0.offset })
-        else { throw failure("漫画书籍或目录身份已变化") }
+        else { throw failure(L10n.text("manga.flow.error.catalog_identity_changed", "漫画书籍或目录身份已变化")) }
         let readable = Int(reader.computeSimulatedChapterSize(readConfig: after.readConfig, realChapterSize: size))
-        guard readable >= 0, readable <= chapters.count else { throw failure("漫画可读范围无效") }
+        guard readable >= 0, readable <= chapters.count else {
+            throw failure(L10n.text("manga.flow.error.readable_range_invalid", "漫画可读范围无效"))
+        }
         return PersistedCatalog(
             book: after, signature: signature, chapters: chapters,
             directorySignature: ReaderCatalogSnapshot.signature(chapters), readableCount: readable)
@@ -230,9 +232,9 @@ final class MangaReaderCatalogClient {
             books.resolvePersistedBook(bookUrl: bookURL, completionHandler: $0)
         }
         try check(generation)
-        guard let book, book.bookUrl == bookURL else { throw failure("书籍不存在或已被移除") }
+        guard let book, book.bookUrl == bookURL else { throw failure(L10n.text("manga.flow.error.book_missing", "书籍不存在或已被移除")) }
         guard ReaderSyncClient.sameIdentity(try context().book, book) else {
-            throw failure("漫画书籍或书源已变化")
+            throw failure(L10n.text("manga.flow.error.book_source_changed", "漫画书籍或书源已变化"))
         }
         return book
     }
@@ -253,11 +255,10 @@ final class MangaReaderCatalogClient {
         try check(snapshot.generation)
         guard snapshot.owner == owner, snapshot.bookSignature == MangaReaderCatalogBookSignature(snapshot.book),
             snapshot.readableSignature == ReaderCatalogSnapshot.signature(snapshot.items.map(\.chapter))
-        else { throw failure("漫画目录快照已失效") }
+        else { throw failure(L10n.text("manga.flow.error.catalog_snapshot_expired", "漫画目录快照已失效")) }
     }
 
-    private static func matchesDirectory(_ chapters: [BookChapter], expected: [BookChapter], updatedIndex: Int) -> Bool
-    {
+    private static func matchesDirectory(_ chapters: [BookChapter], expected: [BookChapter], updatedIndex: Int) -> Bool {
         guard chapters.count == expected.count, chapters.indices.contains(updatedIndex) else { return false }
         let chapter = chapters[updatedIndex]
         let original = expected[updatedIndex]

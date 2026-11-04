@@ -89,7 +89,7 @@ final class MangaTiledImage: @unchecked Sendable {
         defer { lock.unlock() }
         try Task.checkCancellation()
         guard tiles.indices.contains(index), tiles[index].index == index else {
-            throw failure("图片分片索引无效")
+            throw failure(L10n.text("manga.flow.image.tile_index_invalid", "图片分片索引无效"))
         }
         if let image = cache.object(forKey: NSNumber(value: index)) {
             recency.removeAll { $0 == index }
@@ -107,7 +107,7 @@ final class MangaTiledImage: @unchecked Sendable {
                 let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
                 (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue == Int(tile.frame.width),
                 (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue == Int(tile.frame.height)
-            else { throw failure("图片分片已失效，请重新加载原图") }
+            else { throw failure(L10n.text("manga.flow.image.tile_expired", "图片分片已失效，请重新加载原图")) }
             try Task.checkCancellation()
             guard
                 let decoded = CGImageSourceCreateImageAtIndex(
@@ -115,7 +115,7 @@ final class MangaTiledImage: @unchecked Sendable {
                     [kCGImageSourceShouldCache: true, kCGImageSourceShouldCacheImmediately: true] as CFDictionary),
                 decoded.width == Int(tile.frame.width), decoded.height == Int(tile.frame.height),
                 CGImageSourceGetStatusAtIndex(source, 0) == .statusComplete
-            else { throw failure("图片分片解码失败，请重新加载原图") }
+            else { throw failure(L10n.text("manga.flow.image.tile_decode_failed", "图片分片解码失败，请重新加载原图")) }
             try Task.checkCancellation()
             return UIImage(cgImage: decoded)
         }

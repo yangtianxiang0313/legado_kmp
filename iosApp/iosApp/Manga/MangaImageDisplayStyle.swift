@@ -106,6 +106,8 @@ enum MangaImageDisplayRenderer {
     }
 
     private static func failure() -> NSError {
-        NSError(domain: "io.legado.manga.image", code: 2, userInfo: [NSLocalizedDescriptionKey: "图片显示效果处理失败"])
+        NSError(
+            domain: "io.legado.manga.image", code: 2,
+            userInfo: [NSLocalizedDescriptionKey: L10n.text("manga.flow.image.display_failed", "图片显示效果处理失败")])
     }
 }

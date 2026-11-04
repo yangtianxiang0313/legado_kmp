@@ -317,7 +317,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         updateReaderInteraction()
         if catalog.isPreparing {
             collection.setContentOffset(collection.contentOffset, animated: false)
-            catalogStateView.show(message: "正在加载漫画…", loading: true)
+            catalogStateView.show(message: L10n.text("manga.flow.loading", "正在加载漫画…"), loading: true)
             setControlsVisible(true, animated: false)
         } else {
             catalogStateView.hide()
@@ -346,7 +346,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         adapter.setReadingActive(false)
         collection.isUserInteractionEnabled = false
         chrome.setBusy(true)
-        showState(message: "正在加载漫画…", loading: true)
+        showState(message: L10n.text("manga.flow.loading", "正在加载漫画…"), loading: true)
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -368,7 +368,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
                 if error is CancellationError || Task.isCancelled { return }
                 self.isLoading = false
                 self.updateReaderInteraction()
-                self.showState(message: error.localizedDescription, actionTitle: "重试", icon: "arrow.clockwise") {
+                self.showState(message: error.localizedDescription, actionTitle: L10n.Common.retry, icon: "arrow.clockwise") {
                     [weak self] in
                     self?.retryLoad()
                 }
@@ -393,7 +393,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         chrome.setBusy(isReaderBusy)
         if prepared.pages.isEmpty {
             let hasNext = Int(prepared.chapterIndex) + 1 < prepared.chapters.count
-            showState(message: prepared.chapterTitle, actionTitle: hasNext ? "下一章" : nil, icon: "forward.end") {
+            showState(message: prepared.chapterTitle, actionTitle: hasNext ? L10n.Reader.menuNext : nil, icon: "forward.end") {
                 [weak self] in
                 self?.changeChapter(by: 1)
             }
@@ -452,7 +452,8 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         guard canUseActions, presentedViewController == nil, let chapter,
             index > Int(chapter.chapterIndex), pagePosition == chapter.pages.count - 1
         else { return }
-        showTransientMessage("下一章加载失败：\(error.userFacingMessage)", duration: 4)
+        showTransientMessage(
+            L10n.format("manga.flow.next_chapter_failed", "下一章加载失败：%@", error.userFacingMessage), duration: 4)
         setControlsVisible(true)
     }
 
@@ -513,7 +514,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         let revision = loadRevision
         let recoveryItems = await recovery.menuElements()
         guard canUseActions, !recovery.isBusy, loadRevision == revision else { return [] }
-        let refresh = UIAction(title: "刷新本章", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+        let refresh = UIAction(title: L10n.Reader.refreshCurrent, image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
             guard let self, self.canUseActions, self.presentedViewController == nil else { return }
             self.load(
                 index: self.chapter.map { Int($0.chapterIndex) } ?? self.requestedIndex,
@@ -521,8 +522,10 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         }
         return [
             UIMenu(options: .displayInline, children: [refresh] + recoveryItems),
-            UIMenu(title: "云端进度", image: UIImage(systemName: "icloud"), children: progressSync.menuElements()),
-            UIMenu(title: "自动阅读", children: automaticReading.menuElements()),
+            UIMenu(
+                title: L10n.text("manga.flow.cloud_progress", "云端进度"), image: UIImage(systemName: "icloud"),
+                children: progressSync.menuElements()),
+            UIMenu(title: L10n.text("manga.flow.automatic_reading", "自动阅读"), children: automaticReading.menuElements()),
         ]
     }
 
@@ -678,7 +681,7 @@ final class MangaReaderViewController: UIViewController, UIGestureRecognizerDele
         let ownedPresentationVisible =
             presentedViewController?.viewIfLoaded?.window?.windowScene === readingScene
             && readingScene?.activationState == .foregroundActive
-        guard (canNavigate || ownedPresentationVisible), !isExiting, !recovery.isBusy, !sourceDestination.isPending
+        guard canNavigate || ownedPresentationVisible, !isExiting, !recovery.isBusy, !sourceDestination.isPending
         else {
             return
         }

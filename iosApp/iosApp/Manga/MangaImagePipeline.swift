@@ -222,7 +222,9 @@ final class MangaImagePipeline {
     }
 
     nonisolated private static func imageFailure() -> NSError {
-        NSError(domain: "io.legado.manga.image", code: 1, userInfo: [NSLocalizedDescriptionKey: "图片加载或解码失败"])
+        NSError(
+            domain: "io.legado.manga.image", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: L10n.text("manga.flow.image.load_decode_failed", "图片加载或解码失败")])
     }
 }
 

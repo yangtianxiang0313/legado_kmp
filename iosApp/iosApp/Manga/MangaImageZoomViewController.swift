@@ -55,10 +55,13 @@ final class MangaImageZoomViewController: UIViewController, UIScrollViewDelegate
         spinner.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(spinner)
         var configuration = UIButton.Configuration.plain()
-        configuration.title = "图片加载失败，重试"
+        configuration.title = L10n.text("manga.ui.image.retry", "图片加载失败，重试")
+        configuration.titleLineBreakMode = .byWordWrapping
+        configuration.titleAlignment = .center
         configuration.image = UIImage(systemName: "arrow.clockwise")
         configuration.imagePadding = 8
         retry.configuration = configuration
+        retry.titleLabel?.numberOfLines = 0
         retry.tintColor = .white
         retry.isHidden = true
         retry.translatesAutoresizingMaskIntoConstraints = false

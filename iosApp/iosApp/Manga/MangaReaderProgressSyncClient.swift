@@ -74,7 +74,7 @@ final class MangaReaderProgressSyncClient {
         let client = ReaderProgressSyncClient(reader: reader, settings: settings)
         let result = try await response { client.syncExpectedRequest(book: book, onResult: $0) }
         try check(selected)
-        guard let result = result.result else { throw failure("云端进度同步未返回结果") }
+        guard let result = result.result else { throw failure(L10n.text("manga.flow.progress.no_result", "云端进度同步未返回结果")) }
         return result
     }
 
@@ -112,7 +112,7 @@ final class MangaReaderProgressSyncClient {
         guard current.canPrepare, !current.chapter.book.isNotShelf, !expected.isNotShelf,
             expected.bookUrl == bookURL, remote.name == expected.name, remote.author == expected.author,
             remote.durChapterIndex >= 0, remote.durChapterPos >= 0, remote.durChapterTime >= 0
-        else { throw failure("云端进度与当前漫画不匹配") }
+        else { throw failure(L10n.text("manga.flow.progress.book_mismatch", "云端进度与当前漫画不匹配")) }
         let local = try await snapshot()
         try checkPreparation(requestID, generation: selected, context: current)
         guard Self.sameRevision(expected, local), !local.isNotShelf else { throw CancellationError() }
@@ -120,7 +120,7 @@ final class MangaReaderProgressSyncClient {
         let position = Int(remote.durChapterPos)
         let readable = try readableCount(local, directory: current.directory)
         guard current.directory.indices.contains(index), index < readable, !current.directory[index].isVolume else {
-            throw failure("云端章节已超出漫画目录或可读范围")
+            throw failure(L10n.text("manga.flow.progress.chapter_out_of_range", "云端章节已超出漫画目录或可读范围"))
         }
         let ticket = try requests.begin()
         defer {
@@ -139,7 +139,10 @@ final class MangaReaderProgressSyncClient {
                         nil,
                         NSError(
                             domain: "io.legado.mangaProgressSync", code: 1,
-                            userInfo: [NSLocalizedDescriptionKey: result.errorMessage ?? "漫画章节加载失败"]))
+                            userInfo: [
+                                NSLocalizedDescriptionKey: result.errorMessage
+                                    ?? L10n.text("manga.flow.error.chapter_load_failed", "漫画章节加载失败")
+                            ]))
                 } else {
                     completion(result.payload, nil)
                 }
@@ -155,7 +158,7 @@ final class MangaReaderProgressSyncClient {
             ReaderCatalogSnapshot.signature([payload.chapter])
                 == ReaderCatalogSnapshot.signature([current.directory[index]]),
             try readableCount(payload.book, directory: payload.chapters) == readable
-        else { throw failure("漫画书籍、目录或可读范围已变化") }
+        else { throw failure(L10n.text("manga.flow.progress.book_directory_changed", "漫画书籍、目录或可读范围已变化")) }
         let prepared: MangaReaderChapter = try await SharedAsync.value { completion in
             manga.prepareReaderChapter(
                 payload: payload, chapterPosition: remote.durChapterPos, completionHandler: completion)
@@ -168,7 +171,7 @@ final class MangaReaderProgressSyncClient {
             Int(prepared.chapterPosition) == position,
             ReaderCatalogSnapshot.signature(prepared.chapters)
                 == ReaderCatalogSnapshot.signature(Array(current.directory.prefix(readable)))
-        else { throw failure("云端图片页码无效，或漫画目录已变化") }
+        else { throw failure(L10n.text("manga.flow.progress.image_invalid", "云端图片页码无效，或漫画目录已变化")) }
         let latest = try await readSnapshot(current, generation: selected, allowPreview: false)
         try checkPreparation(requestID, generation: selected, context: current)
         try gate.check(ticket)
@@ -242,7 +245,7 @@ final class MangaReaderProgressSyncClient {
         let directory = try await persistedDirectory()
         try check(selected, context: current)
         guard ReaderCatalogSnapshot.signature(directory) == ReaderCatalogSnapshot.signature(current.directory) else {
-            throw failure("漫画目录已变化，请重新加载当前章节")
+            throw failure(L10n.text("manga.flow.progress.directory_changed", "漫画目录已变化，请重新加载当前章节"))
         }
         let latest = try await persistedBook()
         try check(selected, context: current)
@@ -267,13 +270,15 @@ final class MangaReaderProgressSyncClient {
             chapter.pages.indices.contains(Int(book.durChapterPos)),
             ReaderCatalogSnapshot.signature(chapter.chapters)
                 == ReaderCatalogSnapshot.signature(Array(current.directory.prefix(readable)))
-        else { throw failure("当前漫画书籍、章节或目录身份已变化") }
+        else { throw failure(L10n.text("manga.flow.progress.identity_changed", "当前漫画书籍、章节或目录身份已变化")) }
     }
 
     private func readableCount(_ book: Book, directory: [BookChapter]) throws -> Int {
-        guard let size = Int32(exactly: directory.count) else { throw failure("漫画目录过大") }
+        guard let size = Int32(exactly: directory.count) else {
+            throw failure(L10n.text("manga.flow.progress.directory_too_large", "漫画目录过大"))
+        }
         let count = Int(reader.computeSimulatedChapterSize(readConfig: book.readConfig, realChapterSize: size))
-        guard count > 0, count <= directory.count else { throw failure("漫画没有可读章节") }
+        guard count > 0, count <= directory.count else { throw failure(L10n.text("manga.flow.progress.no_readable_chapters", "漫画没有可读章节")) }
         return count
     }
 

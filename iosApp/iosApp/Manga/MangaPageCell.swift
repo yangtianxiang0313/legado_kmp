@@ -34,7 +34,8 @@ final class MangaPageCell: UICollectionViewCell {
         message.textAlignment = .center
         message.numberOfLines = 3
         var configuration = UIButton.Configuration.plain()
-        configuration.title = "重试"
+        configuration.title = L10n.Common.retry
+        configuration.titleLineBreakMode = .byWordWrapping
         configuration.image = UIImage(systemName: "arrow.clockwise")
         configuration.imagePadding = 6
         retryButton.configuration = configuration
@@ -85,7 +86,8 @@ final class MangaPageCell: UICollectionViewCell {
     ) {
         cancelLoad()
         imageView.setPresentation(nil)
-        imageView.accessibilityLabel = "第\(Int(page.index) + 1)张，共\(page.imageCount)张"
+        imageView.accessibilityLabel = L10n.format(
+            "manga.ui.image.position_accessibility", "第%1$ld张，共%2$ld张", Int(page.index) + 1, Int(page.imageCount))
         retry = { [weak self, weak pipeline] in
             guard let self, let pipeline else { return }
             self.start(
@@ -147,7 +149,7 @@ final class MangaPageCell: UICollectionViewCell {
         let token = revision
         status.isHidden = false
         retryButton.isHidden = true
-        message.text = "第\(Int(page.index) + 1)张"
+        message.text = L10n.format("manga.ui.image.position", "第%ld张", Int(page.index) + 1)
         spinner.startAnimating()
         refreshVisibleTiles()
         imageTask = Task { [weak self] in
@@ -170,7 +172,7 @@ final class MangaPageCell: UICollectionViewCell {
                     self.status.isHidden = true
                     return
                 }
-                self.message.text = "第\(Int(page.index) + 1)张加载失败"
+                self.message.text = L10n.format("manga.ui.image.load_failed", "第%ld张加载失败", Int(page.index) + 1)
                 self.retryButton.isHidden = false
                 self.refreshVisibleTiles()
             }

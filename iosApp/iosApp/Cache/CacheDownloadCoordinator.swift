@@ -114,7 +114,7 @@ final class CacheDownloadCoordinator {
             phase: .running,
             cached: previous?.cached ?? 0,
             total: previous?.total ?? max(0, Int(book.totalChapterNum)),
-            message: "正在准备下载…",
+            message: L10n.text("cache.task.preparing", "正在准备下载…"),
             hasProgress: false
         )
         let id = job.id
@@ -229,38 +229,44 @@ final class CacheDownloadCoordinator {
             total = max(0, Int(summary.totalChapters))
             hasProgress = true
             var issues: [String] = []
-            if total == 0 { issues.append("暂无章节，请先更新目录") }
-            if summary.errors > 0 { issues.append("\(summary.errors) 章下载失败") }
+            if total == 0 { issues.append(L10n.text("cache.task.no_chapters", "暂无章节，请先更新目录")) }
+            if summary.errors > 0 {
+                issues.append(L10n.format("cache.task.failed_chapters", "%ld 章下载失败", Int(summary.errors)))
+            }
             if let error = job.progressError { issues.append(error) }
             if summary.pending > 0 || summary.active > 0 {
-                issues.append("仍有 \(summary.pending) 章等待、\(summary.active) 章下载中")
+                issues.append(L10n.format("cache.task.remaining", "仍有 %1$ld 章等待、%2$ld 章下载中", Int(summary.pending), Int(summary.active)))
             }
             if job.stopRequested {
                 phase = .stopped
-                message = (["下载已停止，已缓存章节已保留"] + issues).joined(separator: "；")
+                message = ([L10n.text("cache.task.stopped_retained", "下载已停止，已缓存章节已保留")] + issues).joined(separator: issueSeparator)
             } else if !issues.isEmpty {
                 phase = .failed
-                message = issues.joined(separator: "；")
+                message = issues.joined(separator: issueSeparator)
             } else {
                 phase = .completed
-                message = "所选范围缓存完成"
+                message = L10n.text("cache.task.completed", "所选范围缓存完成")
             }
         case .failure(let error):
             let detail = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             if job.stopRequested || (job.automatic && error is CancellationError) {
                 phase = .stopped
-                var details = ["下载已停止，已缓存章节已保留"]
+                var details = [L10n.text("cache.task.stopped_retained", "下载已停止，已缓存章节已保留")]
                 if let error = job.progressError { details.append(error) }
                 let cancelled =
                     error is CancellationError || (error as NSError).code == NSURLErrorCancelled
                     || detail.lowercased().contains("cancelled") || detail.lowercased().contains("canceled")
                 if !cancelled, !detail.isEmpty { details.append(detail) }
-                message = details.joined(separator: "；")
+                message = details.joined(separator: issueSeparator)
             } else {
                 phase = .failed
-                var details = [detail.isEmpty ? "下载失败，未返回错误详情" : "下载失败：\(detail)"]
+                var details = [
+                    detail.isEmpty
+                        ? L10n.text("cache.task.failed_no_detail", "下载失败，未返回错误详情")
+                        : L10n.format("cache.task.failed_detail", "下载失败：%@", detail)
+                ]
                 if let error = job.progressError, error != detail { details.append(error) }
-                message = details.joined(separator: "；")
+                message = details.joined(separator: issueSeparator)
             }
         }
 
@@ -281,9 +287,12 @@ final class CacheDownloadCoordinator {
     }
 
     private func stoppingMessage(error: String?) -> String {
-        guard let error else { return "正在停止下载" }
-        return "正在停止下载；\(error)"
+        let message = L10n.text("cache.task.stopping", "正在停止下载")
+        guard let error else { return message }
+        return message + issueSeparator + error
     }
+
+    private var issueSeparator: String { L10n.text("cache.task.issue_separator", "；") }
 
     private func notifyObservers() {
         notifications.append(Notification(snapshots: snapshots, observerIDs: Array(observers.keys)))

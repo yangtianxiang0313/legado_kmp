@@ -212,11 +212,13 @@ final class MangaReaderStripController: NSObject, UICollectionViewDataSource, UI
             // The window contains images only, including any image-bearing volume chapter.
             let name = item.page.mChapterName
             if item.position == 0 {
-                let title = MangaChapterTitle(position: row, edge: .leading, message: "阅读 \(name)")
+                let title = MangaChapterTitle(
+                    position: row, edge: .leading, message: L10n.format("manga.ui.chapter.start", "阅读 %@", name))
                 chapterTitles[title.id] = title
             }
             if item.position == item.chapter.pages.count - 1 {
-                let title = MangaChapterTitle(position: row, edge: .trailing, message: "已读完 \(name)")
+                let title = MangaChapterTitle(
+                    position: row, edge: .trailing, message: L10n.format("manga.ui.chapter.end", "已读完 %@", name))
                 chapterTitles[title.id] = title
             }
         }

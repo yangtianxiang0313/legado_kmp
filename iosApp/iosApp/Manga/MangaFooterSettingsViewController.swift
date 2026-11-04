@@ -19,33 +19,61 @@ final class MangaFooterSettingsViewController: UITableViewController, UIAdaptive
         let rows: [Row]
     }
 
-    private static let sections: [Section] = [
-        Section(
-            title: "章节",
-            rows: [
-                .toggle(Toggle(title: "隐藏章节文案", keyPath: \.hideChapterLabel, identifier: "hideChapterLabel")),
-                .toggle(Toggle(title: "隐藏章节序号", keyPath: \.hideChapter, identifier: "hideChapter")),
-                .toggle(Toggle(title: "隐藏章节名称", keyPath: \.hideChapterName, identifier: "hideChapterName")),
-            ]),
-        Section(
-            title: "本章图片",
-            rows: [
-                .toggle(Toggle(title: "隐藏页数文案", keyPath: \.hidePageNumberLabel, identifier: "hidePageNumberLabel")),
-                .toggle(Toggle(title: "隐藏页数", keyPath: \.hidePageNumber, identifier: "hidePageNumber")),
-            ]),
-        Section(
-            title: "总进度",
-            rows: [
-                .toggle(Toggle(title: "隐藏总进度文案", keyPath: \.hideProgressRatioLabel, identifier: "hideProgressRatioLabel")),
-                .toggle(Toggle(title: "隐藏总进度", keyPath: \.hideProgressRatio, identifier: "hideProgressRatio")),
-            ]),
-        Section(
-            title: "页脚",
-            rows: [
-                .toggle(Toggle(title: "隐藏页脚", keyPath: \.hideFooter, identifier: "hideFooter"))
-            ]),
-        Section(title: "对齐方式", rows: [.alignment(.left), .alignment(.center)]),
-    ]
+    private static var sections: [Section] {
+        [
+            Section(
+                title: L10n.text("manga.ui.footer.section.chapter", "章节"),
+                rows: [
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_chapter_label", "隐藏章节文案"),
+                            keyPath: \.hideChapterLabel, identifier: "hideChapterLabel")),
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_chapter_number", "隐藏章节序号"),
+                            keyPath: \.hideChapter, identifier: "hideChapter")),
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_chapter_name", "隐藏章节名称"),
+                            keyPath: \.hideChapterName, identifier: "hideChapterName")),
+                ]),
+            Section(
+                title: L10n.text("manga.ui.footer.section.images", "本章图片"),
+                rows: [
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_page_label", "隐藏页数文案"),
+                            keyPath: \.hidePageNumberLabel, identifier: "hidePageNumberLabel")),
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_page_number", "隐藏页数"),
+                            keyPath: \.hidePageNumber, identifier: "hidePageNumber")),
+                ]),
+            Section(
+                title: L10n.text("manga.ui.footer.section.progress", "总进度"),
+                rows: [
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_progress_label", "隐藏总进度文案"),
+                            keyPath: \.hideProgressRatioLabel, identifier: "hideProgressRatioLabel")),
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_progress", "隐藏总进度"),
+                            keyPath: \.hideProgressRatio, identifier: "hideProgressRatio")),
+                ]),
+            Section(
+                title: L10n.text("manga.ui.footer.section.footer", "页脚"),
+                rows: [
+                    .toggle(
+                        Toggle(
+                            title: L10n.text("manga.ui.footer.hide_footer", "隐藏页脚"),
+                            keyPath: \.hideFooter, identifier: "hideFooter"))
+                ]),
+            Section(
+                title: L10n.text("manga.ui.footer.section.alignment", "对齐方式"),
+                rows: [.alignment(.left), .alignment(.center)]),
+        ]
+    }
 
     private(set) var draft: MangaFooterConfiguration
     private let onSave: @MainActor (MangaFooterConfiguration) async throws -> Void
@@ -69,7 +97,7 @@ final class MangaFooterSettingsViewController: UITableViewController, UIAdaptive
     private lazy var cancelButton = UIBarButtonItem(
         barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
     private lazy var saveButton = UIBarButtonItem(
-        title: "保存", style: .done, target: self, action: #selector(save))
+        title: L10n.Common.save, style: .done, target: self, action: #selector(save))
 
     /// The callback owns persistence; honor cancellation and recheck the owner's write gate before committing.
     init(
@@ -79,7 +107,7 @@ final class MangaFooterSettingsViewController: UITableViewController, UIAdaptive
         draft = configuration
         self.onSave = onSave
         super.init(style: .insetGrouped)
-        title = "漫画页脚"
+        title = L10n.text("manga.ui.footer.title", "漫画页脚")
     }
 
     @available(*, unavailable)
@@ -94,7 +122,7 @@ final class MangaFooterSettingsViewController: UITableViewController, UIAdaptive
 
     override var keyCommands: [UIKeyCommand]? {
         let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
-        escape.discoverabilityTitle = "取消"
+        escape.discoverabilityTitle = L10n.Common.cancel
         return [escape]
     }
 
@@ -218,7 +246,10 @@ final class MangaFooterSettingsViewController: UITableViewController, UIAdaptive
                 }, for: .valueChanged)
             cell.accessoryView = control
         case .alignment(let alignment):
-            let title = alignment == .left ? "左对齐" : "居中"
+            let title =
+                alignment == .left
+                ? L10n.text("manga.ui.footer.align_left", "左对齐")
+                : L10n.text("manga.ui.footer.align_center", "居中")
             let selected = draft.orientation == alignment
             cell.textLabel?.text = title
             cell.imageView?.image = UIImage(systemName: alignment == .left ? "text.alignleft" : "text.aligncenter")
@@ -296,7 +327,7 @@ final class MangaFooterSettingsViewController: UITableViewController, UIAdaptive
         let enabled = canInteract && !isSaving
         cancelButton.isEnabled = enabled
         saveButton.isEnabled = enabled
-        saveButton.title = isSaving ? "保存中" : "保存"
+        saveButton.title = isSaving ? L10n.text("manga.ui.footer.saving", "保存中") : L10n.Common.save
         for cell in tableView.visibleCells {
             cell.isUserInteractionEnabled = enabled
             (cell.accessoryView as? UIControl)?.isEnabled = enabled
@@ -346,10 +377,12 @@ final class MangaFooterSettingsViewController: UITableViewController, UIAdaptive
             return
         }
         if mayDeliver, let error {
-            lastError = error is CancellationError ? "保存已取消，草稿已保留。" : error.userFacingMessage
+            lastError =
+                error is CancellationError
+                ? L10n.text("manga.ui.footer.save_cancelled", "保存已取消，草稿已保留。") : error.userFacingMessage
         } else {
             // A callback may already have committed before noticing cancellation; do not claim it did not write.
-            lastError = "保存状态已变化，请确认后重试。"
+            lastError = L10n.text("manga.ui.footer.save_state_changed", "保存状态已变化，请确认后重试。")
         }
         tableView.reloadSections(IndexSet(integer: Self.sections.count - 1), with: .none)
         updateControls()

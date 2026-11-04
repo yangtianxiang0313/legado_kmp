@@ -8,7 +8,7 @@ final class MangaReadingSettingsViewController: UITableViewController {
     init(settings: MangaReadingSettings) {
         self.settings = settings
         super.init(style: .insetGrouped)
-        title = "漫画设置"
+        title = L10n.text("manga.ui.settings.title", "漫画设置")
     }
 
     @available(*, unavailable)
@@ -33,7 +33,11 @@ final class MangaReadingSettingsViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        ["阅读方式", "预加载", "图像"][section]
+        [
+            L10n.text("manga.ui.settings.section.reading", "阅读方式"),
+            L10n.text("manga.ui.settings.section.prefetch", "预加载"),
+            L10n.text("manga.ui.settings.section.image", "图像"),
+        ][section]
     }
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
@@ -49,16 +53,25 @@ final class MangaReadingSettingsViewController: UITableViewController {
                 control.isOn = options.hideChapterTitle
                 control.isEnabled = enabled
                 control.accessibilityIdentifier = "manga.settings.hideTitle"
-                control.accessibilityLabel = "隐藏章节标题"
+                control.accessibilityLabel = L10n.text("manga.ui.settings.hide_chapter_title", "隐藏章节标题")
                 control.addAction(
                     UIAction { [weak self, weak control] _ in
                         guard let control else { return }
                         self?.settings.set(.hideTitle(control.isOn))
                     }, for: .valueChanged)
-                return cell(title: "隐藏章节标题", control: control)
+                return cell(title: L10n.text("manga.ui.settings.hide_chapter_title", "隐藏章节标题"), control: control)
             }
-            if indexPath.row == 7 { return configurationCell(title: "页脚设置", identifier: "manga.settings.footer") }
-            let titles = ["横向滚动", "整页吸附", "翻页动画", "允许图片缩放", "点击翻页"]
+            if indexPath.row == 7 {
+                return configurationCell(
+                    title: L10n.text("manga.ui.settings.footer", "页脚设置"), identifier: "manga.settings.footer")
+            }
+            let titles = [
+                L10n.text("manga.ui.settings.horizontal_scroll", "横向滚动"),
+                L10n.text("manga.ui.settings.page_snap", "整页吸附"),
+                L10n.text("manga.ui.settings.page_animation", "翻页动画"),
+                L10n.text("manga.ui.settings.allows_zoom", "允许图片缩放"),
+                L10n.text("manga.ui.settings.tap_to_turn", "点击翻页"),
+            ]
             let values = [
                 options.horizontalScroll, options.pageSnap, options.animatesPages, options.allowsZoom, options.clickScroll,
             ]
@@ -87,20 +100,29 @@ final class MangaReadingSettingsViewController: UITableViewController {
             stepper.isEnabled = enabled
             stepper.isContinuous = false
             stepper.accessibilityIdentifier = "manga.settings.prefetch"
-            stepper.accessibilityLabel = "预加载图片"
-            stepper.accessibilityValue = "\(options.prefetchCount) 张"
+            stepper.accessibilityLabel = L10n.text("manga.ui.settings.prefetch_images", "预加载图片")
+            let count =
+                options.prefetchCount == 1
+                ? L10n.format("manga.ui.settings.image_count_single", "%ld 张", Int(options.prefetchCount))
+                : L10n.format("manga.ui.settings.image_count", "%ld 张", Int(options.prefetchCount))
+            stepper.accessibilityValue = count
             stepper.addAction(
                 UIAction { [weak self, weak stepper] _ in
                     guard let stepper else { return }
                     self?.settings.set(.prefetch(Int(stepper.value)))
                 }, for: .valueChanged)
-            return cell(title: "预加载图片", detail: "\(options.prefetchCount) 张", control: stepper)
+            return cell(title: L10n.text("manga.ui.settings.prefetch_images", "预加载图片"), detail: count, control: stepper)
         }
         if indexPath.row == 2 {
-            return configurationCell(title: "颜色滤镜", identifier: "manga.settings.colorFilter")
+            return configurationCell(
+                title: L10n.text("manga.ui.color_filter.title", "颜色滤镜"), identifier: "manga.settings.colorFilter")
         }
         if indexPath.row == 0 {
-            let segments = UISegmentedControl(items: ["原图", "灰度", "墨水屏"])
+            let segments = UISegmentedControl(items: [
+                L10n.text("manga.ui.settings.display.original", "原图"),
+                L10n.text("manga.ui.settings.display.grayscale", "灰度"),
+                L10n.text("manga.ui.settings.display.eink", "墨水屏"),
+            ])
             switch options.displayStyle {
             case .original: segments.selectedSegmentIndex = 0
             case .grayscale: segments.selectedSegmentIndex = 1
@@ -108,7 +130,7 @@ final class MangaReadingSettingsViewController: UITableViewController {
             }
             segments.isEnabled = enabled
             segments.accessibilityIdentifier = "manga.settings.displayStyle"
-            segments.accessibilityLabel = "图像显示方式"
+            segments.accessibilityLabel = L10n.text("manga.ui.settings.display_style_accessibility", "图像显示方式")
             segments.addAction(
                 UIAction { [weak self, weak segments] _ in
                     guard let self, let segments else { return }
@@ -118,7 +140,7 @@ final class MangaReadingSettingsViewController: UITableViewController {
                     guard styles.indices.contains(segments.selectedSegmentIndex) else { return }
                     self.settings.set(.displayStyle(styles[segments.selectedSegmentIndex]))
                 }, for: .valueChanged)
-            return cell(title: "显示方式", control: segments, vertical: true)
+            return cell(title: L10n.text("manga.ui.settings.display_style", "显示方式"), control: segments, vertical: true)
         }
         let slider = UISlider()
         slider.minimumValue = 0
@@ -127,11 +149,14 @@ final class MangaReadingSettingsViewController: UITableViewController {
         slider.isEnabled =
             enabled
             && {
-                if case .eInk = options.displayStyle { return true }; return false
+                if case .eInk = options.displayStyle { return true }
+                return false
             }()
         slider.accessibilityIdentifier = "manga.settings.threshold"
-        slider.accessibilityLabel = "墨水屏阈值"
-        let result = cell(title: "墨水屏阈值", detail: "\(options.eInkThreshold)", control: slider, vertical: true)
+        slider.accessibilityLabel = L10n.text("manga.ui.settings.eink_threshold", "墨水屏阈值")
+        let result = cell(
+            title: L10n.text("manga.ui.settings.eink_threshold", "墨水屏阈值"),
+            detail: "\(options.eInkThreshold)", control: slider, vertical: true)
         slider.addAction(
             UIAction { [weak self, weak slider, weak result] _ in
                 guard let slider else { return }
@@ -184,14 +209,14 @@ final class MangaReadingSettingsViewController: UITableViewController {
         stepper.isEnabled = enabled
         stepper.isContinuous = false
         stepper.accessibilityIdentifier = "manga.settings.autoPageSpeed"
-        stepper.accessibilityLabel = "自动阅读速度"
+        stepper.accessibilityLabel = L10n.text("manga.ui.settings.auto_reading_speed", "自动阅读速度")
         stepper.accessibilityValue = "\(value)"
         stepper.addAction(
             UIAction { [weak self, weak stepper] _ in
                 guard let stepper else { return }
                 self?.settings.set(.autoPageSpeed(Int(stepper.value)))
             }, for: .valueChanged)
-        return cell(title: "自动阅读速度", detail: "\(value)", control: stepper)
+        return cell(title: L10n.text("manga.ui.settings.auto_reading_speed", "自动阅读速度"), detail: "\(value)", control: stepper)
     }
 
     private func cell(title: String, detail: String? = nil, control: UIView, vertical: Bool = false) -> UITableViewCell {
@@ -203,6 +228,7 @@ final class MangaReadingSettingsViewController: UITableViewController {
         label.font = .preferredFont(forTextStyle: .body)
         label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
         let value = UILabel()
         value.text = detail
         value.tag = 91

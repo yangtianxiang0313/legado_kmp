@@ -89,24 +89,31 @@ final class MangaReaderInfoBar: UIView {
         let page = imageTotal > 0 ? min(max(0, pageIndex), imageTotal - 1) + 1 : 0
         set(
             chapterNameLabel, text: chapterName, hidden: configuration.hideChapterName || chapterName.isEmpty,
-            accessibility: "章节名称，\(chapterName)")
+            accessibility: L10n.format("manga.ui.footer.chapter_name_accessibility", "章节名称，%@", chapterName))
         set(
             pageNumberLabel,
-            text: "\(configuration.hidePageNumberLabel ? "" : "页数")\(page)/\(imageTotal)",
+            text: configuration.hidePageNumberLabel
+                ? "\(page)/\(imageTotal)"
+                : L10n.format("manga.ui.footer.page_number", "页数%@", "\(page)/\(imageTotal)"),
             hidden: configuration.hidePageNumber,
-            accessibility: "本章图片，第 \(page) 张，共 \(imageTotal) 张")
+            accessibility: L10n.format(
+                "manga.ui.footer.page_number_accessibility", "本章图片，第 %1$ld 张，共 %2$ld 张", page, imageTotal))
         set(
             chapterLabel,
-            text: "\(configuration.hideChapterLabel ? "" : "章节")\(chapter)/\(chapterTotal)",
+            text: configuration.hideChapterLabel
+                ? "\(chapter)/\(chapterTotal)"
+                : L10n.format("manga.ui.footer.chapter_number", "章节%@", "\(chapter)/\(chapterTotal)"),
             hidden: configuration.hideChapter,
-            accessibility: "第 \(chapter) 章，共 \(chapterTotal) 章")
+            accessibility: L10n.format(
+                "manga.ui.footer.chapter_number_accessibility", "第 %1$ld 章，共 %2$ld 章", chapter, chapterTotal))
         let progress = Self.progressText(
             chapterIndex: chapterIndex, chapterCount: chapterTotal, pageIndex: pageIndex, imageCount: imageTotal)
         set(
             progressLabel,
-            text: "\(configuration.hideProgressRatioLabel ? "" : "总进度")\(progress)",
+            text: configuration.hideProgressRatioLabel
+                ? progress : L10n.format("manga.ui.footer.progress", "总进度%@", progress),
             hidden: configuration.hideProgressRatio,
-            accessibility: "总进度，\(progress)")
+            accessibility: L10n.format("manga.ui.footer.progress_accessibility", "总进度，%@", progress))
         isHidden = configuration.hideFooter
         refreshAppearance()
         accessibilityElements = labels.filter { !$0.isHidden }
@@ -336,13 +343,19 @@ final class MangaReaderInfoBar: UIView {
     }
 
     private func synchronizeClock() {
-        guard canRunClock else { stopClock(); return }
+        guard canRunClock else {
+            stopClock()
+            return
+        }
         guard clockTimer == nil else { return }
         updateClock()
         let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                guard self.canRunClock else { self.stopClock(); return }
+                guard self.canRunClock else {
+                    self.stopClock()
+                    return
+                }
                 self.updateClock()
             }
         }
@@ -358,7 +371,7 @@ final class MangaReaderInfoBar: UIView {
         timeFormatter.dateStyle = .none
         timeFormatter.timeStyle = .short
         timeLabel.text = timeFormatter.string(from: Date())
-        timeLabel.accessibilityLabel = "时间，\(timeLabel.text ?? "")"
+        timeLabel.accessibilityLabel = L10n.format("manga.ui.footer.time_accessibility", "时间，%@", timeLabel.text ?? "")
         refreshAppearance()
         invalidateIntrinsicContentSize()
         setNeedsLayout()

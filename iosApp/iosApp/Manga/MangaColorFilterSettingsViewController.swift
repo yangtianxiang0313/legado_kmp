@@ -8,15 +8,22 @@ final class MangaColorFilterSettingsViewController: UITableViewController, UIAda
     private var didSave = false
     private var errorMessage: String?
     private var isSaving: Bool { saveTask != nil }
-    private let fields: [(String, WritableKeyPath<MangaColorFilter, Int>)] = [
-        ("亮度", \.l), ("R", \.r), ("G", \.g), ("B", \.b), ("A", \.a),
-    ]
+    private var fields: [(String, String, WritableKeyPath<MangaColorFilter, Int>)] {
+        let brightness = L10n.text("manga.ui.color_filter.brightness", "亮度")
+        return [
+            (brightness, brightness, \.l),
+            ("R", L10n.text("manga.ui.color_filter.red_accessibility", "红色通道"), \.r),
+            ("G", L10n.text("manga.ui.color_filter.green_accessibility", "绿色通道"), \.g),
+            ("B", L10n.text("manga.ui.color_filter.blue_accessibility", "蓝色通道"), \.b),
+            ("A", L10n.text("manga.ui.color_filter.alpha_accessibility", "透明度通道"), \.a),
+        ]
+    }
 
     init(settings: MangaReadingSettings) {
         self.settings = settings
         draft = settings.options.colorFilter
         super.init(style: .insetGrouped)
-        title = "颜色滤镜"
+        title = L10n.text("manga.ui.color_filter.title", "颜色滤镜")
     }
 
     @available(*, unavailable)
@@ -58,7 +65,8 @@ final class MangaColorFilterSettingsViewController: UITableViewController, UIAda
         cell.selectionStyle = .none
         if indexPath.section == 1 {
             var content = cell.defaultContentConfiguration()
-            content.text = "重置"
+            content.text = L10n.text("manga.ui.color_filter.reset", "重置")
+            content.textProperties.numberOfLines = 0
             content.image = UIImage(systemName: "arrow.counterclockwise")
             cell.contentConfiguration = content
             cell.selectionStyle = .default
@@ -66,12 +74,16 @@ final class MangaColorFilterSettingsViewController: UITableViewController, UIAda
             cell.isUserInteractionEnabled = !isSaving
             return cell
         }
-        let (title, key) = fields[indexPath.row]
+        let (title, accessibilityLabel, key) = fields[indexPath.row]
         let label = UILabel()
         label.text = title
         label.font = .preferredFont(forTextStyle: .body)
+        label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
         let value = UILabel()
-        value.text = indexPath.row == 0 && draft.l == 0 ? "系统" : "\(draft[keyPath: key])"
+        value.text =
+            indexPath.row == 0 && draft.l == 0
+            ? L10n.text("manga.ui.color_filter.system", "系统") : "\(draft[keyPath: key])"
         value.font = .monospacedDigitSystemFont(ofSize: 15, weight: .regular)
         value.textColor = .secondaryLabel
         value.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -82,7 +94,7 @@ final class MangaColorFilterSettingsViewController: UITableViewController, UIAda
         slider.maximumValue = 255
         slider.value = Float(draft[keyPath: key])
         slider.isEnabled = !isSaving
-        slider.accessibilityLabel = title
+        slider.accessibilityLabel = accessibilityLabel
         slider.accessibilityValue = value.text
         slider.accessibilityIdentifier = "manga.colorFilter.\(["l", "r", "g", "b", "a"][indexPath.row])"
         slider.addAction(
@@ -90,7 +102,9 @@ final class MangaColorFilterSettingsViewController: UITableViewController, UIAda
                 guard let self, let slider, !self.isSaving else { return }
                 let number = Int(slider.value.rounded())
                 self.draft[keyPath: key] = number
-                value?.text = key == \.l && number == 0 ? "系统" : "\(number)"
+                value?.text =
+                    key == \.l && number == 0
+                    ? L10n.text("manga.ui.color_filter.system", "系统") : "\(number)"
                 slider.accessibilityValue = value?.text
                 self.settings.previewColorFilter(self.draft)
             }, for: .valueChanged)

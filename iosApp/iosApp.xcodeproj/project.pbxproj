@@ -646,6 +646,9 @@
 		D36B00010000000000000005 /* BookSourceDebugScreenAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D36B00020000000000000005 /* BookSourceDebugScreenAdapter.swift */; };
 		A10000000000000000000081 /* BookSourceManagementSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000081 /* BookSourceManagementSupport.swift */; };
 		A1000000000000000000001A /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* L10n.swift */; };
+		E61104050000000000000001 /* L10nReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104060000000000000001 /* L10nReader.swift */; };
+		E61104050000000000000002 /* L10nLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104060000000000000002 /* L10nLibrary.swift */; };
+		E61104050000000000000003 /* L10nSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104060000000000000003 /* L10nSources.swift */; };
 		A1000000000000000000001B /* AppUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* AppUI.swift */; };
 		A1000000000000000000001C /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* Localizable.xcstrings */; };
 		A1000000000000000000001D /* ReaderMenuFlowViewControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* ReaderMenuFlowViewControllers.swift */; };
@@ -1424,6 +1427,9 @@
 		D36B00020000000000000005 /* BookSourceDebugScreenAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceDebugScreenAdapter.swift; sourceTree = "<group>"; };
 		A20000000000000000000081 /* BookSourceManagementSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceManagementSupport.swift; sourceTree = "<group>"; };
 		A2000000000000000000001C /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
+		E61104060000000000000001 /* L10nReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10nReader.swift; sourceTree = "<group>"; };
+		E61104060000000000000002 /* L10nLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10nLibrary.swift; sourceTree = "<group>"; };
+		E61104060000000000000003 /* L10nSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10nSources.swift; sourceTree = "<group>"; };
 		A2000000000000000000001D /* AppUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUI.swift; sourceTree = "<group>"; };
 		A2000000000000000000001E /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A2000000000000000000001F /* ReaderMenuFlowViewControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderMenuFlowViewControllers.swift; sourceTree = "<group>"; };
@@ -1850,6 +1856,9 @@
 				A20000000000000000000004 /* SharedRuntime.swift */,
 				E20000000000000000000009 /* SharedCancellableAsync.swift */,
 				A2000000000000000000001C /* L10n.swift */,
+				E61104060000000000000001 /* L10nReader.swift */,
+				E61104060000000000000002 /* L10nLibrary.swift */,
+				E61104060000000000000003 /* L10nSources.swift */,
 				A2000000000000000000001D /* AppUI.swift */,
 				D20000000000000000000001 /* UIIdentifiers.swift */,
 				A20000000000000000000012 /* FlowSubscriptionStore.swift */,
@@ -3349,6 +3358,9 @@
 				E8A51DAD0000000000000011 /* SourceImportPreviewDraftViewController.swift in Sources */,
 				A10000000000000000000030 /* QRCodeScannerViewController.swift in Sources */,
 				A1000000000000000000001A /* L10n.swift in Sources */,
+				E61104050000000000000001 /* L10nReader.swift in Sources */,
+				E61104050000000000000002 /* L10nLibrary.swift in Sources */,
+				E61104050000000000000003 /* L10nSources.swift in Sources */,
 				A1000000000000000000001B /* AppUI.swift in Sources */,
 				A1000000000000000000001D /* ReaderMenuFlowViewControllers.swift in Sources */,
 				A1000000000000000000008D /* ReaderReadAloudSheetViewController.swift in Sources */,

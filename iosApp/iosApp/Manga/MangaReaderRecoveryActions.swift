@@ -136,7 +136,7 @@ final class MangaReaderRecoveryActions {
             if let source, source.bookSourceUrl == book.origin, source.hasManagementLoginURL {
                 elements.append(
                     UIAction(
-                        title: "原书源登录", image: UIImage(systemName: "person.crop.circle"),
+                        title: L10n.text("manga.flow.recovery.source_login", "原书源登录"), image: UIImage(systemName: "person.crop.circle"),
                         identifier: UIAction.Identifier("mangaReader.sourceLogin")
                     ) { [weak self] _ in
                         self?.openLogin(sourceURL: source.bookSourceUrl, token: token, readerGeneration: readerGeneration)
@@ -271,7 +271,7 @@ final class MangaReaderRecoveryActions {
         guard prepared.book.isImage else {
             throw NSError(
                 domain: "io.legado.manga", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "所选择的源不是漫画源"])
+                userInfo: [NSLocalizedDescriptionKey: L10n.text("manga.flow.recovery.not_manga_source", "所选择的源不是漫画源")])
         }
         if let flushError { throw flushError }
         try Task.checkCancellation()
