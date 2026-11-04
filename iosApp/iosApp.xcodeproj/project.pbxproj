@@ -375,6 +375,7 @@
 		A1000000000000000000000C /* ReaderLayoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* ReaderLayoutEngine.swift */; };
 		F02A49010000000000000001 /* ReaderLayoutRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02A49020000000000000001; };
 		E61104010000000000000001 /* ReaderImageLayoutGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104020000000000000001; };
+		E61104070000000000000001 /* ReaderScrollPageMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104080000000000000001; };
 		E61104010000000000000002 /* ReaderPaginationImageSizes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104020000000000000002; };
 		E61104030000000000000001 /* ReaderTextSourceMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104040000000000000001; };
 		E61104030000000000000002 /* ReaderInlineImageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61104040000000000000002; };
@@ -1154,6 +1155,7 @@
 		A2000000000000000000000C /* ReaderLayoutEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLayoutEngine.swift; sourceTree = "<group>"; };
 		F02A49020000000000000001 /* ReaderLayoutRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLayoutRenderer.swift; sourceTree = "<group>"; };
 		E61104020000000000000001 /* ReaderImageLayoutGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderImageLayoutGeometry.swift; sourceTree = "<group>"; };
+		E61104080000000000000001 /* ReaderScrollPageMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderScrollPageMetrics.swift; sourceTree = "<group>"; };
 		E61104020000000000000002 /* ReaderPaginationImageSizes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaginationImageSizes.swift; sourceTree = "<group>"; };
 		E61104040000000000000001 /* ReaderTextSourceMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTextSourceMap.swift; sourceTree = "<group>"; };
 		E61104040000000000000002 /* ReaderInlineImageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderInlineImageComposer.swift; sourceTree = "<group>"; };
@@ -2183,6 +2185,7 @@
 				A2000000000000000000000C /* ReaderLayoutEngine.swift */,
 				F02A49020000000000000001 /* ReaderLayoutRenderer.swift */,
 				E61104020000000000000001 /* ReaderImageLayoutGeometry.swift */,
+				E61104080000000000000001 /* ReaderScrollPageMetrics.swift */,
 				E61104020000000000000002 /* ReaderPaginationImageSizes.swift */,
 				E61104040000000000000001 /* ReaderTextSourceMap.swift */,
 				E61104040000000000000002 /* ReaderInlineImageComposer.swift */,
@@ -3033,6 +3036,7 @@
 				A1000000000000000000000C /* ReaderLayoutEngine.swift in Sources */,
 				F02A49010000000000000001 /* ReaderLayoutRenderer.swift in Sources */,
 				E61104010000000000000001 /* ReaderImageLayoutGeometry.swift in Sources */,
+				E61104070000000000000001 /* ReaderScrollPageMetrics.swift in Sources */,
 				E61104010000000000000002 /* ReaderPaginationImageSizes.swift in Sources */,
 				E61104030000000000000001 /* ReaderTextSourceMap.swift in Sources */,
 				E61104030000000000000002 /* ReaderInlineImageComposer.swift in Sources */,

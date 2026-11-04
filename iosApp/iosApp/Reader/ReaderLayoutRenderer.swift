@@ -22,9 +22,13 @@ final class ReaderLayoutRenderer {
         theme: ReaderThemeController,
         imageStyle: String,
         imageSizes: [String: CGSize] = [:],
-        imageScale: CGFloat = 1
+        imageScale: CGFloat = 1,
+        isScrollMode: Bool = false
     ) -> [ReaderPageLayout] {
         guard !isCancelled else { return [] }
+        let contentSize = CGSize(
+            width: contentSize.width.isFinite ? max(contentSize.width, 1) : 1,
+            height: contentSize.height.isFinite ? max(contentSize.height, 1) : 1)
         var pages: [ReaderPageLayout] = []
         var page = ReaderPageBuildState(contentSize: contentSize, bodyLineAdvance: theme.bodyLineHeight)
         var pendingTextFragments: [ReaderPageFragment] = []
@@ -132,7 +136,8 @@ final class ReaderLayoutRenderer {
                         theme: theme,
                         imageStyle: imageStyle,
                         imageSizes: imageSizes,
-                        imageScale: imageScale
+                        imageScale: imageScale,
+                        isScrollMode: isScrollMode
                     )
 
                 case .spacer:
@@ -446,7 +451,8 @@ final class ReaderLayoutRenderer {
         theme: ReaderThemeController,
         imageStyle: String,
         imageSizes: [String: CGSize],
-        imageScale: CGFloat
+        imageScale: CGFloat,
+        isScrollMode: Bool
     ) {
         guard !isCancelled else { return }
         guard let urlString = fragment.imageUrl,
@@ -459,7 +465,8 @@ final class ReaderLayoutRenderer {
             pixelSize: imageSizes[urlString],
             imageScale: imageScale,
             contentSize: contentSize,
-            bodyLineHeight: theme.bodyLineHeight
+            bodyLineHeight: theme.bodyLineHeight,
+            isScrollMode: isScrollMode
         )
         if geometry.occupiesWholePage {
             if !page.isEmpty {
@@ -467,8 +474,15 @@ final class ReaderLayoutRenderer {
             }
             page = ReaderPageBuildState(contentSize: contentSize, bodyLineAdvance: theme.bodyLineHeight)
         } else {
+            if geometry.allowsVerticalOverflow, !page.cursorY.isFinite {
+                if !page.isEmpty {
+                    pages.append(page.build(chapterTitle: chapterTitle, bottomJustify: false))
+                }
+                page = ReaderPageBuildState(contentSize: contentSize, bodyLineAdvance: theme.bodyLineHeight)
+            }
+            // FULL scroll keeps preceding text: only the image's start must fit the base page.
             preparePageForContent(
-                height: geometry.size.height,
+                height: geometry.allowsVerticalOverflow ? 0 : geometry.size.height,
                 sourceLocation: Int(fragment.chapterStartPosition),
                 to: &page,
                 pages: &pages,
@@ -478,16 +492,26 @@ final class ReaderLayoutRenderer {
             )
         }
         guard !isCancelled else { return }
+        if geometry.allowsVerticalOverflow, !(page.cursorY + geometry.size.height).isFinite {
+            if !page.isEmpty {
+                pages.append(page.build(chapterTitle: chapterTitle, bottomJustify: false))
+            }
+            page = ReaderPageBuildState(contentSize: contentSize, bodyLineAdvance: theme.bodyLineHeight)
+        }
+        let imageFrame = geometry.frame(cursorY: page.cursorY)
         page.appendAttachment(
             sourceRange: NSRange(
                 location: Int(fragment.chapterStartPosition),
                 length: max(Int(fragment.chapterEndPosition - fragment.chapterStartPosition), 1)),
-            frame: geometry.frame(cursorY: page.cursorY),
+            frame: imageFrame,
             contentMode: .scaleAspectFit,
             source: .remoteImage(url: url, altText: fragment.imageAlt),
             previewText: fragment.imageAlt,
             requestRule: urlString
         )
+        if geometry.allowsVerticalOverflow, imageFrame.maxY.isFinite, imageFrame.maxY > contentSize.height {
+            page.fullScrollImageOverflowExtent = max(page.fullScrollImageOverflowExtent ?? 0, imageFrame.maxY)
+        }
         if geometry.occupiesWholePage {
             // Commit the centered image without justification or synthetic source coordinates.
             pages.append(page.build(chapterTitle: chapterTitle, bottomJustify: false))

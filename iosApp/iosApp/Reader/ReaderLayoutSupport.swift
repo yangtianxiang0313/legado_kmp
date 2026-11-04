@@ -7,6 +7,7 @@ struct ReaderPageBuildState {
     var attachmentFragments: [ReaderAttachmentLayoutFragment] = []
     var cursorY: CGFloat = 0
     var pendingBlockSpacing: CGFloat = 0
+    var fullScrollImageOverflowExtent: CGFloat?
     var previewParts: [String] = []
     private var firstCharacterOffset: Int?
     private let bodyLineAdvance: CGFloat
@@ -21,7 +22,7 @@ struct ReaderPageBuildState {
     }
 
     func spacingBeforeContent(height: CGFloat) -> CGFloat {
-        let spacing = max(pendingBlockSpacing, 0)
+        let spacing = pendingBlockSpacing.isFinite ? max(pendingBlockSpacing, 0) : 0
         guard isEmpty else { return spacing }
         return min(spacing, max(contentSize.height - cursorY - height, 0))
     }
@@ -111,13 +112,17 @@ struct ReaderPageBuildState {
 
     func build(chapterTitle: String, bottomJustify: Bool = false) -> ReaderPageLayout {
         let fragments = bottomJustify ? bottomJustifiedFragments() : (textFragments, attachmentFragments)
+        var pageContentSize = contentSize
+        if let extent = fullScrollImageOverflowExtent, extent.isFinite, extent > contentSize.height {
+            pageContentSize.height = extent
+        }
         return ReaderPageLayout(
             textFragments: fragments.0,
             attachmentFragments: fragments.1,
             chapterTitle: chapterTitle,
             characterOffset: firstCharacterOffset ?? 0,
             previewText: previewParts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines),
-            contentSize: contentSize
+            contentSize: pageContentSize
         )
     }
 

@@ -3,9 +3,13 @@ import CoreGraphics
 struct ReaderImageLayoutGeometry {
     let size: CGSize
     let occupiesWholePage: Bool
+    let allowsVerticalOverflow: Bool
     private let contentSize: CGSize
 
-    init(style: String, pixelSize: CGSize?, imageScale: CGFloat, contentSize: CGSize, bodyLineHeight: CGFloat) {
+    init(
+        style: String, pixelSize: CGSize?, imageScale: CGFloat, contentSize: CGSize,
+        bodyLineHeight: CGFloat, isScrollMode: Bool = false
+    ) {
         let style = style.uppercased()
         let availableSize = CGSize(
             width: Self.positiveFinite(contentSize.width) ? contentSize.width : 1,
@@ -13,12 +17,18 @@ struct ReaderImageLayoutGeometry {
         )
         self.contentSize = availableSize
         occupiesWholePage = style == "SINGLE"
+        allowsVerticalOverflow = style == "FULL" && isScrollMode
         let placeholder = Self.placeholderSize(style: style, contentSize: availableSize, bodyLineHeight: bodyLineHeight)
         // Legacy/caller-created TEXT layouts without paragraph hints retain a bounded fallback.
         guard style != "TEXT", let pixelSize,
             Self.positiveFinite(pixelSize.width), Self.positiveFinite(pixelSize.height)
         else {
             size = placeholder
+            return
+        }
+
+        if allowsVerticalOverflow {
+            size = Self.fullWidthSize(pixelSize, width: availableSize.width) ?? placeholder
             return
         }
 
@@ -38,12 +48,25 @@ struct ReaderImageLayoutGeometry {
     }
 
     func frame(cursorY: CGFloat) -> CGRect {
-        CGRect(
+        let y =
+            occupiesWholePage
+            ? max((contentSize.height - size.height) / 2, 0)
+            : (cursorY.isFinite ? max(cursorY, 0) : 0)
+        return CGRect(
             x: max((contentSize.width - size.width) / 2, 0),
-            y: occupiesWholePage ? max((contentSize.height - size.height) / 2, 0) : cursorY,
+            y: (y + size.height).isFinite ? y : 0,
             width: size.width,
             height: size.height
         )
+    }
+
+    private static func fullWidthSize(_ pixelSize: CGSize, width: CGFloat) -> CGSize? {
+        let height = pixelSize.height / pixelSize.width * width
+        if positiveFinite(height) { return CGSize(width: width, height: height) }
+        // A different operation order can avoid intermediate overflow/underflow.
+        let alternateHeight = width / pixelSize.width * pixelSize.height
+        guard positiveFinite(alternateHeight) else { return nil }
+        return CGSize(width: width, height: alternateHeight)
     }
 
     private static func aspectFitSize(_ pixelSize: CGSize, in bounds: CGSize) -> CGSize? {

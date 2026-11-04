@@ -37,7 +37,10 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
     private var isUpdatingContent = false
     private var lastReportedPageIndex = 0
     private var isBoundaryRequestInFlight = false
-    private var lastLaidOutPageSlotHeight: CGFloat = 0
+    private var cachedPageMetrics: ReaderScrollPageMetrics?
+    private var lastLaidOutPageMetrics: ReaderScrollPageMetrics?
+    private var measuredVisibleHeight: CGFloat?
+    private var continuationMeasuredVisibleHeight: CGFloat?
     private var chapterMessageVisible = false
     private let renderedPageRadius = 3
 
@@ -104,7 +107,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let previousPageSlotHeight = lastLaidOutPageSlotHeight
+        let previousMetrics = lastLaidOutPageMetrics
         let previousContentOffset = scrollView.contentOffset
         let wasUpdatingContent = isUpdatingContent
         isUpdatingContent = true
@@ -115,8 +118,8 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         }
         updateScrollFrame()
         layoutPageViews()
-        reconcileContentOffsetAfterLayout(previousPageSlotHeight: previousPageSlotHeight, previousContentOffset: previousContentOffset)
-        lastLaidOutPageSlotHeight = pageSlotHeight
+        reconcileContentOffsetAfterLayout(previousMetrics: previousMetrics, previousContentOffset: previousContentOffset)
+        lastLaidOutPageMetrics = pageMetrics
         isUpdatingContent = wasUpdatingContent
         if !isProgrammaticScroll {
             reportVisiblePage()
@@ -176,7 +179,10 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
             doubleHorizontalPageMode: doubleHorizontalPageMode,
             retainsImageLine: retainsImageLine
         )
-        lastReportedPageIndex = leadingPageIndex(forPageIndex: min(max(currentPageIndex, 0), max(pages.count - 1, 0)))
+        updateScrollFrame()
+        measuredVisibleHeight = currentVisibleRect().height
+        cachedPageMetrics = nil
+        lastReportedPageIndex = pageMetrics.leadingPageIndex(forPageIndex: currentPageIndex)
         isBoundaryRequestInFlight = false
         chromeView.theme = theme
         chromeView.bookURL = bookURL
@@ -185,11 +191,10 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         chromeView.searchResultRange = nil
         chromeView.pageLayout = nil
         chromeView.chrome = chromeProvider(lastReportedPageIndex)
-        updateScrollFrame()
         rebuildPageViews()
         layoutPageViews()
         scrollToPage(index: lastReportedPageIndex, animated: false)
-        lastLaidOutPageSlotHeight = pageSlotHeight
+        lastLaidOutPageMetrics = pageMetrics
     }
 
     /// Supplies one visual-only next-chapter slot; an empty array explicitly removes it.
@@ -198,6 +203,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         isUpdatingContent = true
         defer { isUpdatingContent = wasUpdatingContent }
         clearAutoReadContinuation()
+        continuationMeasuredVisibleHeight = currentVisibleRect().height
         if let renderState, !renderState.pages.isEmpty {
             for page in pages.prefix(isDualPageMode ? 2 : 1) {
                 let contentView = ReaderPageContentView()
@@ -215,18 +221,19 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
             }
         }
         layoutPageViews()
+        lastLaidOutPageMetrics = pageMetrics
     }
 
     func scrollToPage(index: Int, animated: Bool) {
         guard pageCount > 0 else { return }
         let clamped = min(max(index, 0), pageCount - 1)
-        let targetIndex = leadingPageIndex(forPageIndex: clamped)
-        let targetSlot = slotIndex(forPageIndex: clamped)
-        let pageHeight = pageSlotHeight
+        let metrics = pageMetrics
+        let targetIndex = metrics.leadingPageIndex(forPageIndex: clamped)
+        let targetSlot = metrics.slotIndex(forPageIndex: clamped)
         ensureRenderedWindow(centeredAt: targetIndex)
         layoutPageViews()
         isProgrammaticScroll = true
-        scrollView.setContentOffset(CGPoint(x: 0, y: CGFloat(targetSlot) * pageHeight), animated: animated)
+        scrollView.setContentOffset(CGPoint(x: 0, y: metrics.slotStarts[targetSlot]), animated: animated)
         if animated == false {
             isProgrammaticScroll = false
         }
@@ -236,20 +243,20 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
     @discardableResult
     func scrollByViewport(forward: Bool, animated: Bool) -> Bool {
         guard pageCount > 0 else { return false }
-        let pageHeight = pageSlotHeight
-        if isDualPageMode {
-            let currentSlot = Int((scrollView.contentOffset.y / pageHeight).rounded())
+        let metrics = pageMetrics
+        guard scrollView.contentOffset.y.isFinite else { return false }
+        if isDualPageMode, let currentSlot = metrics.roundedFixedSlotIndex(atY: scrollView.contentOffset.y) {
             let targetSlot = currentSlot + (forward ? 1 : -1)
-            guard targetSlot >= 0, targetSlot < spreadCount else { return false }
+            guard targetSlot >= 0, targetSlot < metrics.slotCount else { return false }
             isProgrammaticScroll = true
-            scrollView.setContentOffset(CGPoint(x: 0, y: CGFloat(targetSlot) * pageHeight), animated: animated)
+            scrollView.setContentOffset(CGPoint(x: 0, y: metrics.slotStarts[targetSlot]), animated: animated)
             if animated == false {
                 isProgrammaticScroll = false
                 reportVisiblePage()
             }
             return true
         }
-        let maxOffset = max(scrollView.contentSize.height - pageHeight, 0)
+        let maxOffset = metrics.maximumChapterOffset
         let delta = scrollPageDistance(forward: forward)
         let target = scrollView.contentOffset.y + (forward ? delta : -delta)
         if forward, target >= maxOffset - 1, scrollView.contentOffset.y < maxOffset - 1 {
@@ -289,7 +296,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
     }
 
     private func scrollPageDistance(forward: Bool) -> CGFloat {
-        let viewport = currentVisibleRect().offsetBy(dx: scrollView.contentOffset.x, dy: scrollView.contentOffset.y)
+        let viewport = pageMetrics.visibleViewport.offsetBy(dx: scrollView.contentOffset.x, dy: scrollView.contentOffset.y)
         guard viewport.height > 0 else { return 0 }
         var lines: [(frame: CGRect, isImage: Bool)] = []
         for pageView in pageViews.values {
@@ -313,6 +320,8 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
             forward
             ? last.frame.minY - viewport.minY
             : viewport.maxY - first.frame.maxY
+        // Retaining a line must not turn a page command into a sub-pixel no-op.
+        if distance <= 1 / chromeDisplayScale { return viewport.height }
         return min(max(distance, 0), viewport.height)
     }
 
@@ -344,7 +353,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
             scrollView.contentOffset.y.isFinite
         else { return .layoutUnavailable }
 
-        let maxOffset = max(scrollView.contentSize.height - pageSlotHeight, 0)
+        let maxOffset = pageMetrics.autoReadEndOffset
         let currentOffset = scrollView.contentOffset.y
         // Never clamp a bottom overscroll backwards during automatic reading.
         guard currentOffset < maxOffset else {
@@ -372,7 +381,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
             return nil
         }
         let location = convert(point, to: scrollView)
-        guard let view = pageViews.values.first(where: { $0.frame.contains(location) }) else {
+        guard let view = contentView(at: location) else {
             return nil
         }
         let contentPoint = scrollView.convert(location, to: view)
@@ -385,7 +394,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
             return nil
         }
         let location = convert(point, to: scrollView)
-        guard let view = pageViews.values.first(where: { $0.frame.contains(location) }) else {
+        guard let view = contentView(at: location) else {
             return nil
         }
         let contentPoint = scrollView.convert(location, to: view)
@@ -486,7 +495,12 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
     }
 
     func scrollViewDidScroll(_: UIScrollView) {
-        guard isProgrammaticScroll == false else { return }
+        guard !isUpdatingContent else { return }
+        if isProgrammaticScroll {
+            ensureRenderedWindow(centeredAt: lastReportedPageIndex)
+            layoutPageViews()
+            return
+        }
         reportVisiblePage()
     }
 
@@ -526,55 +540,53 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
     private func layoutPageViews() {
         let pageSize = scrollView.bounds.size
         guard pageSize.width > 0, pageSize.height > 0 else { return }
-        defer { scrollView.contentSize = contentSize(for: pageSize) }
-        if isDualPageMode {
-            layoutDualPageViews(pageSize: pageSize)
-            return
-        }
-        let visibleRect = currentVisibleRect()
+        let metrics = pageMetrics
+        let wasUpdatingContent = isUpdatingContent
+        isUpdatingContent = true
+        defer { isUpdatingContent = wasUpdatingContent }
         for (index, pageView) in pageViews {
-            pageView.frame = CGRect(
-                x: 0,
-                y: CGFloat(index) * pageSize.height,
-                width: pageSize.width,
-                height: pageSize.height
-            )
-            pageView.visibleRect = visibleRect
+            guard let geometry = metrics.pageGeometry(at: index) else { continue }
+            layoutContentView(pageView, frame: geometry.frame, visibleRect: geometry.visibleRect)
         }
-        for pageView in autoReadContinuationViews {
-            pageView.frame = CGRect(
-                x: 0,
-                y: CGFloat(spreadCount) * pageSize.height,
-                width: pageSize.width,
-                height: pageSize.height
-            )
-            pageView.visibleRect = visibleRect
+        for (index, pageView) in autoReadContinuationViews.enumerated() {
+            guard let geometry = metrics.continuationGeometry(at: index) else { continue }
+            layoutContentView(pageView, frame: geometry.frame, visibleRect: geometry.visibleRect)
+        }
+        let size = CGSize(width: pageSize.width, height: metrics.contentHeight)
+        if scrollView.contentSize != size {
+            scrollView.contentSize = size
         }
     }
 
-    private func layoutDualPageViews(pageSize: CGSize) {
-        guard let renderState else { return }
-        let spreadGeometry = ReaderSpreadGeometry(
-            bounds: CGRect(origin: .zero, size: pageSize),
-            theme: renderState.theme,
-            displayScale: chromeDisplayScale
-        )
-        for (index, pageView) in pageViews {
-            let slot = slotIndex(forPageIndex: index)
-            let columnFrame =
-                index % 2 == 0
-                ? spreadGeometry.leadingContentHostFrame
-                : spreadGeometry.trailingContentHostFrame
-            pageView.frame = columnFrame.offsetBy(dx: 0, dy: CGFloat(slot) * pageSize.height)
-            pageView.visibleRect = spreadGeometry.visibleRect
+    private func layoutContentView(_ pageView: ReaderPageContentView, frame: CGRect, visibleRect: CGRect) {
+        var rasterFrame = frame
+        var offset: CGFloat = 0
+        var hidden = false
+        let viewportHeight = pageSlotHeight
+        if frame.height > viewportHeight + 0.5 {
+            // Keep UIView's bitmap backing bounded while its logical page can span many screens.
+            let lower = max(frame.minY, scrollView.bounds.minY - viewportHeight)
+            let upper = min(frame.maxY, scrollView.bounds.maxY + viewportHeight)
+            if upper > lower {
+                offset = lower - frame.minY
+                rasterFrame.origin.y = lower
+                rasterFrame.size.height = upper - lower
+            } else {
+                hidden = true
+                rasterFrame.size.height = min(frame.height, viewportHeight)
+            }
         }
-        for (index, pageView) in autoReadContinuationViews.enumerated() {
-            let columnFrame = index == 0
-                ? spreadGeometry.leadingContentHostFrame
-                : spreadGeometry.trailingContentHostFrame
-            pageView.frame = columnFrame.offsetBy(dx: 0, dy: CGFloat(spreadCount) * pageSize.height)
-            pageView.visibleRect = spreadGeometry.visibleRect
+        let resized = pageView.bounds.size != rasterFrame.size
+        pageView.frame = rasterFrame
+        pageView.visibleRect = visibleRect
+        pageView.renderViewportOffsetY = offset
+        if pageView.isHidden != hidden { pageView.isHidden = hidden }
+        if !pageView.isUserInteractionEnabled {
+            pageView.isAccessibilityElement = false
+            pageView.accessibilityElementsHidden = true
+            pageView.accessibilityLabel = nil
         }
+        if resized { pageView.setNeedsDisplay() }
     }
 
     private func clearAutoReadContinuation() {
@@ -582,40 +594,26 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
             pageView.removeFromSuperview()
         }
         autoReadContinuationViews.removeAll()
+        continuationMeasuredVisibleHeight = nil
+        cachedPageMetrics = nil
     }
 
-    private func reconcileContentOffsetAfterLayout(previousPageSlotHeight: CGFloat, previousContentOffset: CGPoint) {
+    private func reconcileContentOffsetAfterLayout(previousMetrics: ReaderScrollPageMetrics?, previousContentOffset: CGPoint) {
         guard pageCount > 0, pageSlotHeight > 0 else { return }
-        let maxOffset = max(scrollView.contentSize.height - pageSlotHeight, 0)
-        let proposedOffset: CGFloat
-        if previousPageSlotHeight > 0, abs(previousPageSlotHeight - pageSlotHeight) > 0.5 {
-            // Changing contentSize can clamp the old offset before it is converted.
-            let pageProgress = previousContentOffset.y / previousPageSlotHeight
-            proposedOffset = pageProgress * pageSlotHeight
-        } else {
-            proposedOffset = previousContentOffset.y
-        }
-        let clampedOffset = min(max(proposedOffset, 0), maxOffset)
+        // Capture the old slot anchor before UIKit can clamp an offset against the resized content.
+        let clampedOffset = pageMetrics.reconciledOffset(from: previousMetrics, offset: previousContentOffset.y)
         guard abs(scrollView.contentOffset.y - clampedOffset) > 0.5 || scrollView.contentOffset.x != 0 else { return }
+        let wasProgrammaticScroll = isProgrammaticScroll
         isProgrammaticScroll = true
         scrollView.setContentOffset(CGPoint(x: 0, y: clampedOffset), animated: false)
-        isProgrammaticScroll = false
+        isProgrammaticScroll = wasProgrammaticScroll
     }
 
     private func reportVisiblePage() {
         guard !chapterMessageVisible, !isUpdatingContent, pageCount > 0, pageSlotHeight > 0 else { return }
-        let pageHeight = pageSlotHeight
-        let offsetY = scrollView.contentOffset.y
-        guard pageHeight.isFinite, offsetY.isFinite else { return }
-        // Android retains the leading page until the whole slot scrolls past, not its midpoint.
-        // UIKit quantizes offsets to pixels; keep half-pixel ties inclusive despite division roundoff.
-        let halfPixel = 0.5 / chromeDisplayScale
-        let slotProgress = (offsetY + halfPixel) / pageHeight
-        let roundingTolerance = max(abs(slotProgress), 1) * CGFloat.ulpOfOne * 4
-        // Clamp before conversion so overscroll and visual-only continuation stay in this chapter.
-        let clampedProgress = min(max(slotProgress + roundingTolerance, 0), CGFloat(spreadCount - 1))
-        let slot = Int(clampedProgress.rounded(.down))
-        reportPageIndexIfNeeded(leadingPageIndex(forSlotIndex: slot))
+        let metrics = pageMetrics
+        guard let slot = metrics.slotIndex(atY: scrollView.contentOffset.y, displayScale: chromeDisplayScale) else { return }
+        reportPageIndexIfNeeded(metrics.leadingPageIndex(forSlotIndex: slot))
     }
 
     private func reportPageIndexIfNeeded(_ index: Int) {
@@ -635,10 +633,7 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
     private func ensureRenderedWindow(centeredAt pageIndex: Int) {
         defer { rebuildAccessibilityElements() }
         guard let renderState, renderState.pages.isEmpty == false else { return }
-        let clampedIndex = min(max(pageIndex, 0), renderState.pages.count - 1)
-        let lower = max(clampedIndex - renderedPageRadius, 0)
-        let upper = min(clampedIndex + renderedPageRadius, renderState.pages.count - 1)
-        let needed = Set(lower...upper)
+        let needed = pageMetrics.renderedPageIndices(centeredAt: pageIndex, visibleBounds: scrollView.bounds, radius: renderedPageRadius)
         let obsoleteIndices = pageViews.keys.filter { needed.contains($0) == false }
         for index in obsoleteIndices {
             pageViews[index]?.removeFromSuperview()
@@ -647,6 +642,13 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         for index in needed where pageViews[index] == nil {
             pageViews[index] = makePageView(index: index, renderState: renderState)
         }
+    }
+
+    private func contentView(at location: CGPoint) -> ReaderPageContentView? {
+        guard let indices = pageMetrics.pageIndices(atY: location.y) else { return nil }
+        ensureRenderedWindow(centeredAt: indices.lowerBound)
+        layoutPageViews()
+        return indices.compactMap { pageViews[$0] }.first { $0.frame.contains(location) }
     }
 
     private func rebuildAccessibilityElements() {
@@ -698,19 +700,19 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
 
     private func contentSize(for pageSize: CGSize) -> CGSize {
         guard pageSize.width > 0, pageSize.height > 0, pageCount > 0 else { return .zero }
-        let slotCount = spreadCount + (hasAutoReadContinuation ? 1 : 0)
-        return CGSize(width: pageSize.width, height: CGFloat(slotCount) * pageSize.height)
+        return CGSize(width: pageSize.width, height: pageMetrics.contentHeight)
     }
 
     private func requestBoundaryIfNeeded() {
         guard isProgrammaticScroll == false,
             !isUpdatingContent,
             isBoundaryRequestInFlight == false,
+            pageCount > 0,
             pageSlotHeight > 0
         else {
             return
         }
-        let maxOffset = max(scrollView.contentSize.height - pageSlotHeight, 0)
+        let maxOffset = pageMetrics.maximumChapterOffset
         let threshold = max(28, min(84, currentVisibleRect().height * 0.16))
         let boundary: Boundary?
         if scrollView.contentOffset.y <= -threshold {
@@ -765,22 +767,28 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         renderState?.doubleHorizontalPageMode.isEnabledForLegacyDualPageMode == true
     }
 
-    private var spreadCount: Int {
-        guard pageCount > 0 else { return 0 }
-        return isDualPageMode ? Int(ceil(Double(pageCount) / 2.0)) : pageCount
-    }
-
-    private func slotIndex(forPageIndex pageIndex: Int) -> Int {
-        isDualPageMode ? pageIndex / 2 : pageIndex
-    }
-
-    private func leadingPageIndex(forPageIndex pageIndex: Int) -> Int {
-        guard isDualPageMode else { return pageIndex }
-        return min(max((pageIndex / 2) * 2, 0), max(pageCount - 1, 0))
-    }
-
-    private func leadingPageIndex(forSlotIndex slotIndex: Int) -> Int {
-        guard isDualPageMode else { return slotIndex }
-        return min(max(slotIndex * 2, 0), max(pageCount - 1, 0))
+    private var pageMetrics: ReaderScrollPageMetrics {
+        let size = scrollView.bounds.size
+        let spread =
+            isDualPageMode
+            ? renderState.map {
+                ReaderSpreadGeometry(bounds: CGRect(origin: .zero, size: size), theme: $0.theme, displayScale: chromeDisplayScale)
+            } : nil
+        let viewport = ReaderScrollPageMetrics.Viewport(
+            size: size,
+            visibleRect: spread?.visibleRect ?? currentVisibleRect(),
+            leadingHostFrame: spread?.leadingContentHostFrame ?? CGRect(origin: .zero, size: size),
+            trailingHostFrame: spread?.trailingContentHostFrame
+        )
+        if let cachedPageMetrics, cachedPageMetrics.viewport == viewport { return cachedPageMetrics }
+        let metrics = ReaderScrollPageMetrics(
+            viewport: viewport,
+            pageContentHeights: renderState?.pages.map { $0.contentSize.height } ?? [],
+            continuationContentHeights: autoReadContinuationViews.compactMap { $0.pageLayout?.contentSize.height },
+            measuredVisibleHeight: measuredVisibleHeight,
+            continuationMeasuredVisibleHeight: continuationMeasuredVisibleHeight
+        )
+        cachedPageMetrics = metrics
+        return metrics
     }
 }

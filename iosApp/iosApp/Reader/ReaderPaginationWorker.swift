@@ -180,6 +180,7 @@ final class ReaderPaginationWorker: @unchecked Sendable {
             imageStyle: imageStyle,
             imageSizes: input.imageSizes,
             imageScale: input.imageScale,
+            isScrollMode: input.isScrollMode,
             isCancelled: { cancellation.isCancelled }
         )
         try cancellation.checkCancellation()
@@ -198,7 +199,8 @@ final class ReaderPaginationWorker: @unchecked Sendable {
             theme: input.theme,
             imageStyle: imageStyle,
             imageSizes: input.imageSizes,
-            imageScale: input.imageScale
+            imageScale: input.imageScale,
+            isScrollMode: input.isScrollMode
         )
         // A cancelled collector may return nil after partial internal work. Never
         // turn that into an empty page, fallback layout, cache entry, or UI result.

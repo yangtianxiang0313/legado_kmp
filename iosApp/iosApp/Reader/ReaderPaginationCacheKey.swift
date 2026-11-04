@@ -59,6 +59,7 @@ struct ReaderPaginationCacheKey: Hashable {
     private let imageStyle: String
     private let imageSizesSignature: Int
     private let imageScale: CGFloat
+    private let isFullScrollMode: Bool
     private let layoutSignature: Int
 
     init(
@@ -69,6 +70,7 @@ struct ReaderPaginationCacheKey: Hashable {
         imageStyle: String,
         imageSizes: [String: CGSize] = [:],
         imageScale: CGFloat = 1,
+        isScrollMode: Bool = false,
         isCancelled: () -> Bool = { false }
     ) {
         chapterIndex = Int(layout.chapterIndex)
@@ -129,6 +131,7 @@ struct ReaderPaginationCacheKey: Hashable {
         backgroundColor = theme.backgroundColor
         self.imageStyle = imageStyle
         self.imageScale = imageScale
+        isFullScrollMode = imageStyle.uppercased() == "FULL" && isScrollMode
         imageSizesSignature = paginationImageSizesSignature(imageSizes, isCancelled: isCancelled)
         layoutSignature = layout.layoutSignature(isCancelled: isCancelled)
     }

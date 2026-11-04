@@ -493,7 +493,8 @@ final class ReaderLayoutEngine {
         in bounds: CGRect,
         theme: ReaderThemeController,
         imageSizes: [String: CGSize] = [:],
-        imageScale: CGFloat = 1
+        imageScale: CGFloat = 1,
+        isScrollMode: Bool = false
     ) -> PaginationResult {
         let pageGeometry = ReaderPageGeometry.estimated(bounds: bounds, theme: theme)
         let key = ReaderPaginationCacheKey(
@@ -503,7 +504,8 @@ final class ReaderLayoutEngine {
             theme: theme,
             imageStyle: layout.normalizedImageStyle,
             imageSizes: imageSizes,
-            imageScale: imageScale
+            imageScale: imageScale,
+            isScrollMode: isScrollMode
         )
         if let cached = cache.value(for: key) {
             return cached
@@ -518,7 +520,8 @@ final class ReaderLayoutEngine {
             theme: theme,
             imageStyle: layout.normalizedImageStyle,
             imageSizes: imageSizes,
-            imageScale: imageScale
+            imageScale: imageScale,
+            isScrollMode: isScrollMode
         )
         let result = PaginationResult(
             pages: pages.isEmpty
@@ -535,12 +538,13 @@ final class ReaderLayoutEngine {
         in bounds: CGRect,
         theme: ReaderThemeController,
         traits: UITraitCollection? = nil,
-        imageSizes: [String: CGSize] = [:]
+        imageSizes: [String: CGSize] = [:],
+        isScrollMode: Bool = false
     ) async throws -> PaginationResult {
         try Task.checkCancellation()
         let input = ReaderPaginationInput.frozen(
             layout: layout, bounds: bounds, theme: theme, traits: traits ?? UITraitCollection.current,
-            imageSizes: imageSizes)
+            imageSizes: imageSizes, isScrollMode: isScrollMode)
         let result = try await worker.paginate(input)
         // Cancellation may arrive after the worker resumes us but before MainActor runs again.
         try Task.checkCancellation()

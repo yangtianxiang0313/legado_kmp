@@ -127,7 +127,7 @@ final class ReaderPaginationCoordinator {
 
         // Never paginate the initial payload against UIView's provisional bounds.
         let bounds = controller.renderView.bounds
-        guard bounds.width > 0, bounds.height > 0,
+        guard bounds.width.isFinite, bounds.height.isFinite, bounds.width > 0, bounds.height > 0,
             bounds.size == controller.view.bounds.size
         else { return }
 
@@ -140,6 +140,7 @@ final class ReaderPaginationCoordinator {
         let safeAreaPolicy = controller.currentReaderSafeAreaPolicy()
         let renderTheme = safeAreaPolicy.applying(to: controller.themeController)
         let style = preferences.effectiveReaderStyle(userInterfaceStyle: controller.traitCollection.userInterfaceStyle)
+        let isScrollMode = controller.isScrollPageMode
         let doublePageMode = controller.doubleHorizontalPageMode(in: bounds)
         let paginationBounds = controller.paginationBounds(for: bounds, doubleHorizontalPageMode: doublePageMode)
         let requestID = UUID()
@@ -170,6 +171,7 @@ final class ReaderPaginationCoordinator {
                 guard controller.view.window != nil,
                     controller.renderView.bounds == bounds,
                     controller.currentReaderSafeAreaPolicy() == safeAreaPolicy,
+                    controller.isScrollPageMode == isScrollMode,
                     controller.doubleHorizontalPageMode(in: bounds) == doublePageMode
                 else {
                     self.needsPagination = true
@@ -185,6 +187,7 @@ final class ReaderPaginationCoordinator {
                 guard controller.view.window != nil,
                     controller.renderView.bounds == bounds,
                     controller.currentReaderSafeAreaPolicy() == safeAreaPolicy,
+                    controller.isScrollPageMode == isScrollMode,
                     controller.doubleHorizontalPageMode(in: bounds) == doublePageMode
                 else {
                     self.needsPagination = true
@@ -193,13 +196,14 @@ final class ReaderPaginationCoordinator {
                 }
                 let pagination = try await self.layoutEngine.paginateAsync(
                     layout: chapterLayout, in: paginationBounds, theme: renderTheme,
-                    traits: controller.traitCollection, imageSizes: imageSizes)
+                    traits: controller.traitCollection, imageSizes: imageSizes, isScrollMode: isScrollMode)
                 guard !Task.isCancelled, self.requestID == requestID,
                     self.chapter == chapter, self.matchesChapter(in: controller)
                 else { return }
                 guard controller.view.window != nil,
                     controller.renderView.bounds == bounds,
                     controller.currentReaderSafeAreaPolicy() == safeAreaPolicy,
+                    controller.isScrollPageMode == isScrollMode,
                     controller.doubleHorizontalPageMode(in: bounds) == doublePageMode
                 else {
                     self.needsPagination = true
@@ -234,6 +238,11 @@ final class ReaderPaginationCoordinator {
                 guard !Task.isCancelled, self.requestID == requestID,
                     self.chapter == chapter, self.matchesChapter(in: controller)
                 else { return }
+                guard controller.isScrollPageMode == isScrollMode else {
+                    self.needsPagination = true
+                    controller.view.setNeedsLayout()
+                    return
+                }
                 if controller.loadFailureView.isShowingLoading {
                     controller.showReaderLoadFailure(message: error.userFacingMessage, requestedIndex: chapter.index)
                 } else {

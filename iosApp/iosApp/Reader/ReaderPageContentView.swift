@@ -72,6 +72,11 @@ final class ReaderPageContentView: UIView {
     }
 
     var selectionColor: UIColor { theme.selectionColor }
+    var renderViewportOffsetY: CGFloat = 0 {
+        didSet {
+            if oldValue != renderViewportOffsetY { setNeedsDisplay() }
+        }
+    }
     var visibleRect: CGRect = .zero {
         didSet {
             if oldValue != visibleRect {
@@ -127,11 +132,12 @@ final class ReaderPageContentView: UIView {
         guard let pageLayout, let context = UIGraphicsGetCurrentContext() else { return }
         let visibleRect = effectiveVisibleRect()
         guard visibleRect.isEmpty == false, visibleRect.intersects(rect) else { return }
-        let layoutRect = rect.offsetBy(dx: -visibleRect.minX, dy: -visibleRect.minY)
+        let origin = drawingOrigin()
+        let layoutRect = rect.offsetBy(dx: -origin.x, dy: -origin.y)
 
         context.saveGState()
         UIBezierPath(rect: visibleRect).addClip()
-        context.translateBy(x: visibleRect.minX, y: visibleRect.minY)
+        context.translateBy(x: origin.x, y: origin.y)
         defer { context.restoreGState() }
 
         for fragment in pageLayout.textFragments {
@@ -183,17 +189,24 @@ final class ReaderPageContentView: UIView {
     func layoutPoint(at point: CGPoint) -> CGPoint? {
         let visibleRect = effectiveVisibleRect()
         guard visibleRect.contains(point) else { return nil }
-        return CGPoint(x: point.x - visibleRect.minX, y: point.y - visibleRect.minY)
+        let origin = drawingOrigin()
+        return CGPoint(x: point.x - origin.x, y: point.y - origin.y)
     }
 
     func viewRect(for layoutRect: CGRect) -> CGRect {
-        let visibleRect = effectiveVisibleRect()
-        return layoutRect.offsetBy(dx: visibleRect.minX, dy: visibleRect.minY)
+        let origin = drawingOrigin()
+        return layoutRect.offsetBy(dx: origin.x, dy: origin.y)
     }
 
     private func effectiveVisibleRect() -> CGRect {
         let candidate = visibleRect == .zero ? bounds : visibleRect
-        return candidate.intersection(bounds)
+        return candidate.offsetBy(dx: 0, dy: -renderViewportOffsetY).intersection(bounds)
+    }
+
+    private func drawingOrigin() -> CGPoint {
+        guard renderViewportOffsetY != 0 else { return effectiveVisibleRect().origin }
+        let candidate = visibleRect == .zero ? bounds : visibleRect
+        return CGPoint(x: candidate.minX, y: candidate.minY - renderViewportOffsetY)
     }
 
     private func updateImageRequests() {

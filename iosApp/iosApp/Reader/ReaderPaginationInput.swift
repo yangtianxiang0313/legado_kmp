@@ -13,6 +13,7 @@ struct ReaderPaginationInput: @unchecked Sendable {
     let theme: ReaderThemeController
     let imageSizes: [String: CGSize]
     let imageScale: CGFloat
+    let isScrollMode: Bool
 
     @MainActor
     static func frozen(
@@ -20,7 +21,8 @@ struct ReaderPaginationInput: @unchecked Sendable {
         bounds: CGRect,
         theme: ReaderThemeController,
         traits: UITraitCollection,
-        imageSizes: [String: CGSize] = [:]
+        imageSizes: [String: CGSize] = [:],
+        isScrollMode: Bool = false
     ) -> ReaderPaginationInput {
         func resolved(_ color: UIColor) -> UIColor {
             UIColor(cgColor: color.resolvedColor(with: traits).cgColor)
@@ -38,7 +40,8 @@ struct ReaderPaginationInput: @unchecked Sendable {
             pageGeometry: ReaderPageGeometry.estimated(bounds: bounds, theme: frozenTheme),
             theme: frozenTheme,
             imageSizes: imageSizes,
-            imageScale: displayScale.isFinite && displayScale > 0 ? displayScale : 1
+            imageScale: displayScale.isFinite && displayScale > 0 ? displayScale : 1,
+            isScrollMode: isScrollMode
         )
     }
 }
