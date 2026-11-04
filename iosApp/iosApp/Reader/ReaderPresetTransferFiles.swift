@@ -5,7 +5,10 @@ enum ReaderPresetTransferFiles {
 
     static func read(_ source: URL) async throws -> Data {
         try await perform {
-            guard source.isFileURL else { throw ReaderPresetTransferResources.error("请选择有效文件") }
+            guard source.isFileURL else {
+                throw ReaderPresetTransferResources.error(
+                    NSLocalizedString("reader.preset.consumer.invalid_file", value: "请选择有效文件", comment: ""))
+            }
             let scoped = source.startAccessingSecurityScopedResource()
             defer { if scoped { source.stopAccessingSecurityScopedResource() } }
             var coordinationError: NSError?
@@ -16,7 +19,10 @@ enum ReaderPresetTransferFiles {
                 result = Result { try ReaderBackgroundTextFiles.read(readable, limit: ReaderPresetTransferResources.archiveLimit) }
             }
             if let coordinationError { throw coordinationError }
-            guard let result else { throw ReaderPresetTransferResources.error("无法读取配置文件") }
+            guard let result else {
+                throw ReaderPresetTransferResources.error(
+                    NSLocalizedString("reader.preset.consumer.file_read_failed", value: "无法读取配置文件", comment: ""))
+            }
             return try result.get()
         }
     }

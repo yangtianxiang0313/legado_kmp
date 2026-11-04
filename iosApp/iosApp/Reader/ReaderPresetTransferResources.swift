@@ -62,7 +62,9 @@ enum ReaderPresetTransferResources {
                     domain: "io.legado.reader.configTransfer", code: 2,
                     userInfo: [
                         NSLocalizedDescriptionKey:
-                            "\(originalError.localizedDescription)\n导入资源回滚失败：\(error.localizedDescription)",
+                            String.localizedStringWithFormat(
+                                NSLocalizedString("reader.preset.consumer.rollback_failed", value: "%@\n导入资源回滚失败：%@", comment: ""),
+                                originalError.localizedDescription, error.localizedDescription),
                         NSUnderlyingErrorKey: originalError,
                     ])
             }
@@ -84,7 +86,9 @@ enum ReaderPresetTransferResources {
     private static let resourceLimit = 32 * 1024 * 1024
 
     static func prepareImport(_ data: Data, fontStore: ReaderFontStore = .shared) throws -> PreparedImport {
-        guard data.count <= archiveLimit else { throw error("阅读配置文件过大") }
+        guard data.count <= archiveLimit else {
+            throw error(NSLocalizedString("reader.preset.consumer.file_too_large", value: "阅读配置文件过大", comment: ""))
+        }
         let entries: [String: String]
         if data.starts(with: [0x50, 0x4B]) {
             entries = try ReaderPresetArchive().unpack(base64Zip: data.base64EncodedString())
@@ -94,7 +98,9 @@ enum ReaderPresetTransferResources {
         }
         guard let encoded = entries["readConfig.json"], let config = Data(base64Encoded: encoded),
             config.count <= 4 * 1024 * 1024, let text = String(data: config, encoding: .utf8)
-        else { throw error("缺少有效的 readConfig.json") }
+        else {
+            throw error(NSLocalizedString("reader.preset.consumer.config_missing", value: "缺少有效的 readConfig.json", comment: ""))
+        }
         let codec = ReaderPresetTransferCodec()
         var row = try object(codec.encode(preset: codec.decode(jsonString: text)))
         var createdImages: [URL] = []
@@ -119,7 +125,9 @@ enum ReaderPresetTransferResources {
                 }
                 let name = resourceName(path)
                 guard let encoded = entries[name], let image = Data(base64Encoded: encoded) else {
-                    throw error("配置缺少背景图片：\(name)")
+                    throw error(
+                        String.localizedStringWithFormat(
+                            NSLocalizedString("reader.preset.consumer.background_missing", value: "配置缺少背景图片：%@", comment: ""), name))
                 }
                 let digest = SHA256.hash(data: image).description
                 let storedPath: String
@@ -129,7 +137,7 @@ enum ReaderPresetTransferResources {
                     try validateImage(image)
                     storedPath = try ReaderBackgroundTextFiles.importImage(image)
                     guard let url = ReaderBackgroundImageCatalog.resourceURL(forStoredPath: storedPath) else {
-                        throw error("无法保存背景图片")
+                        throw error(NSLocalizedString("reader.preset.consumer.background_save_failed", value: "无法保存背景图片", comment: ""))
                     }
                     createdImages.append(url)
                     importedImages[digest] = storedPath
@@ -143,7 +151,7 @@ enum ReaderPresetTransferResources {
                 if let encoded = entries[name], let bytes = Data(base64Encoded: encoded) {
                     guard bytes.count <= resourceLimit, ["ttf", "otf"].contains((name as NSString).pathExtension.lowercased())
                     else {
-                        throw error("不支持的配置字体")
+                        throw error(NSLocalizedString("reader.preset.consumer.font_unsupported", value: "不支持的配置字体", comment: ""))
                     }
                     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
                         UUID().uuidString, isDirectory: true)
@@ -185,7 +193,7 @@ enum ReaderPresetTransferResources {
                 continue
             }
             guard let url = ReaderBackgroundImageCatalog.resourceURL(forStoredPath: path) else {
-                throw error("无法读取配置背景图片")
+                throw error(NSLocalizedString("reader.preset.consumer.background_read_failed", value: "无法读取配置背景图片", comment: ""))
             }
             let image = try ReaderBackgroundTextFiles.read(url, limit: resourceLimit)
             try validateImage(image)
@@ -196,7 +204,7 @@ enum ReaderPresetTransferResources {
             } else {
                 let ext = url.pathExtension.lowercased()
                 guard !ext.isEmpty, ext.utf8.allSatisfy({ (48...57).contains($0) || (97...122).contains($0) }) else {
-                    throw error("背景图片扩展名无效")
+                    throw error(NSLocalizedString("reader.preset.consumer.background_extension_invalid", value: "背景图片扩展名无效", comment: ""))
                 }
                 name = "background-\(label).\(ext)"
                 entries[name] = image.base64EncodedString()
@@ -210,9 +218,13 @@ enum ReaderPresetTransferResources {
         if let font = row["textFont"] as? String, !font.isEmpty {
             if font.hasPrefix("reader-font:") {
                 let resource = try fontStore.exportResource(for: font)
-                guard resource.data.count <= resourceLimit else { throw error("配置字体文件过大") }
+                guard resource.data.count <= resourceLimit else {
+                    throw error(NSLocalizedString("reader.preset.consumer.font_too_large", value: "配置字体文件过大", comment: ""))
+                }
                 let ext = (resource.name as NSString).pathExtension.lowercased()
-                guard ["ttf", "otf"].contains(ext) else { throw error("不支持的配置字体") }
+                guard ["ttf", "otf"].contains(ext) else {
+                    throw error(NSLocalizedString("reader.preset.consumer.font_unsupported", value: "不支持的配置字体", comment: ""))
+                }
                 let name = "font." + ext
                 entries[name] = resource.data.base64EncodedString()
                 row["textFont"] = name
@@ -224,12 +236,12 @@ enum ReaderPresetTransferResources {
         }
         let config = Data(try encode(row).utf8)
         guard config.count <= 4 * 1024 * 1024, total + config.count < archiveLimit - 65_536 else {
-            throw error("阅读配置资源总量过大")
+            throw error(NSLocalizedString("reader.preset.consumer.resources_too_large", value: "阅读配置资源总量过大", comment: ""))
         }
         entries["readConfig.json"] = config.base64EncodedString()
         let archive = try ReaderPresetArchive().pack(base64Entries: entries)
         guard let data = Data(base64Encoded: archive), data.count <= archiveLimit else {
-            throw error("无法打包阅读配置")
+            throw error(NSLocalizedString("reader.preset.consumer.archive_failed", value: "无法打包阅读配置", comment: ""))
         }
         let name = safeFileName(row["name"] as? String ?? "")
         return Export(fileName: name + ".zip", data: data)
@@ -237,7 +249,7 @@ enum ReaderPresetTransferResources {
 
     private static func object(_ text: String) throws -> [String: Any] {
         guard let value = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] else {
-            throw error("阅读配置必须是一个对象")
+            throw error(NSLocalizedString("reader.preset.consumer.object_required", value: "阅读配置必须是一个对象", comment: ""))
         }
         return value
     }
@@ -267,7 +279,9 @@ enum ReaderPresetTransferResources {
             width.doubleValue > 0, height.doubleValue > 0,
             width.doubleValue <= 16_384, height.doubleValue <= 16_384,
             width.doubleValue * height.doubleValue <= 64_000_000
-        else { throw error("配置背景图片无效或尺寸过大") }
+        else {
+            throw error(NSLocalizedString("reader.preset.consumer.background_invalid", value: "配置背景图片无效或尺寸过大", comment: ""))
+        }
     }
 
     static func error(_ text: String) -> NSError {

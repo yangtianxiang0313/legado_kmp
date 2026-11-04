@@ -143,7 +143,11 @@ final class ReaderFontDialogBodyView: UIView {
                 })
         }
         items.append(
-            .init(identifier: "reader.font.otherDirectory", title: "其它目录") { [weak self] in
+            .init(
+                identifier: "reader.font.otherDirectory",
+                title: NSLocalizedString(
+                    "reader.font.consumer.other_directory", value: "其它目录", comment: "Legado other_folder")
+            ) { [weak self] in
                 self?.activateMenuItem(.directory, generation: generation)
             })
         let menu = ReaderOverflowMenuView(items: items, anchorView: moreButton, interfaceStyle: .unspecified)
@@ -282,7 +286,8 @@ final class ReaderFontDialogBodyView: UIView {
         moreButton.setImage(ReaderMenuAndroidIcon.more.image(), for: .normal)
         moreButton.imageView?.contentMode = .center
         moreButton.accessibilityLabel = L10n.Reader.menuMore
-        moreButton.accessibilityHint = "其它目录"
+        moreButton.accessibilityHint = NSLocalizedString(
+            "reader.font.consumer.other_directory", value: "其它目录", comment: "Legado other_folder")
         moreButton.accessibilityIdentifier = "reader.font.more"
         moreButton.addTarget(self, action: #selector(showOverflow), for: .touchUpInside)
         busyIndicator.hidesWhenStopped = true
@@ -364,7 +369,15 @@ final class ReaderFontDialogBodyView: UIView {
         moreButton.frame = slot(leading: width - iconWidth, width: iconWidth)
         moreButton.contentEdgeInsets = UIEdgeInsets(
             top: 0, left: isRTL ? 10 : 6, bottom: 0, right: isRTL ? 6 : 10)
-        moreButton.accessibilityHint = defaultInOverflow ? "\(L10n.ReaderAppearance.fontDefault)、其它目录" : "其它目录"
+        moreButton.accessibilityHint =
+            defaultInOverflow
+            ? String(
+                format: NSLocalizedString(
+                    "reader.font.consumer.overflow_hint", value: "%@、其它目录",
+                    comment: "Font menu actions; %@ is the localized default font action"),
+                L10n.ReaderAppearance.fontDefault)
+            : NSLocalizedString(
+                "reader.font.consumer.other_directory", value: "其它目录", comment: "Legado other_folder")
         busyIndicator.center = moreButton.center
         return height
     }

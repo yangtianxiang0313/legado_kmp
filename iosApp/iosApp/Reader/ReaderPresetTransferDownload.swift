@@ -14,7 +14,10 @@ final class ReaderPresetTransferDownload: NSObject, URLSessionDownloadDelegate, 
     }
 
     func load(_ url: URL) async throws -> Data {
-        guard Self.accepts(url) else { throw ReaderPresetTransferResources.error("请输入有效的 HTTP 或 HTTPS 地址") }
+        guard Self.accepts(url) else {
+            throw ReaderPresetTransferResources.error(
+                NSLocalizedString("reader.preset.consumer.invalid_url", value: "请输入有效的 HTTP 或 HTTPS 地址", comment: ""))
+        }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 lock.lock()
@@ -25,7 +28,9 @@ final class ReaderPresetTransferDownload: NSObject, URLSessionDownloadDelegate, 
                 }
                 guard self.continuation == nil, session == nil else {
                     lock.unlock()
-                    continuation.resume(throwing: ReaderPresetTransferResources.error("下载已经开始"))
+                    continuation.resume(
+                        throwing: ReaderPresetTransferResources.error(
+                            NSLocalizedString("reader.preset.consumer.download_started", value: "下载已经开始", comment: "")))
                     return
                 }
                 self.continuation = continuation
@@ -56,7 +61,10 @@ final class ReaderPresetTransferDownload: NSObject, URLSessionDownloadDelegate, 
         didWriteData _: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
     ) {
         if totalBytesWritten > Int64(limit) || totalBytesExpectedToWrite > Int64(limit) {
-            finish(.failure(ReaderPresetTransferResources.error("阅读配置下载超过 64 MiB")))
+            finish(
+                .failure(
+                    ReaderPresetTransferResources.error(
+                        NSLocalizedString("reader.preset.consumer.download_too_large", value: "阅读配置下载超过 64 MiB", comment: ""))))
         }
     }
 
@@ -64,12 +72,19 @@ final class ReaderPresetTransferDownload: NSObject, URLSessionDownloadDelegate, 
         let result: Result<Data, Error> = Result {
             guard let response = downloadTask.response as? HTTPURLResponse,
                 let url = response.url, Self.accepts(url)
-            else { throw ReaderPresetTransferResources.error("下载响应无效") }
+            else {
+                throw ReaderPresetTransferResources.error(
+                    NSLocalizedString("reader.preset.consumer.download_invalid_response", value: "下载响应无效", comment: ""))
+            }
             guard (200..<300).contains(response.statusCode) else {
-                throw ReaderPresetTransferResources.error("下载失败：HTTP \(response.statusCode)")
+                throw ReaderPresetTransferResources.error(
+                    String.localizedStringWithFormat(
+                        NSLocalizedString("reader.preset.consumer.download_http_error", value: "下载失败：HTTP %ld", comment: ""),
+                        response.statusCode))
             }
             guard response.expectedContentLength <= Int64(limit) else {
-                throw ReaderPresetTransferResources.error("阅读配置下载超过 64 MiB")
+                throw ReaderPresetTransferResources.error(
+                    NSLocalizedString("reader.preset.consumer.download_too_large", value: "阅读配置下载超过 64 MiB", comment: ""))
             }
             return try ReaderBackgroundTextFiles.read(location, limit: limit)
         }
@@ -88,7 +103,10 @@ final class ReaderPresetTransferDownload: NSObject, URLSessionDownloadDelegate, 
             completionHandler(request)
         } else {
             completionHandler(nil)
-            finish(.failure(ReaderPresetTransferResources.error("不支持的下载重定向")))
+            finish(
+                .failure(
+                    ReaderPresetTransferResources.error(
+                        NSLocalizedString("reader.preset.consumer.download_redirect_unsupported", value: "不支持的下载重定向", comment: ""))))
         }
     }
 

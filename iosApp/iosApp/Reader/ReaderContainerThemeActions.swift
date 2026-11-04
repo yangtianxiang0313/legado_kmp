@@ -256,7 +256,8 @@ struct ReaderLocalSettings {
             doubleHorizontalPage: loadDoubleHorizontalPage(defaults: defaults),
             paddingDisplayCutouts: loadPaddingDisplayCutouts(defaults: defaults),
             noAnimScrollPage: defaults.object(forKey: noAnimScrollPageKey) as? Bool ?? false,
-            previewImageByClick: loadBool(defaults: defaults, key: previewImageByClickKey, fallbackKey: legacyPreviewImageByClickKey, defaultValue: false),
+            previewImageByClick: loadBool(
+                defaults: defaults, key: previewImageByClickKey, fallbackKey: legacyPreviewImageByClickKey, defaultValue: false),
             touchSensitivity: ReaderTouchSensitivity(
                 rawValue: defaults.string(forKey: touchSensitivityKey) ?? ReaderTouchSensitivity.medium.rawValue
             ) ?? .medium,
@@ -491,7 +492,7 @@ extension ReaderContainerViewController {
             ReaderLocalSettings.persistBrightnessAuto(readerBrightnessAutoPreference)
             readMenu.reloadLocalSettings()
             readMenu.setBrightnessValue(Float(UIScreen.main.brightness))
-            showToast("阅读亮度配置尚未加载，稍后再试")
+            showToast(NSLocalizedString("reader.preset.consumer.brightness_not_loaded", value: "阅读亮度配置尚未加载，稍后再试", comment: ""))
             return false
         }
         readerBrightnessAutoPreference = false

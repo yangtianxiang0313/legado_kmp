@@ -13,11 +13,14 @@ final class ReaderPaddingBodyView: UIView {
     var canInteract: (() -> Bool)?
 
     private let headerView = ReaderPaddingSectionHeaderView(
-        title: "页眉", titleInsets: .zero, bottomInset: 10, hasToggle: true)
+        title: NSLocalizedString("reader.padding.consumer.header", value: "页眉", comment: ""),
+        titleInsets: .zero, bottomInset: 10, hasToggle: true)
     private let bodyTitleView = ReaderPaddingSectionHeaderView(
-        title: "正文", titleInsets: UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0))
+        title: NSLocalizedString("reader.padding.consumer.body", value: "正文", comment: ""),
+        titleInsets: UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0))
     private let footerView = ReaderPaddingSectionHeaderView(
-        title: "页脚", titleInsets: UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0), hasToggle: true)
+        title: NSLocalizedString("reader.padding.consumer.footer", value: "页脚", comment: ""),
+        titleInsets: UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0), hasToggle: true)
     private var sections: [(header: ReaderPaddingSectionHeaderView, rows: [AndroidReaderStyleSliderRow])] = []
     private var rowHeightConstraints: [NSLayoutConstraint] = []
     private var interactionEnabled = true
@@ -212,7 +215,7 @@ private final class ReaderPaddingSectionHeaderView: UIView {
         titleLabel.accessibilityTraits = .header
         addSubview(titleLabel)
         if hasToggle {
-            lineLabel.text = "显示分隔线"
+            lineLabel.text = NSLocalizedString("reader.padding.consumer.show_separator", value: "显示分隔线", comment: "")
             lineLabel.numberOfLines = 0
             lineLabel.lineBreakMode = .byCharWrapping
             lineLabel.adjustsFontForContentSizeCategory = false
@@ -221,7 +224,8 @@ private final class ReaderPaddingSectionHeaderView: UIView {
             addSubview(lineLabel)
             lineButton.addSubview(lineIndicator)
             lineButton.isAccessibilityElement = true
-            lineButton.accessibilityLabel = "\(title)，显示分隔线"
+            lineButton.accessibilityLabel = String.localizedStringWithFormat(
+                NSLocalizedString("reader.padding.consumer.separator_accessibility", value: "%@，显示分隔线", comment: ""), title)
             lineButton.addTarget(self, action: #selector(toggleLine), for: .touchUpInside)
             addSubview(lineButton)
         }

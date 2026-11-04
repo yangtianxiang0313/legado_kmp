@@ -79,7 +79,7 @@ final class ReaderConfigURLDialogViewController: UIViewController,
         guard phase == .active else { return nil }
         let command = UIKeyCommand(
             input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel))
-        command.discoverabilityTitle = "取消"
+        command.discoverabilityTitle = L10n.Common.cancel
         command.wantsPriorityOverSystemBehavior = true
         return [command]
     }

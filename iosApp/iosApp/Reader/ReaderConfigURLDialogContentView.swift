@@ -10,9 +10,9 @@ final class ReaderConfigURLDialogContentView: UIView {
 
         var title: String {
             switch self {
-            case .url: return "输入地址"
-            case .rename: return "样式名称："
-            case .themeName: return "主题名称"
+            case .url: return NSLocalizedString("reader.preset.consumer.enter_address", value: "输入地址", comment: "")
+            case .rename: return NSLocalizedString("reader.background_text.style_name_title", value: "样式名称：", comment: "")
+            case .themeName: return NSLocalizedString("reader.preset.consumer.theme_name", value: "主题名称", comment: "")
             }
         }
 
@@ -62,9 +62,9 @@ final class ReaderConfigURLDialogContentView: UIView {
     private let scrollView = ReaderConfigURLDialogScrollView()
     private let formView = UIView()
     private let footerView = UIView()
-    private let cancelControl = BookshelfLayoutDialogAction(title: "取消")
+    private let cancelControl = BookshelfLayoutDialogAction(title: L10n.Common.cancel)
     // AlertBuilder.okButton uses android.R.string.ok (zh-CN: 确定), not the app's R.string.ok (确认).
-    private let submitControl = BookshelfLayoutDialogAction(title: "确定")
+    private let submitControl = BookshelfLayoutDialogAction(title: L10n.Common.ok)
     private var needsCaretReveal = false
     private var lastViewportSize: CGSize = .zero
 

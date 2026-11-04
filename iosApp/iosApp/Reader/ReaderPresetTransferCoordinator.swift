@@ -78,10 +78,10 @@ final class ReaderPresetTransferCoordinator: NSObject, UIDocumentPickerDelegate,
         guard canBegin, let owner else { return }
         let captured = reserve(owner)
         let menu = ReaderBookChoiceDialogViewController(
-            title: "导入",
+            title: NSLocalizedString("reader.preset.consumer.import_title", value: "导入", comment: ""),
             choices: [
-                .init(title: "本地导入", accessibilityValue: "local"),
-                .init(title: "网络导入", accessibilityValue: "network"),
+                .init(title: L10n.SourceManagement.importLocalAction, accessibilityValue: "local"),
+                .init(title: L10n.SourceManagement.importOnlineAction, accessibilityValue: "network"),
             ],
             identifierPrefix: "reader.presetImport",
             onClose: { [weak self] in
@@ -119,7 +119,8 @@ final class ReaderPresetTransferCoordinator: NSObject, UIDocumentPickerDelegate,
             else { return }
             // The legacy exporter prefers the selected slot, including duplicate names.
             guard let json = try owner.facade.exportAndroidReaderPresetJson(name: captured.expectedName) else {
-                throw ReaderPresetTransferResources.error("找不到当前阅读配置")
+                throw ReaderPresetTransferResources.error(
+                    NSLocalizedString("reader.preset.consumer.current_missing", value: "找不到当前阅读配置", comment: ""))
             }
             let file = try await ReaderPresetTransferFiles.makeExport(json)
             var leased = false
@@ -145,7 +146,10 @@ final class ReaderPresetTransferCoordinator: NSObject, UIDocumentPickerDelegate,
                 share.completionWithItemsHandler = nil
                 activity = nil
                 exportFile = nil
-                if isCurrent(captured) { throw ReaderPresetTransferResources.error("无法显示导出面板") }
+                if isCurrent(captured) {
+                    throw ReaderPresetTransferResources.error(
+                        NSLocalizedString("reader.preset.consumer.share_unavailable", value: "无法显示导出面板", comment: ""))
+                }
                 return
             }
             share.presentationController?.delegate = self
@@ -334,7 +338,8 @@ final class ReaderPresetTransferCoordinator: NSObject, UIDocumentPickerDelegate,
             } else {
                 let value = address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 guard let url = URL(string: value) else {
-                    throw ReaderPresetTransferResources.error("请输入有效的 HTTP 或 HTTPS 地址")
+                    throw ReaderPresetTransferResources.error(
+                        NSLocalizedString("reader.preset.consumer.invalid_url", value: "请输入有效的 HTTP 或 HTTPS 地址", comment: ""))
                 }
                 let request = ReaderPresetTransferDownload()
                 download = request

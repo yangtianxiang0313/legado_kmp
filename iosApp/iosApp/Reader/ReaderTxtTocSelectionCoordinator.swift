@@ -62,7 +62,9 @@ final class ReaderTxtTocSelectionCoordinator: NSObject {
         controller.onManage = { [weak self] in self?.manageRules() }
         controller.overrideUserInterfaceStyle = reader.readMenu.overflowInterfaceStyle
         dialog = controller
-        controller.setBusy(true, message: "正在加载目录规则")
+        controller.setBusy(
+            true,
+            message: NSLocalizedString("reader.txt_toc.consumer.loading_rules", value: "正在加载目录规则", comment: ""))
         reader.present(controller, animated: true)
         loading = Task { [self, weak controller] in
             do {
@@ -88,7 +90,9 @@ final class ReaderTxtTocSelectionCoordinator: NSObject {
         loading?.cancel()
         applying?.cancel()
         if applying != nil {
-            dialog?.setBusy(true, message: "正在取消，请稍候")
+            dialog?.setBusy(
+                true,
+                message: NSLocalizedString("reader.txt_toc.consumer.cancelling", value: "正在取消，请稍候", comment: ""))
         } else if loading == nil {
             Task { [self] in await dismiss() }
         }
@@ -114,7 +118,9 @@ final class ReaderTxtTocSelectionCoordinator: NSObject {
         else { return }
         let id = generation
         cancellationRequested = false
-        dialog.setBusy(true, message: "正在重建目录")
+        dialog.setBusy(
+            true,
+            message: NSLocalizedString("reader.txt_toc.consumer.rebuilding_toc", value: "正在重建目录", comment: ""))
         reader.chapterLoadCoordinator.cancel(in: reader)
         reader.chapterPrefetchCoordinator.suspend()
         reader.stageProgress(immediate: true)
@@ -185,7 +191,9 @@ final class ReaderTxtTocSelectionCoordinator: NSObject {
         if let failure, !cancellationRequested, generation == id, isActive(reader) {
             dialog?.showError(failure.userFacingMessage)
         } else if failure == nil, presented == nil, !cancellationRequested {
-            dialog?.showError("目录已更新，但正文尚未加载，请稍后重试")
+            dialog?.showError(
+                NSLocalizedString(
+                    "reader.txt_toc.consumer.content_not_loaded", value: "目录已更新，但正文尚未加载，请稍后重试", comment: ""))
         } else {
             dialog?.setBusy(false)
         }

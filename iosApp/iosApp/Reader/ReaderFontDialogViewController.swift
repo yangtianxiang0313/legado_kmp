@@ -275,7 +275,9 @@ final class ReaderFontDialogViewController: UIViewController,
                 isFinishingPicker = false
                 retryAction = activity == .choosing ? .systemFonts : .pickDirectory
                 activity = .idle
-                failureMessage = "无法打开选择窗口，请重试。"
+                failureMessage = NSLocalizedString(
+                    "reader.font.consumer.chooser_failed", value: "无法打开选择窗口，请重试。",
+                    comment: "Font chooser presentation failure")
                 bodyView.revealStatusOnNextLayout()
             }
         }
@@ -368,7 +370,11 @@ final class ReaderFontDialogViewController: UIViewController,
                     needsReload = true
                     return
                 }
-                failureMessage = "\(L10n.ReaderAppearance.fontLoadFailed)\n\(error.localizedDescription)"
+                failureMessage = String(
+                    format: NSLocalizedString(
+                        "reader.font.consumer.error_detail", value: "%@\n%@",
+                        comment: "Localized font error heading followed by unmodified error detail"),
+                    L10n.ReaderAppearance.fontLoadFailed, error.localizedDescription)
                 retryAction = directory.map { .directory($0) } ?? .load
                 bodyView.revealStatusOnNextLayout()
             }
@@ -395,7 +401,9 @@ final class ReaderFontDialogViewController: UIViewController,
         }
         let match =
             directoryMatch
-            ?? entries.first { $0.identifier == (ReaderFontSelectionToken(identifier: selectedFontName)?.catalogIdentifier ?? selectedFontName) }
+            ?? entries.first {
+                $0.identifier == (ReaderFontSelectionToken(identifier: selectedFontName)?.catalogIdentifier ?? selectedFontName)
+            }
             ?? entries.first { !$0.postScriptName.isEmpty && $0.postScriptName == selectedFontName }
             ?? selectedFilename.flatMap { filename in entries.first { $0.title.utf8.elementsEqual(filename.utf8) } }
         return match?.identifier == entry.identifier
@@ -460,7 +468,11 @@ final class ReaderFontDialogViewController: UIViewController,
                 dismiss(animated: !UIAccessibility.isReduceMotionEnabled)
             } catch {
                 guard acceptsResult(id, generation: generation) else { return }
-                failureMessage = "\(L10n.Common.unavailableTitle)\n\(error.localizedDescription)"
+                failureMessage = String(
+                    format: NSLocalizedString(
+                        "reader.font.consumer.error_detail", value: "%@\n%@",
+                        comment: "Localized font error heading followed by unmodified error detail"),
+                    L10n.Common.unavailableTitle, error.localizedDescription)
                 retryAction = .selection(selection)
                 bodyView.revealStatusOnNextLayout()
                 UIAccessibility.post(notification: .announcement, argument: failureMessage)

@@ -157,7 +157,10 @@ extension ReaderContainerViewController {
         }
         if book.isLocal && book.isTxtLocalBook {
             items.append(
-                readerOverflowItem("menu_toc_regex", title: "TXT目录规则", isEnabled: hasChapter) {
+                readerOverflowItem(
+                    "menu_toc_regex", title: NSLocalizedString("reader.txt_toc_rule_title", value: "TXT目录规则", comment: ""),
+                    isEnabled: hasChapter
+                ) {
                     $0.txtTocSelectionCoordinator.present()
                 })
         }
@@ -170,7 +173,10 @@ extension ReaderContainerViewController {
                 })
         }
         items.append(contentsOf: [
-            readerOverflowItem("menu_simulated_reading", title: "模拟追读") {
+            readerOverflowItem(
+                "menu_simulated_reading",
+                title: NSLocalizedString("reader.simulated_reading.title", value: "模拟追读", comment: "")
+            ) {
                 $0.bookSettingsCoordinator.presentSimulation()
             },
             readerOverflowItem(
@@ -341,7 +347,8 @@ extension ReaderContainerViewController {
 
     private func confirmReverseCurrentChapterContent() {
         guard chapters.indices.contains(chapterIndex) else {
-            showToast("当前没有可反转的章节")
+            showToast(
+                NSLocalizedString("reader.chapter.consumer.no_chapter_to_reverse", value: "当前没有可反转的章节", comment: ""))
             return
         }
         let alert = UIAlertController(
@@ -359,7 +366,8 @@ extension ReaderContainerViewController {
 
     private func reverseCurrentChapterContent() {
         guard chapters.indices.contains(chapterIndex) else {
-            showToast("当前没有可反转的章节")
+            showToast(
+                NSLocalizedString("reader.chapter.consumer.no_chapter_to_reverse", value: "当前没有可反转的章节", comment: ""))
             return
         }
         runReaderOperation {
@@ -373,7 +381,8 @@ extension ReaderContainerViewController {
 
     private func toggleReaderReSegment() {
         guard book != nil else {
-            showToast("当前书籍信息尚未加载，稍后再试")
+            showToast(
+                NSLocalizedString("reader.chapter.consumer.book_not_loaded", value: "当前书籍信息尚未加载，稍后再试", comment: ""))
             return
         }
         runReaderOperation {
@@ -389,7 +398,7 @@ extension ReaderContainerViewController {
 
     private func toggleReaderRemoveSameTitle() {
         guard chapters.indices.contains(chapterIndex) else {
-            showToast("当前没有可刷新的章节")
+            showToast(NSLocalizedString("reader.refresh_no_chapters", value: "当前没有可刷新的章节", comment: ""))
             return
         }
         runReaderOperation {
@@ -409,7 +418,8 @@ extension ReaderContainerViewController {
 
     private func toggleReaderDelTag(tag: Int64, title: String) {
         guard book != nil else {
-            showToast("当前书籍信息尚未加载，稍后再试")
+            showToast(
+                NSLocalizedString("reader.chapter.consumer.book_not_loaded", value: "当前书籍信息尚未加载，稍后再试", comment: ""))
             return
         }
         runReaderOperation {
@@ -435,7 +445,9 @@ extension ReaderContainerViewController {
 
     private func refreshReaderChapterList() {
         guard book != nil else {
-            showToast("当前书籍信息尚未加载，无法刷新目录")
+            showToast(
+                NSLocalizedString(
+                    "reader.chapter.consumer.book_not_loaded_refresh_toc", value: "当前书籍信息尚未加载，无法刷新目录", comment: ""))
             return
         }
         runReaderOperation {
@@ -451,7 +463,9 @@ extension ReaderContainerViewController {
     private func confirmClearReaderBookCache() {
         guard let bookURL = book?.bookUrl.trimmingCharacters(in: .whitespacesAndNewlines), bookURL.isEmpty == false
         else {
-            showToast("当前书籍路径为空，无法清理缓存")
+            showToast(
+                NSLocalizedString(
+                    "reader.chapter.consumer.empty_book_path_clear_cache", value: "当前书籍路径为空，无法清理缓存", comment: ""))
             return
         }
         let alert = UIAlertController(

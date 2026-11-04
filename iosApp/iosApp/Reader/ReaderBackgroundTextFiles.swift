@@ -17,7 +17,11 @@ enum ReaderBackgroundTextFiles {
     }
 
     static var invalidConfig: NSError {
-        NSError(domain: "io.legado.reader.background", code: 1, userInfo: [NSLocalizedDescriptionKey: "阅读配置格式无效"])
+        NSError(
+            domain: "io.legado.reader.background", code: 1,
+            userInfo: [
+                NSLocalizedDescriptionKey: NSLocalizedString("reader.preset.consumer.config_invalid", value: "阅读配置格式无效", comment: "")
+            ])
     }
 
     static func importImage(_ data: Data) throws -> String {
@@ -26,10 +30,16 @@ enum ReaderBackgroundTextFiles {
             let source = CGImageSourceCreateWithData(data as CFData, nil), let type = CGImageSourceGetType(source),
             let ext = UTType(type as String)?.preferredFilenameExtension
         else {
-            throw NSError(domain: "io.legado.reader.background", code: 2, userInfo: [NSLocalizedDescriptionKey: "无法读取背景图片"])
+            throw NSError(
+                domain: "io.legado.reader.background", code: 2,
+                userInfo: [
+                    NSLocalizedDescriptionKey: NSLocalizedString("reader.preset.consumer.image_unreadable", value: "无法读取背景图片", comment: "")
+                ])
         }
-        let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("ReaderBackgrounds", isDirectory: true)
+        let directory = try FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+        )
+        .appendingPathComponent("ReaderBackgrounds", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let fileName = UUID().uuidString + "." + ext
         try data.write(to: directory.appendingPathComponent(fileName), options: .atomic)

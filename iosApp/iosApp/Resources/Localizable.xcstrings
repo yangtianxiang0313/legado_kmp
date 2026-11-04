@@ -1,6 +1,1263 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "reader.padding.consumer.top" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "上边距"}},
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Top"}}
+      }
+    },
+    "reader.padding.consumer.bottom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "下边距"}},
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Bottom"}}
+      }
+    },
+    "reader.padding.consumer.left" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "左边距"}},
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Left"}}
+      }
+    },
+    "reader.padding.consumer.right" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "右边距"}},
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Right"}}
+      }
+    },
+    "reader.font.consumer.directory.authorization_missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {"state" : "translated", "value" : "字体目录授权记录已丢失，请重新选择字体目录。"}
+        },
+        "en" : {
+          "stringUnit" : {"state" : "translated", "value" : "Font folder authorization is missing. Select the font folder again."}
+        }
+      }
+    },
+    "reader.font.consumer.directory.load_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {"state" : "translated", "value" : "无法加载字体目录：%@\n请重新选择字体目录。"}
+        },
+        "en" : {
+          "stringUnit" : {"state" : "translated", "value" : "The font folder could not be loaded: %@\nSelect the font folder again."}
+        }
+      }
+    },
+    "reader.font.consumer.other_directory" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其它目录"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other folder"
+          }
+        }
+      }
+    },
+    "reader.font.consumer.overflow_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@、其它目录"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, Other folder"
+          }
+        }
+      }
+    },
+    "reader.font.consumer.chooser_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开选择窗口，请重试。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to open the selection dialog. Please try again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.error_detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\n%@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\n%@"
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.invalid_bookmark" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体目录授权记录损坏，请重新选择字体目录。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font folder authorization record is damaged. Please select the font folder again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.stale_bookmark" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体目录授权记录已过期，请重新加载或重新选择字体目录。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font folder authorization record has expired. Please reload or select the font folder again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.invalid_directory" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择可读取的字体目录，不能使用目录链接。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please select a readable font folder. Folder links are not supported."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.changed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体目录已移动或被替换，请重新加载或重新选择字体目录。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font folder has been moved or replaced. Please reload or select the font folder again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.stale_entry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此字体来自旧的目录列表，请重新加载后选择。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This font is from an outdated folder listing. Please reload before selecting it."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.invalid_file" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择普通字体文件，不能使用目录或文件链接。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please select a regular font file. Folders and file links are not supported."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.empty_file" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体文件为空，请选择其他字体。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font file is empty. Please select another font."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体文件过大，最多支持 64 MiB。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font file is too large. The maximum supported size is 64 MiB."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.file_changed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体文件在读取时发生变化，请重新加载后重试。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font file changed while it was being read. Please reload and try again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.unavailable_font" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已导入的字体无法读取或注册，请重新导入。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The imported font cannot be read or registered. Please import it again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.invalid_temporary_directory" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法访问字体导入临时目录。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to access the temporary folder for font imports."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.directory.coordination_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法协调读取字体目录或文件，请重新选择字体目录。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to coordinate reading the font folder or file. Please select the font folder again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.unregister_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销字体注册失败：%@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to unregister the font: %@"
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.file_exists" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体存储文件已存在，请重试。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font storage file already exists. Please try again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.invalid_file" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择可读取的字体文件，不能导入目录或文件链接。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please select a readable font file. Folders and file links cannot be imported."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.unsupported_type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅支持导入 TTF 或 OTF 字体文件。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only TTF or OTF font files can be imported."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.empty_file" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体文件为空，请重新选择。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font file is empty. Please select a file again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.invalid_font" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件不是有效的 TTF/OTF，或字体格式不受支持。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file is not a valid TTF/OTF font, or its font format is not supported."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体文件已丢失或无法读取，请重新导入。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font file is missing or cannot be read. Please import it again."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.invalid_catalog" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体目录记录损坏或无法读取，为保护已有字体，未覆盖原记录。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font catalog is damaged or unreadable. The original records have not been overwritten to protect existing fonts."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.catalog_full" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体目录记录过大，无法继续导入。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The font catalog is too large. No more fonts can be imported."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.name_conflict" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体内部名称“%@”与已有字体冲突，请选择内部名称不同的字体。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The internal font name \"%@\" conflicts with an existing font. Please select a font with a different internal name."
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.registration_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体注册失败，可能与已有字体重名：%@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Font registration failed, possibly due to a name conflict with an existing font: %@"
+          }
+        }
+      }
+    },
+    "reader.font.consumer.store.file_operation_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取或保存字体：%@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to read or save the font: %@"
+          }
+        }
+      }
+    },
+    "reader.chapter.consumer.no_chapter_to_reverse" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前没有可反转的章节"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No chapters are available to reverse"
+          }
+        }
+      }
+    },
+    "reader.chapter.consumer.book_not_loaded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前书籍信息尚未加载，稍后再试"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The current book information has not loaded yet. Please try again later."
+          }
+        }
+      }
+    },
+    "reader.chapter.consumer.book_not_loaded_refresh_toc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前书籍信息尚未加载，无法刷新目录"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The current book information has not loaded yet. The contents cannot be refreshed."
+          }
+        }
+      }
+    },
+    "reader.chapter.consumer.empty_book_path_clear_cache" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前书籍路径为空，无法清理缓存"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The current book path is empty. The cache cannot be cleared."
+          }
+        }
+      }
+    },
+    "reader.chapter.consumer.progress_not_saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读进度尚未保存，请稍后重试"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading progress has not been saved yet. Please try again later."
+          }
+        }
+      }
+    },
+    "reader.txt_toc.consumer.loading_rules" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在加载目录规则"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading contents rules"
+          }
+        }
+      }
+    },
+    "reader.txt_toc.consumer.cancelling" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在取消，请稍候"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelling, please wait"
+          }
+        }
+      }
+    },
+    "reader.txt_toc.consumer.rebuilding_toc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重建目录"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rebuilding contents"
+          }
+        }
+      }
+    },
+    "reader.txt_toc.consumer.content_not_loaded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目录已更新，但正文尚未加载，请稍后重试"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The contents have been updated, but the chapter text has not loaded yet. Please try again later."
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.import_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.current_missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到当前阅读配置"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The current reading style could not be found"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.share_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法显示导出面板"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The export sheet could not be opened"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.invalid_url" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入有效的 HTTP 或 HTTPS 地址"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid HTTP or HTTPS address"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.rollback_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\n导入资源回滚失败：%@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\nImported resources could not be rolled back: %@"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.file_too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读配置文件过大"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style file is too large"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.config_missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缺少有效的 readConfig.json"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A valid readConfig.json is missing"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.background_missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置缺少背景图片：%@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style is missing a background image: %@"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.background_save_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存背景图片"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background image could not be saved"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.font_unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持的配置字体"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style contains an unsupported font"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.background_read_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取配置背景图片"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style background image could not be read"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.background_extension_invalid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景图片扩展名无效"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background image has an invalid file extension"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.font_too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置字体文件过大"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style font file is too large"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.resources_too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读配置资源总量过大"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style resources are too large"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.archive_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打包阅读配置"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style archive could not be created"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.object_required" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读配置必须是一个对象"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style must be a JSON object"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.background_invalid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置背景图片无效或尺寸过大"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style background image is invalid or too large"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.download_started" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载已经开始"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The download has already started"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.download_too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读配置下载超过 64 MiB"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style download exceeds 64 MiB"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.download_invalid_response" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载响应无效"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The download response is invalid"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.download_http_error" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载失败：HTTP %ld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download failed: HTTP %ld"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.download_redirect_unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持的下载重定向"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The download redirect is not supported"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.invalid_file" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择有效文件"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a valid file"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.file_read_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取配置文件"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style file could not be read"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.config_invalid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读配置格式无效"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading style format is invalid"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.image_unreadable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取背景图片"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background image could not be read"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.enter_address" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入地址"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter address"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.theme_name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主题名称"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Theme name"
+          }
+        }
+      }
+    },
+    "reader.preset.consumer.brightness_not_loaded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读亮度配置尚未加载，稍后再试"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading brightness settings have not loaded yet. Please try again later."
+          }
+        }
+      }
+    },
+    "reader.padding.consumer.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页眉"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Header"
+          }
+        }
+      }
+    },
+    "reader.padding.consumer.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正文"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Content"
+          }
+        }
+      }
+    },
+    "reader.padding.consumer.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页脚"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Footer"
+          }
+        }
+      }
+    },
+    "reader.padding.consumer.show_separator" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示分隔线"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display divider"
+          }
+        }
+      }
+    },
+    "reader.padding.consumer.separator_accessibility" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，显示分隔线"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, display divider"
+          }
+        }
+      }
+    },
     "pdf.reader.location_save_failed": {
       "extractionState": "manual",
       "localizations": {

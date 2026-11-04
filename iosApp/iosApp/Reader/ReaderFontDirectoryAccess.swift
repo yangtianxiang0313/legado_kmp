@@ -246,18 +246,54 @@ enum ReaderFontDirectoryError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidBookmark: return "字体目录授权记录损坏，请重新选择字体目录。"
-        case .staleBookmark: return "字体目录授权记录已过期，请重新加载或重新选择字体目录。"
-        case .invalidDirectory: return "请选择可读取的字体目录，不能使用目录链接。"
-        case .directoryChanged: return "字体目录已移动或被替换，请重新加载或重新选择字体目录。"
-        case .staleEntry: return "此字体来自旧的目录列表，请重新加载后选择。"
-        case .invalidFile: return "请选择普通字体文件，不能使用目录或文件链接。"
-        case .emptyFile: return "字体文件为空，请选择其他字体。"
-        case .tooLarge: return "字体文件过大，最多支持 64 MiB。"
-        case .fileChanged: return "字体文件在读取时发生变化，请重新加载后重试。"
-        case .unavailableFont: return "已导入的字体无法读取或注册，请重新导入。"
-        case .invalidTemporaryDirectory: return "无法访问字体导入临时目录。"
-        case .coordinationFailed: return "无法协调读取字体目录或文件，请重新选择字体目录。"
+        case .invalidBookmark:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.invalid_bookmark", value: "字体目录授权记录损坏，请重新选择字体目录。",
+                comment: "Invalid font directory authorization record")
+        case .staleBookmark:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.stale_bookmark", value: "字体目录授权记录已过期，请重新加载或重新选择字体目录。",
+                comment: "Expired font directory authorization record")
+        case .invalidDirectory:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.invalid_directory", value: "请选择可读取的字体目录，不能使用目录链接。",
+                comment: "Invalid font directory")
+        case .directoryChanged:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.changed", value: "字体目录已移动或被替换，请重新加载或重新选择字体目录。",
+                comment: "Font directory identity changed")
+        case .staleEntry:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.stale_entry", value: "此字体来自旧的目录列表，请重新加载后选择。",
+                comment: "Stale font directory entry")
+        case .invalidFile:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.invalid_file", value: "请选择普通字体文件，不能使用目录或文件链接。",
+                comment: "Invalid font directory file")
+        case .emptyFile:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.empty_file", value: "字体文件为空，请选择其他字体。",
+                comment: "Empty font directory file")
+        case .tooLarge:
+            return NSLocalizedString(
+                "reader.font.consumer.too_large", value: "字体文件过大，最多支持 64 MiB。",
+                comment: "Font file size limit")
+        case .fileChanged:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.file_changed", value: "字体文件在读取时发生变化，请重新加载后重试。",
+                comment: "Font file changed during reading")
+        case .unavailableFont:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.unavailable_font", value: "已导入的字体无法读取或注册，请重新导入。",
+                comment: "Imported font cannot be read or registered")
+        case .invalidTemporaryDirectory:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.invalid_temporary_directory", value: "无法访问字体导入临时目录。",
+                comment: "Font import temporary directory is inaccessible")
+        case .coordinationFailed:
+            return NSLocalizedString(
+                "reader.font.consumer.directory.coordination_failed", value: "无法协调读取字体目录或文件，请重新选择字体目录。",
+                comment: "Font directory or file read coordination failed")
         }
     }
 }

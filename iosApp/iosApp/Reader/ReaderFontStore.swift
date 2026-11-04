@@ -262,7 +262,11 @@ final class ReaderFontStore {
             var error: Unmanaged<CFError>?
             guard CTFontManagerUnregisterFontsForURL(registered.url as CFURL, .process, &error) else {
                 let detail = error.map { CFErrorCopyDescription($0.takeRetainedValue()) as String } ?? postScriptName
-                throw StoreError.fileOperation("撤销字体注册失败：\(detail)")
+                throw StoreError.fileOperation(
+                    String(
+                        format: NSLocalizedString(
+                            "reader.font.consumer.store.unregister_failed", value: "撤销字体注册失败：%@",
+                            comment: "Font unregister failure; %@ is unmodified error detail"), detail))
             }
             Self.registrations.removeValue(forKey: postScriptName)
         }
@@ -304,7 +308,10 @@ final class ReaderFontStore {
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let destination = fileURL(for: record)
         guard !FileManager.default.fileExists(atPath: destination.path) else {
-            throw StoreError.fileOperation("字体存储文件已存在，请重试。")
+            throw StoreError.fileOperation(
+                NSLocalizedString(
+                    "reader.font.consumer.store.file_exists", value: "字体存储文件已存在，请重试。",
+                    comment: "Font storage file already exists"))
         }
         var committed = false
         defer {
@@ -581,17 +588,53 @@ final class ReaderFontStore {
 
         var errorDescription: String? {
             switch self {
-            case .invalidFile: return "请选择可读取的字体文件，不能导入目录或文件链接。"
-            case .unsupportedType: return "仅支持导入 TTF 或 OTF 字体文件。"
-            case .emptyFile: return "字体文件为空，请重新选择。"
-            case .tooLarge: return "字体文件过大，最多支持 64 MiB。"
-            case .invalidFont: return "文件不是有效的 TTF/OTF，或字体格式不受支持。"
-            case .unavailable: return "字体文件已丢失或无法读取，请重新导入。"
-            case .invalidCatalog: return "字体目录记录损坏或无法读取，为保护已有字体，未覆盖原记录。"
-            case .catalogFull: return "字体目录记录过大，无法继续导入。"
-            case .nameConflict(let name): return "字体内部名称“\(name)”与已有字体冲突，请选择内部名称不同的字体。"
-            case .registration(let reason): return "字体注册失败，可能与已有字体重名：\(reason)"
-            case .fileOperation(let reason): return "无法读取或保存字体：\(reason)"
+            case .invalidFile:
+                return NSLocalizedString(
+                    "reader.font.consumer.store.invalid_file", value: "请选择可读取的字体文件，不能导入目录或文件链接。",
+                    comment: "Invalid font import file")
+            case .unsupportedType:
+                return NSLocalizedString(
+                    "reader.font.consumer.store.unsupported_type", value: "仅支持导入 TTF 或 OTF 字体文件。",
+                    comment: "Supported font import file types")
+            case .emptyFile:
+                return NSLocalizedString(
+                    "reader.font.consumer.store.empty_file", value: "字体文件为空，请重新选择。",
+                    comment: "Empty font import file")
+            case .tooLarge:
+                return NSLocalizedString(
+                    "reader.font.consumer.too_large", value: "字体文件过大，最多支持 64 MiB。",
+                    comment: "Font file size limit")
+            case .invalidFont:
+                return NSLocalizedString(
+                    "reader.font.consumer.store.invalid_font", value: "文件不是有效的 TTF/OTF，或字体格式不受支持。",
+                    comment: "Invalid or unsupported font data")
+            case .unavailable:
+                return NSLocalizedString(
+                    "reader.font.consumer.store.unavailable", value: "字体文件已丢失或无法读取，请重新导入。",
+                    comment: "Imported font file is unavailable")
+            case .invalidCatalog:
+                return NSLocalizedString(
+                    "reader.font.consumer.store.invalid_catalog", value: "字体目录记录损坏或无法读取，为保护已有字体，未覆盖原记录。",
+                    comment: "Invalid font catalog; original records are preserved")
+            case .catalogFull:
+                return NSLocalizedString(
+                    "reader.font.consumer.store.catalog_full", value: "字体目录记录过大，无法继续导入。",
+                    comment: "Font catalog size limit")
+            case .nameConflict(let name):
+                return String(
+                    format: NSLocalizedString(
+                        "reader.font.consumer.store.name_conflict", value: "字体内部名称“%@”与已有字体冲突，请选择内部名称不同的字体。",
+                        comment: "Font name conflict; %@ is the unmodified internal font name"), name)
+            case .registration(let reason):
+                return String(
+                    format: NSLocalizedString(
+                        "reader.font.consumer.store.registration_failed", value: "字体注册失败，可能与已有字体重名：%@",
+                        comment: "Font registration failure; %@ is unmodified error detail"), reason)
+            case .fileOperation(let reason):
+                return String(
+                    format: NSLocalizedString(
+                        "reader.font.consumer.store.file_operation_failed", value: "无法读取或保存字体：%@",
+                        comment: "Font read or save failure; %@ is unmodified error detail"), reason)
             }
         }
     }

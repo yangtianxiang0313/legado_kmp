@@ -37,7 +37,10 @@ final class ReaderFontLibrary {
             guard let value = defaults.object(forKey: bookmarkKey) else {
                 return snapshot(
                     owned: owned, requiresSelection: true,
-                    warning: directory == nil ? nil : "字体目录授权记录已丢失，请重新选择字体目录。")
+                    warning: directory == nil
+                        ? nil
+                        : NSLocalizedString(
+                            "reader.font.consumer.directory.authorization_missing", value: "字体目录授权记录已丢失，请重新选择字体目录。", comment: ""))
             }
             do {
                 guard let bookmark = value as? Data else { throw ReaderFontDirectoryError.invalidBookmark }
@@ -54,7 +57,9 @@ final class ReaderFontLibrary {
             } catch {
                 return snapshot(
                     owned: owned, requiresSelection: true,
-                    warning: "无法加载字体目录：\(error.localizedDescription)\n请重新选择字体目录。")
+                    warning: String.localizedStringWithFormat(
+                        NSLocalizedString("reader.font.consumer.directory.load_failed", value: "无法加载字体目录：%@\n请重新选择字体目录。", comment: ""),
+                        error.localizedDescription))
             }
         }
     }

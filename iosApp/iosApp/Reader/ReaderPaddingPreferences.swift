@@ -1,3 +1,4 @@
+import Foundation
 import shared
 
 enum ReaderPaddingField: String, CaseIterable {
@@ -7,10 +8,14 @@ enum ReaderPaddingField: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .headerTop, .bodyTop, .footerTop: return "上边距"
-        case .headerBottom, .bodyBottom, .footerBottom: return "下边距"
-        case .headerLeft, .bodyLeft, .footerLeft: return "左边距"
-        case .headerRight, .bodyRight, .footerRight: return "右边距"
+        case .headerTop, .bodyTop, .footerTop:
+            return NSLocalizedString("reader.padding.consumer.top", value: "上边距", comment: "Android padding_top")
+        case .headerBottom, .bodyBottom, .footerBottom:
+            return NSLocalizedString("reader.padding.consumer.bottom", value: "下边距", comment: "Android padding_bottom")
+        case .headerLeft, .bodyLeft, .footerLeft:
+            return NSLocalizedString("reader.padding.consumer.left", value: "左边距", comment: "Android padding_left")
+        case .headerRight, .bodyRight, .footerRight:
+            return NSLocalizedString("reader.padding.consumer.right", value: "右边距", comment: "Android padding_right")
         }
     }
 

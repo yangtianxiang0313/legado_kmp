@@ -173,7 +173,10 @@ final class ReaderProgressQueue {
         guard committed else {
             throw NSError(
                 domain: "io.legado.readerProgress", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "阅读进度尚未保存，请稍后重试"])
+                userInfo: [
+                    NSLocalizedDescriptionKey: NSLocalizedString(
+                        "reader.chapter.consumer.progress_not_saved", value: "阅读进度尚未保存，请稍后重试", comment: "")
+                ])
         }
     }
 
