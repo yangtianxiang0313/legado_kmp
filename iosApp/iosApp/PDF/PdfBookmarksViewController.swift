@@ -2,7 +2,9 @@ import UIKit
 import shared
 
 @MainActor
-final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, UITableViewDataSource, UITableViewDelegate {
+final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, UITableViewDataSource,
+    UITableViewDelegate
+{
     var onSelection: ((Bookmark) -> Void)?
     var canSubmit: (() -> Bool)? {
         didSet {
@@ -18,6 +20,10 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
     private enum SortOrder: String, CaseIterable {
         case page = "按页码"
         case time = "按时间"
+
+        var title: String {
+            self == .page ? L10n.PDFContent.bookmarkSortPage : L10n.PDFContent.bookmarkSortTime
+        }
     }
 
     private let client: PdfBookmarkClient
@@ -82,7 +88,7 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "书签"
+        title = L10n.Reader.menuBookmark
         configureViews()
         configureNavigation()
         for name in [
@@ -148,9 +154,9 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
     }
 
     private func configureNavigation() {
-        configureButton(addButton, symbol: "plus", title: "添加书签", action: #selector(addBookmark))
-        configureButton(sortButton, symbol: "arrow.up.arrow.down", title: "书签排序", action: nil)
-        configureButton(closeButton, symbol: "xmark", title: "关闭书签", action: #selector(close))
+        configureButton(addButton, symbol: "plus", title: L10n.PDFContent.bookmarkAdd, action: #selector(addBookmark))
+        configureButton(sortButton, symbol: "arrow.up.arrow.down", title: L10n.Reader.bookmarkSortTitle, action: nil)
+        configureButton(closeButton, symbol: "xmark", title: L10n.PDFContent.bookmarkClose, action: #selector(close))
         sortButton.showsMenuAsPrimaryAction = true
         sortButton.menu = UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak self] completion in
@@ -158,7 +164,7 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
                 completion(
                     SortOrder.allCases.map { order in
                         UIAction(
-                            title: order.rawValue, image: UIImage(systemName: order == .page ? "doc" : "clock"),
+                            title: order.title, image: UIImage(systemName: order == .page ? "doc" : "clock"),
                             state: self.sortOrder == order ? .on : .off
                         ) { [weak self] _ in
                             guard let self, self.canInteract else { return }
@@ -168,7 +174,9 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
                     })
             }
         ])
-        navigationItem.rightBarButtonItems = [UIBarButtonItem(customView: addButton), UIBarButtonItem(customView: sortButton)]
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(customView: addButton), UIBarButtonItem(customView: sortButton),
+        ]
         if navigationController?.viewControllers.first === self || navigationController == nil {
             navigationItem.leftBarButtonItem = UIBarButtonItem(customView: closeButton)
         }
@@ -187,7 +195,7 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
     private func configureViews() {
         view.accessibilityIdentifier = "pdf.bookmarks"
         searchBar.searchBarStyle = .minimal
-        searchBar.placeholder = "搜索摘录、备注或章名"
+        searchBar.placeholder = L10n.PDFContent.bookmarkSearchPlaceholder
         searchBar.delegate = self
         searchBar.searchTextField.autocorrectionType = .no
         searchBar.searchTextField.autocapitalizationType = .none
@@ -198,7 +206,8 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
         statusLabel.numberOfLines = 0
         statusLabel.accessibilityIdentifier = "pdf.bookmarks.status"
         spinner.hidesWhenStopped = true
-        configureButton(retryButton, symbol: "arrow.clockwise", title: "重试", action: #selector(retryOperation))
+        configureButton(
+            retryButton, symbol: "arrow.clockwise", title: L10n.Common.retry, action: #selector(retryOperation))
         let status = UIStackView(arrangedSubviews: [spinner, statusLabel, retryButton])
         status.alignment = .center
         status.spacing = 8
@@ -250,7 +259,9 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
         emptyLabel.textColor = AndroidReplicaTheme.secondaryText
         searchBar.tintColor = AndroidReplicaTheme.accent
         searchBar.searchTextField.textColor = AndroidReplicaTheme.primaryText
-        for button in [addButton, sortButton, closeButton, retryButton] { button.tintColor = AndroidReplicaTheme.accent }
+        for button in [addButton, sortButton, closeButton, retryButton] {
+            button.tintColor = AndroidReplicaTheme.accent
+        }
         tableView.reloadData()
     }
 
@@ -403,14 +414,15 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
         guard isViewLoaded else { return }
         tableView.reloadData()
         if loadTask != nil || actionTask != nil { spinner.startAnimating() } else { spinner.stopAnimating() }
-        statusLabel.text = message ?? (loadTask != nil ? "正在加载书签" : "\(rows.count) 个书签")
+        statusLabel.text =
+            message ?? (loadTask != nil ? L10n.PDFContent.bookmarkLoading : L10n.PDFContent.bookmarkCount(rows.count))
         retryButton.isHidden = retry == nil
         if !rows.isEmpty || loadTask != nil {
             emptyLabel.text = nil
         } else if let message, !hasLoaded {
             emptyLabel.text = message
         } else if hasLoaded {
-            emptyLabel.text = bookmarks.isEmpty ? "暂无书签" : "未找到匹配书签"
+            emptyLabel.text = bookmarks.isEmpty ? L10n.AllBookmark.empty : L10n.PDFContent.bookmarkNoMatches
         } else {
             emptyLabel.text = nil
         }
@@ -419,7 +431,7 @@ final class PdfBookmarksViewController: UIViewController, UISearchBarDelegate, U
     }
 
     private func showFailure(_ error: Error, retry: @escaping () -> Void) {
-        message = error.userFacingMessage.isEmpty ? "操作失败，请重试" : error.userFacingMessage
+        message = error.userFacingMessage.isEmpty ? L10n.PDFContent.bookmarkOperationFailed : error.userFacingMessage
         self.retry = retry
         render()
         UIAccessibility.post(notification: .announcement, argument: message)

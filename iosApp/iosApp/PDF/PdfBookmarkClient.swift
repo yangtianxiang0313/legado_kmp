@@ -67,16 +67,16 @@ final class PdfBookmarkClient {
 
     func makeDraft(pageIndex: Int, excerpt: String) async throws -> Bookmark {
         try validate(pageIndex: pageIndex)
-        try validate(text: excerpt, field: "摘录")
+        try validate(text: excerpt, field: L10n.PDFContent.bookmarkExcerptField)
         let services = try self.services()
         let context = try await self.context(using: services)
         let bookmarks = try await allBookmarks(using: services)
         _ = try await persistedBook(using: services)
         let title = context.chapters[pageIndex].title
-        try validate(text: title, field: "页面标题")
+        try validate(text: title, field: L10n.PDFContent.bookmarkPageTitleField)
         let time = try Self.nextTime()
         guard !bookmarks.contains(where: { $0.time == time }) else {
-            throw failure("书签时间标识已存在，请重新添加")
+            throw failure(L10n.PDFContent.bookmarkTimeExists)
         }
         let draft = Bookmark(
             time: time, bookName: context.identity.name, bookAuthor: context.identity.author,
@@ -92,8 +92,8 @@ final class PdfBookmarkClient {
     func save(_ original: Bookmark, bookText: String, note: String, isNew: Bool) async throws -> Bookmark {
         try beginWrite()
         defer { isWriting = false }
-        try validate(text: bookText, field: "摘录")
-        try validate(text: note, field: "备注")
+        try validate(text: bookText, field: L10n.PDFContent.bookmarkExcerptField)
+        try validate(text: note, field: L10n.PDFContent.bookmarkNoteField)
         let services = try self.services()
         let context = try await self.context(using: services)
         try validateOwner(original, in: context)
@@ -102,10 +102,10 @@ final class PdfBookmarkClient {
             let identity = DraftIdentity(
                 book: context.identity, page: original.chapterIndex, title: original.chapterName)
             guard drafts[original.time] == identity else {
-                throw failure("书签草稿已失效或定位已变化，请重新添加")
+                throw failure(L10n.PDFContent.bookmarkDraftExpired)
             }
             guard original.chapterName == context.chapters[Int(original.chapterIndex)].title else {
-                throw failure("PDF 页面标题已变化，请重新添加书签")
+                throw failure(L10n.PDFContent.bookmarkPageTitleChanged)
             }
         }
 
@@ -114,13 +114,13 @@ final class PdfBookmarkClient {
         try validateOwner(original, in: currentContext)
         if isNew { try validate(original, in: currentContext) }
         if isNew, original.chapterName != currentContext.chapters[Int(original.chapterIndex)].title {
-            throw failure("PDF 页面标题已变化，请重新添加书签")
+            throw failure(L10n.PDFContent.bookmarkPageTitleChanged)
         }
         let bookmarks = try await allBookmarks(using: services)
         let source: Bookmark
         if isNew {
             guard !bookmarks.contains(where: { $0.time == original.time }) else {
-                throw failure("书签时间标识已被占用，未覆盖现有书签，请重新加载")
+                throw failure(L10n.PDFContent.bookmarkTimeOccupied)
             }
             source = original
         } else {
@@ -140,7 +140,7 @@ final class PdfBookmarkClient {
                 services.bookmarks.updateBookmark(bookmark: updated, completionHandler: $0)
             }
         } catch {
-            throw failure("书签保存未确认，请重新加载书签后再操作", underlying: error)
+            throw failure(L10n.PDFContent.bookmarkSaveUnconfirmed, underlying: error)
         }
         return updated
     }
@@ -159,7 +159,7 @@ final class PdfBookmarkClient {
                 services.bookmarks.deleteBookmark(time: target.time, completionHandler: $0)
             }
         } catch {
-            throw failure("书签删除未确认，请重新加载书签后再操作", underlying: error)
+            throw failure(L10n.PDFContent.bookmarkDeleteUnconfirmed, underlying: error)
         }
     }
 
@@ -180,14 +180,14 @@ final class PdfBookmarkClient {
                 books: SharedRuntime.bookDetailFacade().get(), shelf: SharedRuntime.bookshelfFacade().get(),
                 reader: SharedRuntime.readerFacade().get(), bookmarks: SharedRuntime.bookmarkFacade().get())
         } catch {
-            throw failure("书签服务暂不可用，请稍后重试", underlying: error)
+            throw failure(L10n.PDFContent.bookmarkServiceUnavailable, underlying: error)
         }
     }
 
     private func persistedBook(using services: Services) async throws -> Book {
         try Task.checkCancellation()
         guard !bookURL.isEmpty, !bookURL.contains("\0"), pageCount > 0, pageCount <= Int(Int32.max) else {
-            throw failure("PDF 书籍地址或页面数量无效")
+            throw failure(L10n.PDFContent.bookmarkBookInvalid)
         }
         let book: Book?
         do {
@@ -196,22 +196,22 @@ final class PdfBookmarkClient {
             }
         } catch {
             try Task.checkCancellation()
-            throw failure("无法读取当前 PDF 书籍，请稍后重试", underlying: error)
+            throw failure(L10n.PDFContent.bookmarkBookReadFailed, underlying: error)
         }
         try Task.checkCancellation()
-        guard let book, book.bookUrl == bookURL else { throw failure("书籍已移除，请返回书架重新打开") }
+        guard let book, book.bookUrl == bookURL else { throw failure(L10n.PDFContent.bookmarkBookRemoved) }
         guard book.isLocal, LocalBookFileBinding.shared.format(book: book) == "pdf",
             !book.isAudio, !book.isImage, !book.isEpub
-        else { throw failure("当前书籍不是可用的本地 PDF") }
+        else { throw failure(L10n.PDFContent.bookmarkBookUnavailable) }
         guard Int(book.totalChapterNum) == pageCount else {
-            throw failure("PDF 页面数量已变化，请重新打开书籍")
+            throw failure(L10n.PDFContent.bookmarkPageCountChanged)
         }
         guard !book.config.reverseToc else {
-            throw failure("PDF 目录已反转，不能按物理页定位，请恢复目录后重新打开书籍")
+            throw failure(L10n.PDFContent.bookmarkTocReversed)
         }
         let identity = BookIdentity(book)
         if let boundIdentity, boundIdentity != identity {
-            throw failure("PDF 书籍归属或书签分组已变化，请重新打开书籍")
+            throw failure(L10n.PDFContent.bookmarkBookIdentityChanged)
         }
         boundIdentity = identity
         return book
@@ -232,7 +232,7 @@ final class PdfBookmarkClient {
             }
         } catch {
             try Task.checkCancellation()
-            throw failure("无法核实书签分组，请稍后重试", underlying: error)
+            throw failure(L10n.PDFContent.bookmarkGroupReadFailed, underlying: error)
         }
         try Task.checkCancellation()
         // Database search includes NOT_SHELF previews; exact grouping excludes fuzzy name/author matches.
@@ -240,18 +240,18 @@ final class PdfBookmarkClient {
         var owners = Set(matches.map(\.bookUrl))
         owners.insert(bookURL)
         guard owners.count == 1 else {
-            throw failure("存在多本同名同作者书籍（含预览），无法确认书签归属，请先处理重复书籍")
+            throw failure(L10n.PDFContent.bookmarkDuplicateOwners)
         }
         let chapters = try await self.chapters(using: services)
         _ = try await persistedBook(using: services)
-        guard chapters.count == pageCount else { throw failure("PDF 目录与页面数量不一致，请重新打开书籍") }
+        guard chapters.count == pageCount else { throw failure(L10n.PDFContent.bookmarkTocCountMismatch) }
         for (index, chapter) in chapters.enumerated() {
             if index.isMultiple(of: 256) { try Task.checkCancellation() }
             guard chapter.bookUrl == bookURL, Int(chapter.index) == index,
                 chapter.url == "pdf-page-\(index + 1)", !chapter.isVolume,
                 chapter.start == nil, chapter.end == nil,
                 chapter.startFragmentId == nil, chapter.endFragmentId == nil
-            else { throw failure("PDF 目录页身份已变化，请重新打开书籍") }
+            else { throw failure(L10n.PDFContent.bookmarkTocIdentityChanged) }
         }
         return Context(identity: identity, chapters: chapters)
     }
@@ -259,7 +259,7 @@ final class PdfBookmarkClient {
     private func chapters(using services: Services) async throws -> [BookChapter] {
         let request = PdfBookmarkChapterRead()
         defer { request.finish() }
-        let timeout = failure("读取 PDF 目录超时，请稍后重试")
+        let timeout = failure(L10n.PDFContent.bookmarkTocReadTimeout)
         do {
             let chapters: [BookChapter] = try await SharedCancellableAsync.value { completion in
                 request.startDeadline { completion(nil, timeout) }
@@ -273,7 +273,7 @@ final class PdfBookmarkClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw failure("无法读取 PDF 目录，请稍后重试", underlying: error)
+            throw failure(L10n.PDFContent.bookmarkTocReadFailed, underlying: error)
         }
     }
 
@@ -288,22 +288,22 @@ final class PdfBookmarkClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw failure("无法读取最新书签，请稍后重试", underlying: error)
+            throw failure(L10n.PDFContent.bookmarkReadFailed, underlying: error)
         }
     }
 
     private func latest(_ original: Bookmark, in bookmarks: [Bookmark], context: Context) throws -> Bookmark {
         let matches = bookmarks.filter { $0.time == original.time }
         guard matches.count == 1, let current = matches.first else {
-            throw failure("书签已被删除或标识无效，请重新加载书签")
+            throw failure(L10n.PDFContent.bookmarkRemovedOrInvalid)
         }
         try validateOwner(current, in: context)
         guard current.bookName == original.bookName, current.bookAuthor == original.bookAuthor,
             current.chapterIndex == original.chapterIndex, current.chapterPos == original.chapterPos,
             current.chapterName == original.chapterName
-        else { throw failure("书签归属或定位已变化，请重新加载书签") }
+        else { throw failure(L10n.PDFContent.bookmarkIdentityChanged) }
         guard current.bookText == original.bookText, current.content == original.content else {
-            throw failure("书签摘录或备注已被修改，请重新加载后再操作")
+            throw failure(L10n.PDFContent.bookmarkTextChanged)
         }
         return current
     }
@@ -311,30 +311,30 @@ final class PdfBookmarkClient {
     private func validate(_ bookmark: Bookmark, in context: Context) throws {
         try validateOwner(bookmark, in: context)
         try validate(pageIndex: Int(bookmark.chapterIndex))
-        guard bookmark.chapterPos == 0 else { throw failure("书签不是有效的 PDF 页面起始位置") }
+        guard bookmark.chapterPos == 0 else { throw failure(L10n.PDFContent.bookmarkPositionInvalid) }
     }
 
     private func validateOwner(_ bookmark: Bookmark, in context: Context) throws {
         guard bookmark.bookName == context.identity.name, bookmark.bookAuthor == context.identity.author else {
-            throw failure("书签不属于当前 PDF 的书名、作者分组")
+            throw failure(L10n.PDFContent.bookmarkOwnerMismatch)
         }
     }
 
     private func validate(pageIndex: Int) throws {
         guard pageIndex >= 0, pageIndex < pageCount, pageIndex <= Int(Int32.max) else {
-            throw failure("PDF 书签页码超出可读范围")
+            throw failure(L10n.PDFContent.bookmarkPageOutOfRange)
         }
     }
 
     private func validate(text: String, field: String) throws {
         guard text.utf16.count <= Self.textLimit else {
-            throw failure("\(field)过长，最多允许 \(Self.textLimit) 个 UTF-16 字符")
+            throw failure(L10n.PDFContent.bookmarkTextTooLong(field, Self.textLimit))
         }
     }
 
     private func beginWrite() throws {
         try Task.checkCancellation()
-        guard !isWriting else { throw failure("书签操作尚未结束，请稍后重试") }
+        guard !isWriting else { throw failure(L10n.PDFContent.bookmarkOperationBusy) }
         isWriting = true
     }
 
@@ -343,7 +343,7 @@ final class PdfBookmarkClient {
         guard milliseconds.isFinite, let now = Int64(exactly: milliseconds), lastIssuedTime < Int64.max else {
             throw NSError(
                 domain: "io.legado.kmp.ios.pdf.bookmark", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "无法生成有效的书签时间标识，请稍后重试"])
+                userInfo: [NSLocalizedDescriptionKey: L10n.PDFContent.bookmarkTimeInvalid])
         }
         let time = max(now, lastIssuedTime + 1)
         lastIssuedTime = time

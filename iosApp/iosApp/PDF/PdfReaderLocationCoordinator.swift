@@ -33,7 +33,9 @@ final class PdfReaderLocationCoordinator {
             apply(saved)
         } else if let page = document.page(at: index) {
             let bounds = page.bounds(for: view.displayBox)
-            apply(PdfReadingLocation(mode: mode, pageIndex: index, pointX: bounds.minX, pointY: bounds.maxY, relativeScale: 1))
+            apply(
+                PdfReadingLocation(
+                    mode: mode, pageIndex: index, pointX: bounds.minX, pointY: bounds.maxY, relativeScale: 1))
         }
         observeScrolling()
     }

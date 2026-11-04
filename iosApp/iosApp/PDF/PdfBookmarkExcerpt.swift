@@ -16,7 +16,7 @@ enum PdfBookmarkExcerpt {
             else {
                 throw NSError(
                     domain: "io.legado.pdf.bookmark", code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "PDF 页面已不可用"])
+                    userInfo: [NSLocalizedDescriptionKey: L10n.PDFContent.bookmarkPageUnavailable])
             }
             let text = page.string ?? ""
             try Task.checkCancellation()
@@ -29,13 +29,15 @@ enum PdfBookmarkExcerpt {
         }
         try Task.checkCancellation()
         // Scanned pages stay readable and bookmarkable without inventing an OCR text layer.
-        return text.isEmpty ? "第 \(pageIndex + 1) 页" : text
+        return text.isEmpty ? L10n.PDFContent.pageNumber(pageIndex + 1) : text
     }
 
     static func bounded(_ text: String) -> String {
         let value = text as NSString
         var length = min(value.length, maximumUTF16Length)
-        if length > 0, length < value.length, (0xD800...0xDBFF).contains(value.character(at: length - 1)) { length -= 1 }
+        if length > 0, length < value.length, (0xD800...0xDBFF).contains(value.character(at: length - 1)) {
+            length -= 1
+        }
         return value.substring(to: length).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

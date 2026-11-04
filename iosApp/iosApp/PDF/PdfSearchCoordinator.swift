@@ -118,7 +118,7 @@ final class PdfSearchCoordinator {
         results.removeAll(keepingCapacity: true)
 
         guard rawQuery.utf16.count <= Self.maximumQueryLength else {
-            status = .failed("搜索词过长（最多 512 个 UTF-16 单元）")
+            status = .failed(L10n.PDFContent.searchQueryTooLong(Self.maximumQueryLength))
             publish()
             return
         }
@@ -128,7 +128,7 @@ final class PdfSearchCoordinator {
             return
         }
         guard fileURL.isFileURL else {
-            status = .failed("PDF 查找需要本地文件")
+            status = .failed(L10n.PDFContent.searchRequiresLocalFile)
             publish()
             return
         }
@@ -255,16 +255,16 @@ private final class PdfSearchFinder {
         hasStarted = true
         hasScopedAccess = fileURL.startAccessingSecurityScopedResource()
         guard let document = PDFDocument(url: fileURL) else {
-            onEvent?(.failed("PDF 无法打开，文件可能已移除或损坏"))
+            onEvent?(.failed(L10n.PDFContent.searchDocumentUnavailable))
             return
         }
         self.document = document
         guard !document.isLocked else {
-            onEvent?(.failed("PDF 已锁定，无法查找正文"))
+            onEvent?(.failed(L10n.PDFContent.searchDocumentLocked))
             return
         }
         guard document.pageCount > 0 else {
-            onEvent?(.failed("PDF 没有可查找的页面"))
+            onEvent?(.failed(L10n.PDFContent.searchNoPages))
             return
         }
 
@@ -305,7 +305,7 @@ private final class PdfSearchFinder {
         guard let selection = notification.userInfo?[PDFDocumentFoundSelectionKey] as? PDFSelection,
             let match = PdfSearchMatch.make(from: selection, in: document)
         else {
-            onEvent?(.failed("PDF 匹配内容无法定位"))
+            onEvent?(.failed(L10n.PDFContent.searchMatchUnavailable))
             return
         }
         onEvent?(.match(match))

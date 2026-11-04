@@ -45,12 +45,13 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
     override func viewDidLoad() {
         super.viewDidLoad()
         configureViews()
-        NotificationCenter.default.addObserver(self, selector: #selector(pageChanged), name: .PDFViewPageChanged, object: pdfView)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(pageChanged), name: .PDFViewPageChanged, object: pdfView)
         NotificationCenter.default.addObserver(
             self, selector: #selector(scaleChanged), name: .PDFViewScaleChanged, object: pdfView)
         location.onError = { [weak self] message in
             guard self?.isVisible == true else { return }
-            self?.showTransientMessage("阅读位置保存失败：\(message)")
+            self?.showTransientMessage(L10n.PDFReader.locationSaveFailed(message))
         }
         NotificationCenter.default.addObserver(
             self, selector: #selector(appBackgrounded), name: UIApplication.willResignActiveNotification, object: nil)
@@ -124,11 +125,11 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
         titleLabel.textColor = AndroidReplicaTheme.toolbarText
         titleLabel.text = "PDF"
         titleLabel.lineBreakMode = .byTruncatingMiddle
-        let back = button("chevron.left", label: "返回", action: #selector(goBack))
-        let toc = button("list.bullet", label: "目录", action: #selector(showPages))
-        let search = button("magnifyingglass", label: "搜索正文", action: #selector(showSearch))
+        let back = button("chevron.left", label: L10n.Reader.backAction, action: #selector(goBack))
+        let toc = button("list.bullet", label: L10n.Reader.menuToc, action: #selector(showPages))
+        let search = button("magnifyingglass", label: L10n.PDFReader.searchContent, action: #selector(showSearch))
         search.accessibilityIdentifier = "pdf.search"
-        let mode = button("ellipsis", label: "更多", action: nil)
+        let mode = button("ellipsis", label: L10n.Reader.menuMore, action: nil)
         mode.accessibilityIdentifier = "pdf.more"
         mode.showsMenuAsPrimaryAction = true
         mode.menu = UIMenu(children: [
@@ -145,12 +146,12 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
         pdfView.displayDirection = .vertical
         pdfView.accessibilityIdentifier = "pdf.document"
         previousButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
-        previousButton.accessibilityLabel = "上一页"
+        previousButton.accessibilityLabel = L10n.PDFReader.previousPage
         previousButton.addTarget(self, action: #selector(previousPage), for: .touchUpInside)
         nextButton.setImage(UIImage(systemName: "chevron.right"), for: .normal)
-        nextButton.accessibilityLabel = "下一页"
+        nextButton.accessibilityLabel = L10n.PDFReader.nextPage
         nextButton.addTarget(self, action: #selector(nextPage), for: .touchUpInside)
-        slider.accessibilityLabel = "PDF 页码"
+        slider.accessibilityLabel = L10n.PDFReader.pageNumber
         slider.accessibilityIdentifier = "pdf.pageSlider"
         slider.addTarget(
             self, action: #selector(sliderChanged),
@@ -172,7 +173,7 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
         errorLabel.numberOfLines = 0
         errorLabel.textAlignment = .center
         errorLabel.textColor = AndroidReplicaTheme.primaryText
-        retryButton.setTitle("重试", for: .normal)
+        retryButton.setTitle(L10n.Common.retry, for: .normal)
         retryButton.addTarget(self, action: #selector(retry), for: .touchUpInside)
         retryButton.isHidden = true
         spinner.hidesWhenStopped = true
@@ -189,7 +190,8 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
             topBar.heightAnchor.constraint(equalToConstant: 56),
             header.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: 4),
             header.trailingAnchor.constraint(equalTo: topBar.trailingAnchor, constant: -4),
-            header.topAnchor.constraint(equalTo: topBar.topAnchor), header.bottomAnchor.constraint(equalTo: topBar.bottomAnchor),
+            header.topAnchor.constraint(equalTo: topBar.topAnchor),
+            header.bottomAnchor.constraint(equalTo: topBar.bottomAnchor),
             footer.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
             footer.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             footer.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -239,13 +241,15 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
                 let document = await Task.detached(priority: .userInitiated) { PDFDocument(url: url) }.value
                 try Task.checkCancellation()
                 guard let document, !document.isLocked, document.pageCount > 0 else {
-                    throw NSError(domain: "io.legado.pdf", code: 1, userInfo: [NSLocalizedDescriptionKey: "PDF 已加密、损坏或没有可阅读的页面"])
+                    throw NSError(
+                        domain: "io.legado.pdf", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: L10n.PDFReader.unreadableDocument])
                 }
                 self.progress = try PdfReaderProgressStore(bookURL: self.bookURL)
                 self.bookmarkClient = PdfBookmarkClient(bookURL: self.bookURL, pageCount: document.pageCount)
                 self.progress?.onError = { [weak self] message in
                     guard self?.isVisible == true else { return }
-                    self?.showTransientMessage("阅读进度保存失败：\(message)")
+                    self?.showTransientMessage(L10n.PDFReader.progressSaveFailed(message))
                 }
                 self.restoredPage = Int(resolved.book.durChapterIndex)
                 self.fileURL = url
@@ -281,7 +285,8 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
     }
 
     @objc private func pageChanged() {
-        guard ready, didRestore, !location.isRestoring, let document = pdfView.document, let page = pdfView.currentPage else {
+        guard ready, didRestore, !location.isRestoring, let document = pdfView.document, let page = pdfView.currentPage
+        else {
             return
         }
         let index = document.index(for: page)
@@ -304,22 +309,28 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
     private func menuElements() -> [UIMenuElement] {
         guard ready, didRestore, !isLeaving else { return [] }
         let continuous = UIAction(
-            title: "连续滚动", image: UIImage(systemName: "arrow.down"),
+            title: L10n.PDFReader.continuousScrolling, image: UIImage(systemName: "arrow.down"),
             state: location.mode == .continuous ? .on : .off
         ) { [weak self] _ in self?.setContinuous(true) }
         let paged = UIAction(
-            title: "逐页阅读", image: UIImage(systemName: "rectangle.portrait"),
+            title: L10n.PDFReader.pagedReading, image: UIImage(systemName: "rectangle.portrait"),
             state: location.mode == .paged ? .on : .off
         ) { [weak self] _ in self?.setContinuous(false) }
-        let fit = UIAction(title: "适合页面", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) { [weak self] _ in
+        let fit = UIAction(
+            title: L10n.PDFReader.fitPage, image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")
+        ) { [weak self] _ in
             guard let self, self.canUseReader else { return }
             self.location.fitPage()
         }
-        let jump = UIAction(title: "跳转页码", image: UIImage(systemName: "number")) { [weak self] _ in self?.showPageJump() }
-        let addBookmark = UIAction(title: "添加书签", image: UIImage(systemName: "bookmark")) { [weak self] _ in
+        let jump = UIAction(title: L10n.PDFReader.jumpToPage, image: UIImage(systemName: "number")) { [weak self] _ in
+            self?.showPageJump()
+        }
+        let addBookmark = UIAction(title: L10n.PDFReader.addBookmark, image: UIImage(systemName: "bookmark")) {
+            [weak self] _ in
             self?.performBookmarkAction(add: true)
         }
-        let bookmarks = UIAction(title: "书签", image: UIImage(systemName: "bookmark")) { [weak self] _ in
+        let bookmarks = UIAction(title: L10n.Reader.menuBookmark, image: UIImage(systemName: "bookmark")) {
+            [weak self] _ in
             self?.performBookmarkAction(add: false)
         }
         var items: [UIMenuElement] = [
@@ -328,13 +339,15 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
         ]
         if !jumpHistory.isEmpty {
             items.append(
-                UIAction(title: "返回跳转前位置", image: UIImage(systemName: "arrow.uturn.backward")) { [weak self] _ in
+                UIAction(title: L10n.PDFReader.returnBeforeJump, image: UIImage(systemName: "arrow.uturn.backward")) {
+                    [weak self] _ in
                     self?.returnFromJump()
                 })
         }
         if hasSearchHighlight {
             items.append(
-                UIAction(title: "清除搜索高亮", image: UIImage(systemName: "xmark.circle")) { [weak self] _ in
+                UIAction(title: L10n.PDFReader.clearSearchHighlight, image: UIImage(systemName: "xmark.circle")) {
+                    [weak self] _ in
                     guard let self, self.canUseReader else { return }
                     self.clearSearchHighlight()
                 })
@@ -370,7 +383,9 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
                     }
                     let editor = ReaderTocBookmarkEditorViewController(
                         bookmark: draft,
-                        onSave: { text, note in _ = try await client.save(draft, bookText: text, note: note, isNew: true) })
+                        onSave: { text, note in
+                            _ = try await client.save(draft, bookText: text, note: note, isNew: true)
+                        })
                     editor.canSubmit = { [weak self, weak editor] in
                         guard let self, let editor, self.loadRevision == revision, !self.isLeaving,
                             self.presentedViewController === editor, self.view.window === window,
@@ -397,7 +412,9 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
                     self.present(navigation, animated: true)
                 }
             } catch is CancellationError {} catch {
-                guard let self, self.loadRevision == revision, self.view.window === window, self.isVisible else { return }
+                guard let self, self.loadRevision == revision, self.view.window === window, self.isVisible else {
+                    return
+                }
                 self.showTransientMessage(error.userFacingMessage)
             }
         }
@@ -425,14 +442,14 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
 
     private func showPageJump() {
         guard canUseReader, let document = pdfView.document else { return }
-        let alert = UIAlertController(title: "跳转页码", message: nil, preferredStyle: .alert)
+        let alert = UIAlertController(title: L10n.PDFReader.jumpToPage, message: nil, preferredStyle: .alert)
         alert.addTextField { field in
             field.keyboardType = .numberPad
             field.text = "\(Int(self.slider.value.rounded()) + 1)"
             field.placeholder = "1...\(document.pageCount)"
             field.accessibilityIdentifier = "pdf.jump.page"
         }
-        let jump = UIAlertAction(title: "跳转", style: .default) { [weak self, weak alert] _ in
+        let jump = UIAlertAction(title: L10n.PDFReader.jump, style: .default) { [weak self, weak alert] _ in
             guard let value = alert?.textFields?.first?.text, let page = Int(value),
                 (1...document.pageCount).contains(page), let alert
             else { return }
@@ -445,7 +462,7 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
                 let value = Int(alert?.textFields?.first?.text ?? "") ?? 0
                 jump?.isEnabled = (1...document.pageCount).contains(value)
             }, for: .editingChanged)
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
         alert.addAction(jump)
         present(alert, animated: true) { alert.textFields?.first?.selectAll(nil) }
     }
@@ -489,6 +506,17 @@ final class PdfReaderViewController: UIViewController, NavigationCustomToolbarPr
         let revision = loadRevision
         weak var window = view.window
         let list = PdfPageListViewController(document: document, selectedPage: document.index(for: current))
+        list.canSubmit = { [weak self, weak window, weak document] in
+            guard let self, let window, let document,
+                self.loadRevision == revision, !self.isLeaving,
+                self.pdfView.document === document, self.view.window === window,
+                self.navigationController?.topViewController === self,
+                window.isKeyWindow, window.windowScene?.activationState == .foregroundActive,
+                UIApplication.shared.applicationState == .active,
+                AppLockManager.shared.isUnlocked(in: window)
+            else { return false }
+            return true
+        }
         list.onSelection = { [weak self] page in
             DispatchQueue.main.async {
                 guard let self, self.loadRevision == revision, self.view.window === window else { return }

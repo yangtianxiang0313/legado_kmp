@@ -81,7 +81,7 @@ final class PdfReadingLocationStore {
         guard Self.isValid(location, pageCount: pageCount) else {
             throw Self.error(
                 code: 1,
-                message: "PDF 页码、坐标或缩放比例无效"
+                message: L10n.PDFReader.invalidLocation
             )
         }
 
@@ -95,10 +95,10 @@ final class PdfReadingLocationStore {
         do {
             data = try JSONEncoder().encode(record)
         } catch {
-            throw Self.error(code: 3, message: "无法保存 PDF 阅读位置", underlying: error)
+            throw Self.error(code: 3, message: L10n.PDFReader.locationSaveUnavailable, underlying: error)
         }
         guard data.count <= Self.maximumRecordBytes else {
-            throw Self.error(code: 4, message: "PDF 阅读位置记录超过大小限制")
+            throw Self.error(code: 4, message: L10n.PDFReader.locationRecordTooLarge)
         }
 
         // Only this book's record is replaced; UserDefaults persists it asynchronously.
@@ -118,7 +118,7 @@ final class PdfReadingLocationStore {
 
     private static func fingerprint(fileURL: URL) throws -> FileFingerprint {
         guard fileURL.isFileURL else {
-            throw error(code: 2, message: "PDF 阅读位置需要本地文件")
+            throw error(code: 2, message: L10n.PDFReader.locationRequiresLocalFile)
         }
         let canonicalURL = fileURL.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
         let attributes: [FileAttributeKey: Any]
@@ -126,7 +126,7 @@ final class PdfReadingLocationStore {
             // Read fresh filesystem attributes instead of potentially cached URL resource values.
             attributes = try FileManager.default.attributesOfItem(atPath: canonicalURL.path)
         } catch {
-            throw Self.error(code: 2, message: "无法读取 PDF 文件信息", underlying: error)
+            throw Self.error(code: 2, message: L10n.PDFReader.fileMetadataReadFailed, underlying: error)
         }
         guard attributes[.type] as? FileAttributeType == .typeRegular,
             let byteCount = attributes[.size] as? NSNumber,
@@ -134,7 +134,7 @@ final class PdfReadingLocationStore {
             let modificationDate = attributes[.modificationDate] as? Date,
             modificationDate.timeIntervalSince1970.isFinite
         else {
-            throw error(code: 2, message: "PDF 文件信息缺失或无效")
+            throw error(code: 2, message: L10n.PDFReader.fileMetadataInvalid)
         }
         return FileFingerprint(
             path: canonicalURL.path,

@@ -32,10 +32,10 @@ final class PdfSearchViewController: UIViewController, UISearchBarDelegate, UITa
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "正文查找"
+        title = L10n.PDFContent.searchTitle
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close, target: self, action: #selector(closeSearch))
-        navigationItem.rightBarButtonItem?.accessibilityLabel = "关闭查找"
+        navigationItem.rightBarButtonItem?.accessibilityLabel = L10n.PDFContent.searchClose
         navigationItem.rightBarButtonItem?.accessibilityIdentifier = "pdf.search.close"
         configureViews()
         coordinator.onUpdate = { [weak self] in self?.render() }
@@ -70,7 +70,7 @@ final class PdfSearchViewController: UIViewController, UISearchBarDelegate, UITa
         view.accessibilityViewIsModal = true
         searchBar.delegate = self
         searchBar.searchBarStyle = .minimal
-        searchBar.placeholder = "搜索正文"
+        searchBar.placeholder = L10n.PDFContent.searchPlaceholder
         searchBar.text = initialQuery
         searchBar.showsCancelButton = false
         searchBar.tintColor = AndroidReplicaTheme.accent
@@ -87,8 +87,10 @@ final class PdfSearchViewController: UIViewController, UISearchBarDelegate, UITa
         statusLabel.numberOfLines = 0
         statusLabel.accessibilityIdentifier = "pdf.search.status"
         spinner.hidesWhenStopped = true
-        configureButton(stopButton, symbol: "stop.circle", label: "停止查找", action: #selector(stopSearch))
-        configureButton(retryButton, symbol: "arrow.clockwise", label: "重试", action: #selector(retrySearch))
+        configureButton(
+            stopButton, symbol: "stop.circle", label: L10n.PDFContent.searchStop, action: #selector(stopSearch))
+        configureButton(
+            retryButton, symbol: "arrow.clockwise", label: L10n.Common.retry, action: #selector(retrySearch))
         let status = UIStackView(arrangedSubviews: [spinner, statusLabel, stopButton, retryButton])
         status.axis = .horizontal
         status.alignment = .center
@@ -162,17 +164,19 @@ final class PdfSearchViewController: UIViewController, UISearchBarDelegate, UITa
         case .idle:
             statusLabel.text = nil
         case .searching:
-            statusLabel.text = "正在查找 · \(matches.count) 个结果"
+            statusLabel.text = L10n.PDFContent.searchInProgress(matches.count)
         case .completed:
-            statusLabel.text = "\(matches.count) 个结果"
-            if matches.isEmpty { emptyLabel.text = "未找到匹配内容" }
+            statusLabel.text = L10n.PDFContent.searchResultCount(matches.count)
+            if matches.isEmpty { emptyLabel.text = L10n.PDFContent.searchNoMatches }
         case .cancelled:
-            statusLabel.text = "查找已停止 · \(matches.count) 个结果"
-            if matches.isEmpty { emptyLabel.text = "查找已停止" }
+            statusLabel.text = L10n.PDFContent.searchStoppedResultCount(matches.count)
+            if matches.isEmpty { emptyLabel.text = L10n.PDFContent.searchStopped }
         case .truncated:
-            statusLabel.text = "达到上限，显示前\(PdfSearchCoordinator.maximumResults)项"
+            statusLabel.text = L10n.PDFContent.searchLimitReached(PdfSearchCoordinator.maximumResults)
         case .failed(let message):
-            statusLabel.text = matches.isEmpty ? "查找失败" : "\(message)（保留 \(matches.count) 个结果）"
+            statusLabel.text =
+                matches.isEmpty
+                ? L10n.PDFContent.searchFailed : L10n.PDFContent.searchFailureRetainingResults(message, matches.count)
             if matches.isEmpty { emptyLabel.text = message }
             retryButton.isHidden = false
         }
@@ -240,7 +244,8 @@ final class PdfSearchViewController: UIViewController, UISearchBarDelegate, UITa
         let lastPage = match.ranges.map(\.pageIndex).max() ?? match.pageIndex
         let pageText =
             lastPage == match.pageIndex
-            ? "第 \(match.pageIndex + 1) 页" : "第 \(match.pageIndex + 1)–\(lastPage + 1) 页"
+            ? L10n.PDFContent.pageNumber(match.pageIndex + 1)
+            : L10n.PDFContent.pageRange(match.pageIndex + 1, lastPage + 1)
         var content = cell.defaultContentConfiguration()
         content.text = pageText
         content.secondaryText = match.text

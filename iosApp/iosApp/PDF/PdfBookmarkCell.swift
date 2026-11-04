@@ -49,15 +49,20 @@ final class PdfBookmarkCell: UITableViewCell {
         let page = Int(bookmark.chapterIndex)
         let pageInRange = (0..<max(pageCount, 0)).contains(page)
         let valid = pageInRange && bookmark.chapterPos == 0
-        let pageTitle = pageInRange ? "第 \(page + 1) 页" : "页码不可用（\(Int64(bookmark.chapterIndex) + 1)）"
+        let pageTitle =
+            pageInRange
+            ? L10n.PDFContent.pageNumber(page + 1)
+            : L10n.PDFContent.bookmarkUnavailablePage(Int64(bookmark.chapterIndex) + 1)
         chapterLabel.text = bookmark.chapterName.isEmpty ? pageTitle : bookmark.chapterName
         excerptLabel.text = bookmark.bookText
         excerptLabel.isHidden = bookmark.bookText.isEmpty
         noteLabel.text = bookmark.content
         noteLabel.isHidden = bookmark.content.isEmpty
         let current = valid && page == currentPage
-        locationLabel.text = [pageTitle, !valid ? "定位不可用" : nil, current ? "当前页" : nil, date].compactMap { $0 }.joined(
-            separator: " · ")
+        locationLabel.text = [
+            pageTitle, !valid ? L10n.PDFContent.bookmarkLocationUnavailable : nil,
+            current ? L10n.PDFContent.bookmarkCurrentPage : nil, date,
+        ].compactMap { $0 }.joined(separator: " · ")
         let lines = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 0 : 3
         excerptLabel.numberOfLines = lines
         noteLabel.numberOfLines = lines
@@ -69,7 +74,7 @@ final class PdfBookmarkCell: UITableViewCell {
         accessibilityLabel = [chapterLabel.text, bookmark.bookText, bookmark.content]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         accessibilityValue = locationLabel.text
-        accessibilityHint = valid ? nil : "此书签页码或定位与当前 PDF 不一致，仍可编辑或删除"
+        accessibilityHint = valid ? nil : L10n.PDFContent.bookmarkInvalidLocationHint
         accessibilityIdentifier = "pdf.bookmarks.item.\(bookmark.time)"
     }
 

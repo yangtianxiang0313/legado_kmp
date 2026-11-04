@@ -2200,6 +2200,217 @@ enum L10n {
         static let deleteConfirm = text("all_bookmark.delete_confirm", "确认删除此书签？")
     }
 
+    enum PDFNavigation {
+        static let contents = text("pdf.navigation.contents", "目录")
+        static let outline = text("pdf.navigation.outline", "大纲")
+        static let pages = text("pdf.navigation.pages", "页面")
+        static let currentPage = text("pdf.navigation.current_page", "当前页")
+        static func page(_ number: Int) -> String {
+            format("pdf.navigation.page", "第 %d 页", number)
+        }
+    }
+
+    enum PDFReader {
+        static func locationSaveFailed(_ message: String) -> String {
+            format("pdf.reader.location_save_failed", "阅读位置保存失败：%@", message)
+        }
+        static let searchContent = text("pdf.reader.search_content", "搜索正文")
+        static let previousPage = text("pdf.reader.previous_page", "上一页")
+        static let nextPage = text("pdf.reader.next_page", "下一页")
+        static let pageNumber = text("pdf.reader.page_number", "PDF 页码")
+        static let unreadableDocument = text("pdf.reader.unreadable_document", "PDF 已加密、损坏或没有可阅读的页面")
+        static func progressSaveFailed(_ message: String) -> String {
+            format("pdf.reader.progress_save_failed", "阅读进度保存失败：%@", message)
+        }
+        static let continuousScrolling = text("pdf.reader.continuous_scrolling", "连续滚动")
+        static let pagedReading = text("pdf.reader.paged_reading", "逐页阅读")
+        static let fitPage = text("pdf.reader.fit_page", "适合页面")
+        static let jumpToPage = text("pdf.reader.jump_to_page", "跳转页码")
+        static let addBookmark = text("pdf.reader.add_bookmark", "添加书签")
+        static let returnBeforeJump = text("pdf.reader.return_before_jump", "返回跳转前位置")
+        static let clearSearchHighlight = text("pdf.reader.clear_search_highlight", "清除搜索高亮")
+        static let jump = text("pdf.reader.jump", "跳转")
+        static let invalidLocation = text("pdf.reader.invalid_location", "PDF 页码、坐标或缩放比例无效")
+        static let locationSaveUnavailable = text("pdf.reader.location_save_unavailable", "无法保存 PDF 阅读位置")
+        static let locationRecordTooLarge = text("pdf.reader.location_record_too_large", "PDF 阅读位置记录超过大小限制")
+        static let locationRequiresLocalFile = text("pdf.reader.location_requires_local_file", "PDF 阅读位置需要本地文件")
+        static let fileMetadataReadFailed = text("pdf.reader.file_metadata_read_failed", "无法读取 PDF 文件信息")
+        static let fileMetadataInvalid = text("pdf.reader.file_metadata_invalid", "PDF 文件信息缺失或无效")
+    }
+
+    enum PDFContent {
+        static let searchTitle = text("pdf.content.search_title", "正文查找")
+
+        static let searchClose = text("pdf.content.search_close", "关闭查找")
+
+        static let searchPlaceholder = text("pdf.content.search_placeholder", "搜索正文")
+
+        static let searchStop = text("pdf.content.search_stop", "停止查找")
+
+        static func searchInProgress(_ count: Int) -> String {
+            format(
+                "pdf.content.search_in_progress", "正在查找 · %d 个结果", count)
+        }
+
+        static func searchResultCount(_ count: Int) -> String {
+            format(
+                "pdf.content.search_result_count", "%d 个结果", count)
+        }
+
+        static let searchNoMatches = text("pdf.content.search_no_matches", "未找到匹配内容")
+
+        static func searchStoppedResultCount(_ count: Int) -> String {
+            format(
+                "pdf.content.search_stopped_result_count", "查找已停止 · %d 个结果", count)
+        }
+
+        static let searchStopped = text("pdf.content.search_stopped", "查找已停止")
+
+        static func searchLimitReached(_ count: Int) -> String {
+            format(
+                "pdf.content.search_limit_reached", "达到上限，显示前%d项", count)
+        }
+
+        static let searchFailed = text("pdf.content.search_failed", "查找失败")
+
+        static func searchFailureRetainingResults(_ message: String, _ count: Int) -> String {
+            format(
+                "pdf.content.search_failure_retaining_results", "%1$@（保留 %2$d 个结果）", message, count)
+        }
+
+        static func searchQueryTooLong(_ limit: Int) -> String {
+            format(
+                "pdf.content.search_query_too_long", "搜索词过长（最多 %d 个 UTF-16 单元）", limit)
+        }
+
+        static let searchRequiresLocalFile = text("pdf.content.search_requires_local_file", "PDF 查找需要本地文件")
+
+        static let searchDocumentUnavailable = text("pdf.content.search_document_unavailable", "PDF 无法打开，文件可能已移除或损坏")
+
+        static let searchDocumentLocked = text("pdf.content.search_document_locked", "PDF 已锁定，无法查找正文")
+
+        static let searchNoPages = text("pdf.content.search_no_pages", "PDF 没有可查找的页面")
+
+        static let searchMatchUnavailable = text("pdf.content.search_match_unavailable", "PDF 匹配内容无法定位")
+
+        static func pageNumber(_ number: Int) -> String {
+            format(
+                "pdf.content.page_number", "第 %d 页", number)
+        }
+
+        static func pageRange(_ first: Int, _ last: Int) -> String {
+            format(
+                "pdf.content.page_range", "第 %1$d–%2$d 页", first, last)
+        }
+
+        static let bookmarkSortPage = text("pdf.content.bookmark_sort_page", "按页码")
+
+        static let bookmarkSortTime = text("pdf.content.bookmark_sort_time", "按时间")
+
+        static let bookmarkAdd = text("pdf.content.bookmark_add", "添加书签")
+
+        static let bookmarkClose = text("pdf.content.bookmark_close", "关闭书签")
+
+        static let bookmarkSearchPlaceholder = text("pdf.content.bookmark_search_placeholder", "搜索摘录、备注或章名")
+
+        static let bookmarkLoading = text("pdf.content.bookmark_loading", "正在加载书签")
+
+        static func bookmarkCount(_ count: Int) -> String {
+            format(
+                "pdf.content.bookmark_count", "%d 个书签", count)
+        }
+
+        static let bookmarkNoMatches = text("pdf.content.bookmark_no_matches", "未找到匹配书签")
+
+        static let bookmarkOperationFailed = text("pdf.content.bookmark_operation_failed", "操作失败，请重试")
+
+        static let bookmarkExcerptField = text("pdf.content.bookmark_excerpt_field", "摘录")
+
+        static let bookmarkPageTitleField = text("pdf.content.bookmark_page_title_field", "页面标题")
+
+        static let bookmarkNoteField = text("pdf.content.bookmark_note_field", "备注")
+
+        static let bookmarkTimeExists = text("pdf.content.bookmark_time_exists", "书签时间标识已存在，请重新添加")
+
+        static let bookmarkDraftExpired = text("pdf.content.bookmark_draft_expired", "书签草稿已失效或定位已变化，请重新添加")
+
+        static let bookmarkPageTitleChanged = text("pdf.content.bookmark_page_title_changed", "PDF 页面标题已变化，请重新添加书签")
+
+        static let bookmarkTimeOccupied = text("pdf.content.bookmark_time_occupied", "书签时间标识已被占用，未覆盖现有书签，请重新加载")
+
+        static let bookmarkSaveUnconfirmed = text("pdf.content.bookmark_save_unconfirmed", "书签保存未确认，请重新加载书签后再操作")
+
+        static let bookmarkDeleteUnconfirmed = text("pdf.content.bookmark_delete_unconfirmed", "书签删除未确认，请重新加载书签后再操作")
+
+        static let bookmarkServiceUnavailable = text("pdf.content.bookmark_service_unavailable", "书签服务暂不可用，请稍后重试")
+
+        static let bookmarkBookInvalid = text("pdf.content.bookmark_book_invalid", "PDF 书籍地址或页面数量无效")
+
+        static let bookmarkBookReadFailed = text("pdf.content.bookmark_book_read_failed", "无法读取当前 PDF 书籍，请稍后重试")
+
+        static let bookmarkBookRemoved = text("pdf.content.bookmark_book_removed", "书籍已移除，请返回书架重新打开")
+
+        static let bookmarkBookUnavailable = text("pdf.content.bookmark_book_unavailable", "当前书籍不是可用的本地 PDF")
+
+        static let bookmarkPageCountChanged = text("pdf.content.bookmark_page_count_changed", "PDF 页面数量已变化，请重新打开书籍")
+
+        static let bookmarkTocReversed = text("pdf.content.bookmark_toc_reversed", "PDF 目录已反转，不能按物理页定位，请恢复目录后重新打开书籍")
+
+        static let bookmarkBookIdentityChanged = text(
+            "pdf.content.bookmark_book_identity_changed", "PDF 书籍归属或书签分组已变化，请重新打开书籍")
+
+        static let bookmarkGroupReadFailed = text("pdf.content.bookmark_group_read_failed", "无法核实书签分组，请稍后重试")
+
+        static let bookmarkDuplicateOwners = text(
+            "pdf.content.bookmark_duplicate_owners", "存在多本同名同作者书籍（含预览），无法确认书签归属，请先处理重复书籍")
+
+        static let bookmarkTocCountMismatch = text("pdf.content.bookmark_toc_count_mismatch", "PDF 目录与页面数量不一致，请重新打开书籍")
+
+        static let bookmarkTocIdentityChanged = text(
+            "pdf.content.bookmark_toc_identity_changed", "PDF 目录页身份已变化，请重新打开书籍")
+
+        static let bookmarkTocReadTimeout = text("pdf.content.bookmark_toc_read_timeout", "读取 PDF 目录超时，请稍后重试")
+
+        static let bookmarkTocReadFailed = text("pdf.content.bookmark_toc_read_failed", "无法读取 PDF 目录，请稍后重试")
+
+        static let bookmarkReadFailed = text("pdf.content.bookmark_read_failed", "无法读取最新书签，请稍后重试")
+
+        static let bookmarkRemovedOrInvalid = text("pdf.content.bookmark_removed_or_invalid", "书签已被删除或标识无效，请重新加载书签")
+
+        static let bookmarkIdentityChanged = text("pdf.content.bookmark_identity_changed", "书签归属或定位已变化，请重新加载书签")
+
+        static let bookmarkTextChanged = text("pdf.content.bookmark_text_changed", "书签摘录或备注已被修改，请重新加载后再操作")
+
+        static let bookmarkPositionInvalid = text("pdf.content.bookmark_position_invalid", "书签不是有效的 PDF 页面起始位置")
+
+        static let bookmarkOwnerMismatch = text("pdf.content.bookmark_owner_mismatch", "书签不属于当前 PDF 的书名、作者分组")
+
+        static let bookmarkPageOutOfRange = text("pdf.content.bookmark_page_out_of_range", "PDF 书签页码超出可读范围")
+
+        static func bookmarkTextTooLong(_ field: String, _ limit: Int) -> String {
+            format(
+                "pdf.content.bookmark_text_too_long", "%1$@过长，最多允许 %2$d 个 UTF-16 字符", field, limit)
+        }
+
+        static let bookmarkOperationBusy = text("pdf.content.bookmark_operation_busy", "书签操作尚未结束，请稍后重试")
+
+        static let bookmarkTimeInvalid = text("pdf.content.bookmark_time_invalid", "无法生成有效的书签时间标识，请稍后重试")
+
+        static let bookmarkPageUnavailable = text("pdf.content.bookmark_page_unavailable", "PDF 页面已不可用")
+
+        static func bookmarkUnavailablePage(_ number: Int64) -> String {
+            format(
+                "pdf.content.bookmark_unavailable_page", "页码不可用（%lld）", number)
+        }
+
+        static let bookmarkLocationUnavailable = text("pdf.content.bookmark_location_unavailable", "定位不可用")
+
+        static let bookmarkCurrentPage = text("pdf.content.bookmark_current_page", "当前页")
+
+        static let bookmarkInvalidLocationHint = text(
+            "pdf.content.bookmark_invalid_location_hint", "此书签页码或定位与当前 PDF 不一致，仍可编辑或删除")
+    }
+
     private static func text(_ key: String, _ fallback: String) -> String {
         Bundle.main.localizedString(forKey: key, value: fallback, table: nil)
     }
