@@ -2,8 +2,10 @@
 
 package io.legado.kmp.shared.analyze.parser
 
+import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Document
 import com.fleeksoft.ksoup.nodes.Element
+import com.fleeksoft.ksoup.parser.Parser
 import io.legado.kmp.shared.libxml2.LEGADO_XML_ATTRIBUTE_NODE
 import io.legado.kmp.shared.libxml2.LEGADO_XML_CDATA_SECTION_NODE
 import io.legado.kmp.shared.libxml2.LEGADO_XML_COMMENT_NODE
@@ -71,6 +73,15 @@ private val extensionSuffixRegex = Regex("""/(allText|tidyText|html|outerHtml)\(
  */
 private val nodeRangeRegex = Regex("""node\(\)\s*\[\s*(\d+)\s*:\s*(\d+)\s*]""")
 
+private const val XPATH_NC_NAME = """[A-Za-z_][A-Za-z0-9_.-]*"""
+private const val XPATH_Q_NAME = """$XPATH_NC_NAME(?::$XPATH_NC_NAME)?"""
+private val terminalAttributeSuffixRegex = Regex("""(/@$XPATH_Q_NAME)(?:@$XPATH_Q_NAME)+(\s*)$""")
+private val simpleAttributePathRegex = run {
+    val step = """(?:\.{1,2}|(?:${XPATH_NC_NAME}::)?(?:\*|$XPATH_NC_NAME(?::(?:$XPATH_NC_NAME|\*))?))"""
+    val path = """(?:/{1,2})?$step(?:\s*\[\])*(?:\s*/{1,2}\s*$step(?:\s*\[\])*)*"""
+    Regex("""\s*(?:$path)?\s*/{1,2}@$XPATH_Q_NAME\s*""")
+}
+
 // Keep only immutable text and a stable locator; native document ownership stays inside evaluate().
 private class IosXPathElement(
     val document: String,
@@ -87,7 +98,7 @@ private class IosXPathBackend : XPathBackend {
             return emptyList()
         }
         if (content is List<*>) return content.filterNotNull().flatMap { getElements(it, xPath) }
-        val preprocessed = preProcessXPath(xPath)
+        val preprocessed = preProcessXPath(normalizeTerminalAttributeSuffix(xPath))
         return evaluate(content, preprocessed.cleanXPath) { document, result, source ->
             if (legado_xpath_result_type(result) != LEGADO_XPATH_NODESET.toInt()) {
                 emptyList()
@@ -112,7 +123,7 @@ private class IosXPathBackend : XPathBackend {
             return emptyList()
         }
         if (content is List<*>) return content.filterNotNull().flatMap { getStringList(it, xPath) }
-        val preprocessed = preProcessXPath(xPath)
+        val preprocessed = preProcessXPath(normalizeTerminalAttributeSuffix(xPath))
         return evaluate(content, preprocessed.cleanXPath) { document, result, _ ->
             when (legado_xpath_result_type(result)) {
                 LEGADO_XPATH_NODESET.toInt() -> buildList {
@@ -137,6 +148,44 @@ private class IosXPathBackend : XPathBackend {
     }
 
     // ── JsoupXPath Extension Pre-processing ──────────────────────────────
+
+    // Only tolerate bare attribute tails on an otherwise simple, balanced location path.
+    private fun normalizeTerminalAttributeSuffix(xPath: String): String {
+        val suffix = terminalAttributeSuffixRegex.find(xPath) ?: return xPath
+        val path = StringBuilder()
+        val brackets = mutableListOf<Char>()
+        var quote: Char? = null
+        for (index in 0 until suffix.range.first) {
+            val character = xPath[index]
+            if (quote != null) {
+                if (character == quote) quote = null
+                continue
+            }
+            when (character) {
+                '\'', '"' -> {
+                    if (brackets.isEmpty()) return xPath
+                    quote = character
+                }
+                '[' -> {
+                    if (brackets.isEmpty()) path.append("[]")
+                    brackets.add(character)
+                }
+                '(' -> {
+                    if (brackets.isEmpty()) return xPath
+                    brackets.add(character)
+                }
+                ']', ')' -> {
+                    val opening = if (character == ']') '[' else '('
+                    if (brackets.lastOrNull() != opening) return xPath
+                    brackets.removeAt(brackets.lastIndex)
+                }
+                else -> if (brackets.isEmpty()) path.append(character)
+            }
+        }
+        if (quote != null || brackets.isNotEmpty()) return xPath
+        if (!simpleAttributePathRegex.matches("$path${suffix.groupValues[1]}")) return xPath
+        return xPath.replaceRange(suffix.range, suffix.groupValues[1] + suffix.groupValues[2])
+    }
 
     /**
      * Pre-process an XPath expression to handle JsoupXPath extensions:
@@ -245,16 +294,23 @@ private class IosXPathBackend : XPathBackend {
     ): List<T> {
         val element = elementContext(content)
         val normalized = element?.document ?: normalizeContent(content.toString())
+        val isXml = shouldParseAsXml(normalized)
+        // Match Jsoup's XML recovery before libxml2, which drops unescaped entity-like URL fields.
+        val source = if (isXml) {
+            Ksoup.parse(html = normalized, parser = Parser.xmlParser()).apply {
+                outputSettings().prettyPrint(false)
+            }.outerHtml()
+        } else normalized
         val document = legado_xpath_read_document(
-            normalized,
-            if (shouldParseAsXml(normalized)) 1 else 0
+            source,
+            if (isXml) 1 else 0
         ) ?: return emptyList()
         return try {
             val candidates = if (element != null) listOf(xPath) else buildXPathCandidates(normalized, xPath)
             for (candidate in candidates) {
                 val result = legado_xpath_eval_at_path(document, element?.path, candidate) ?: continue
                 val values = try {
-                    block(document, result, normalized)
+                    block(document, result, source)
                 } finally {
                     legado_xml_free_xpath(result)
                 }

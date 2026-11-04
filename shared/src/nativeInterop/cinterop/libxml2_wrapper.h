@@ -18,19 +18,40 @@ enum {
     LEGADO_XML_COMMENT_NODE = XML_COMMENT_NODE
 };
 
+/* JsoupXPath matches unprefixed XML elements regardless of the default namespace. */
+static inline void legado_xpath_clear_default_element_namespaces(xmlNodePtr root) {
+    xmlNodePtr node = root;
+    while (node != NULL) {
+        if (node->type == XML_ELEMENT_NODE && node->ns != NULL && node->ns->prefix == NULL) {
+            xmlSetNs(node, NULL);
+        }
+        if (node->type == XML_ELEMENT_NODE && node->children != NULL) {
+            node = node->children;
+            continue;
+        }
+        while (node != root && node->next == NULL) node = node->parent;
+        if (node == root) break;
+        node = node->next;
+    }
+}
+
 static inline xmlDocPtr legado_xpath_read_document(const char *content, int isXml) {
     if (content == NULL) {
         return NULL;
     }
     /* Kotlin strings cross cinterop as UTF-8; source charset declarations are already decoded. */
     if (isXml) {
-        return xmlReadMemory(
+        xmlDocPtr document = xmlReadMemory(
             content,
             (int)strlen(content),
             NULL,
             "UTF-8",
             XML_PARSE_RECOVER | XML_PARSE_NOERROR | XML_PARSE_NOWARNING
         );
+        if (document != NULL) {
+            legado_xpath_clear_default_element_namespaces(xmlDocGetRootElement(document));
+        }
+        return document;
     }
     return htmlReadMemory(
         content,
