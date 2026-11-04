@@ -51,7 +51,8 @@ struct ReaderPageBuildState {
         kind: ReaderTextBlockKind,
         blockIndex: Int,
         isContinuation: Bool,
-        advance: CGFloat? = nil
+        advance: CGFloat? = nil,
+        sourceMap: ReaderTextSourceMap? = nil
     ) {
         if firstCharacterOffset == nil {
             firstCharacterOffset = sourceRange.location
@@ -63,12 +64,14 @@ struct ReaderPageBuildState {
                 frame: CGRect(x: 0, y: cursorY, width: contentSize.width, height: height),
                 kind: kind,
                 blockIndex: blockIndex,
-                isContinuation: isContinuation
+                isContinuation: isContinuation,
+                sourceMap: sourceMap
             )
         )
         cursorY += advance ?? height
         if previewParts.count < 3 {
-            let text = attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = (sourceMap?.accessibilityText(in: attributed.string) ?? attributed.string).trimmingCharacters(
+                in: .whitespacesAndNewlines)
             if text.isEmpty == false {
                 previewParts.append(text)
             }
@@ -81,7 +84,8 @@ struct ReaderPageBuildState {
         contentMode: UIView.ContentMode,
         source: ReaderAttachmentSource,
         previewText: String?,
-        requestRule: String? = nil
+        requestRule: String? = nil,
+        inlineAnchorSourceRange: NSRange? = nil
     ) {
         if firstCharacterOffset == nil {
             firstCharacterOffset = sourceRange.location
@@ -92,10 +96,11 @@ struct ReaderPageBuildState {
                 frame: frame,
                 contentMode: contentMode,
                 source: source,
-                requestRule: requestRule
+                requestRule: requestRule,
+                inlineAnchorSourceRange: inlineAnchorSourceRange
             )
         )
-        cursorY = max(cursorY, frame.maxY)
+        if inlineAnchorSourceRange == nil { cursorY = max(cursorY, frame.maxY) }
         if let previewText, previewParts.count < 3 {
             let text = previewText.trimmingCharacters(in: .whitespacesAndNewlines)
             if text.isEmpty == false {
@@ -120,7 +125,7 @@ struct ReaderPageBuildState {
         let original = (textFragments, attachmentFragments)
         var lines = textFragments.enumerated().map { (index: $0.offset, frame: $0.element.frame, isImage: false) }
         for (index, attachment) in attachmentFragments.enumerated() {
-            if case .remoteImage = attachment.source {
+            if case .remoteImage = attachment.source, attachment.inlineAnchorSourceRange == nil {
                 lines.append((index, attachment.frame, true))
             }
         }
@@ -138,9 +143,16 @@ struct ReaderPageBuildState {
                 let item = attachments[line.index]
                 attachments[line.index] = ReaderAttachmentLayoutFragment(
                     sourceRange: item.sourceRange, frame: item.frame.offsetBy(dx: 0, dy: offset),
-                    contentMode: item.contentMode, source: item.source, requestRule: item.requestRule)
+                    contentMode: item.contentMode, source: item.source, requestRule: item.requestRule,
+                    inlineAnchorSourceRange: item.inlineAnchorSourceRange)
             } else {
                 texts[line.index] = texts[line.index].offsetBy(dx: 0, dy: offset)
+                for (index, item) in attachments.enumerated() where item.inlineAnchorSourceRange == textFragments[line.index].sourceRange {
+                    attachments[index] = ReaderAttachmentLayoutFragment(
+                        sourceRange: item.sourceRange, frame: item.frame.offsetBy(dx: 0, dy: offset),
+                        contentMode: item.contentMode, source: item.source, requestRule: item.requestRule,
+                        inlineAnchorSourceRange: item.inlineAnchorSourceRange)
+                }
             }
         }
         return (texts, attachments)

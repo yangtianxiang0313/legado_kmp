@@ -169,6 +169,21 @@ extension ReaderChapterLayout {
                 hasher.combine(fragment.isParagraphEnd)
             }
         }
+        hasher.combine(inlineImageParagraphs.count)
+        for paragraph in inlineImageParagraphs {
+            guard !isCancelled() else { return hasher.finalize() }
+            hasher.combine(paragraph.runs.count)
+            for run in paragraph.runs {
+                guard !isCancelled() else { return hasher.finalize() }
+                hasher.combine(Int(run.blockIndex))
+                hasher.combine(Int(run.textStart))
+                hasher.combine(Int(run.textLength))
+                hasher.combine(run.displayText != nil)
+                if let text = run.displayText, !combinePaginationText(text, into: &hasher, isCancelled: isCancelled) {
+                    return hasher.finalize()
+                }
+            }
+        }
         return hasher.finalize()
     }
 }

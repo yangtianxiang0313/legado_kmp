@@ -23,25 +23,36 @@ struct ReaderReadAloudContent {
         var startPositions = [Position?](repeating: nil, count: pages.count)
         var fragmentsByBlock: [Int: [FragmentPage]] = [:]
 
+        func append(_ value: String, blockIndex: Int, kind: ReaderTextBlockKind, pageIndex: Int) {
+            if typeByBlock[blockIndex] == nil {
+                orderedBlockIndexes.append(blockIndex)
+                typeByBlock[blockIndex] = kind == .heading ? .heading : .paragraph
+            }
+            let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.isEmpty == false else { return }
+
+            let hasSeparator = textByBlock[blockIndex]?.isEmpty == false
+            let previousEnd = fragmentsByBlock[blockIndex]?.last?.textRange.upperBound ?? 0
+            let textOffset = previousEnd + (hasSeparator ? 1 : 0)
+            textByBlock[blockIndex, default: ""].append(hasSeparator ? "\n\(text)" : text)
+            fragmentsByBlock[blockIndex, default: []].append(
+                FragmentPage(textRange: textOffset..<(textOffset + text.utf16.count), pageIndex: pageIndex)
+            )
+            if startPositions[pageIndex] == nil {
+                startPositions[pageIndex] = Position(blockIndex: blockIndex, textOffset: textOffset)
+            }
+        }
+
         for (pageIndex, page) in pages.enumerated() {
             for fragment in page.textFragments {
-                let blockIndex = fragment.blockIndex
-                if typeByBlock[blockIndex] == nil {
-                    orderedBlockIndexes.append(blockIndex)
-                    typeByBlock[blockIndex] = fragment.kind == .heading ? .heading : .paragraph
-                }
-                let text = fragment.attributedText.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard text.isEmpty == false else { continue }
-
-                let hasSeparator = textByBlock[blockIndex]?.isEmpty == false
-                let previousEnd = fragmentsByBlock[blockIndex]?.last?.textRange.upperBound ?? 0
-                let textOffset = previousEnd + (hasSeparator ? 1 : 0)
-                textByBlock[blockIndex, default: ""].append(hasSeparator ? "\n\(text)" : text)
-                fragmentsByBlock[blockIndex, default: []].append(
-                    FragmentPage(textRange: textOffset..<(textOffset + text.utf16.count), pageIndex: pageIndex)
-                )
-                if startPositions[pageIndex] == nil {
-                    startPositions[pageIndex] = Position(blockIndex: blockIndex, textOffset: textOffset)
+                if let map = fragment.sourceMap {
+                    let text = fragment.attributedText.string as NSString
+                    for span in map.spans {
+                        guard case .text(let index) = span.kind else { continue }
+                        append(text.substring(with: span.displayRange), blockIndex: index, kind: fragment.kind, pageIndex: pageIndex)
+                    }
+                } else {
+                    append(fragment.attributedText.string, blockIndex: fragment.blockIndex, kind: fragment.kind, pageIndex: pageIndex)
                 }
             }
         }

@@ -99,10 +99,12 @@ final class ReaderPageContentView: UIView {
     }
 
     func cacheLoadedImage(_ image: UIImage, for url: URL) {
-        guard pageLayout?.attachmentFragments.contains(where: {
-            if case .remoteImage(let sourceURL, _) = $0.source { return sourceURL == url }
-            return false
-        }) == true else { return }
+        guard
+            pageLayout?.attachmentFragments.contains(where: {
+                if case .remoteImage(let sourceURL, _) = $0.source { return sourceURL == url }
+                return false
+            }) == true
+        else { return }
         imageTasks.removeValue(forKey: url)?.cancel()
         imageRequestIDs.removeValue(forKey: url)
         loadingURLs.remove(url)
@@ -145,24 +147,34 @@ final class ReaderPageContentView: UIView {
             }
         }
 
-        for fragment in pageLayout.attachmentFragments where fragment.frame.intersects(layoutRect) {
+        for fragment in pageLayout.attachmentFragments {
             switch fragment.source {
             case .spacer:
                 continue
-            case let .remoteImage(url, altText):
+            case .remoteImage(let url, let altText):
                 if let image = loadedImages[url] {
                     let drawRect: CGRect
-                    if fragment.contentMode == .scaleAspectFill {
+                    if fragment.inlineAnchorSourceRange != nil {
+                        guard let rect = ReaderInlineImageGeometry.drawingRect(imageSize: image.size, in: fragment.frame) else { continue }
+                        // ImageColumn keeps a TEXT image's column width, allowing vertical overflow.
+                        drawRect = rect
+                    } else if fragment.contentMode == .scaleAspectFill {
                         drawRect = aspectFillRect(aspectRatio: image.size, in: fragment.frame)
                     } else {
                         drawRect = AVMakeRect(aspectRatio: image.size, insideRect: fragment.frame)
                     }
+                    guard drawRect.intersects(layoutRect) else { continue }
                     context.saveGState()
-                    UIBezierPath(rect: fragment.frame).addClip()
+                    if fragment.inlineAnchorSourceRange == nil { UIBezierPath(rect: fragment.frame).addClip() }
                     image.draw(in: drawRect)
                     context.restoreGState()
                 } else {
-                    drawPlaceholder(in: fragment.frame, altText: altText, context: context)
+                    guard fragment.frame.intersects(layoutRect) else { continue }
+                    if fragment.inlineAnchorSourceRange != nil {
+                        drawInlinePlaceholder(in: fragment.frame, context: context)
+                    } else {
+                        drawPlaceholder(in: fragment.frame, altText: altText, context: context)
+                    }
                 }
             }
         }
@@ -187,7 +199,7 @@ final class ReaderPageContentView: UIView {
     private func updateImageRequests() {
         var imageFragments: [URL: ReaderAttachmentLayoutFragment] = [:]
         for fragment in pageLayout?.attachmentFragments ?? [] {
-            if case let .remoteImage(url, _) = fragment.source {
+            if case .remoteImage(let url, _) = fragment.source {
                 imageFragments[url] = fragment
             }
         }
@@ -244,39 +256,52 @@ final class ReaderPageContentView: UIView {
     }
 
     private func attributedText(for fragment: ReaderTextLayoutFragment) -> NSAttributedString {
-        let isReadAloud = highlightedBlockIndex == fragment.blockIndex
-        let searchRange = localSearchResultRange(for: fragment)
-        guard isReadAloud || searchRange != nil else {
+        let readAloudRanges: [NSRange]
+        if let map = fragment.sourceMap {
+            readAloudRanges = highlightedBlockIndex.map { map.textRanges(forBlockIndex: $0) } ?? []
+        } else {
+            readAloudRanges =
+                highlightedBlockIndex == fragment.blockIndex ? [NSRange(location: 0, length: fragment.attributedText.length)] : []
+        }
+        let searchRanges = localSearchResultRanges(for: fragment)
+        guard !readAloudRanges.isEmpty || !searchRanges.isEmpty else {
             return fragment.attributedText
         }
         let highlighted = NSMutableAttributedString(attributedString: fragment.attributedText)
-        if isReadAloud {
-            let range = NSRange(location: 0, length: highlighted.length)
+        for range in readAloudRanges {
             highlighted.addAttribute(.backgroundColor, value: theme.textColor.withAlphaComponent(0.18), range: range)
             highlighted.addAttribute(.foregroundColor, value: theme.textColor, range: range)
         }
-        if let searchRange {
+        for searchRange in searchRanges {
             highlighted.addAttribute(
                 .foregroundColor, value: AndroidReplicaTheme.accent.resolvedColor(with: traitCollection), range: searchRange)
         }
         return highlighted
     }
 
-    private func localSearchResultRange(for fragment: ReaderTextLayoutFragment) -> NSRange? {
+    private func localSearchResultRanges(for fragment: ReaderTextLayoutFragment) -> [NSRange] {
         guard let searchResultRange,
             ReaderTextSelectionGeometry.isValidSelectionRange(searchResultRange),
             ReaderTextSelectionGeometry.isValidSelectionRange(fragment.sourceRange)
-        else { return nil }
+        else { return [] }
+        if let map = fragment.sourceMap { return map.displayRanges(forSourceRange: searchResultRange) }
         let intersection = NSIntersectionRange(searchResultRange, fragment.sourceRange)
-        guard intersection.length > 0 else { return nil }
+        guard intersection.length > 0 else { return [] }
         let localRange = NSRange(
             location: intersection.location - fragment.sourceRange.location, length: intersection.length)
         let boundedRange = NSIntersectionRange(localRange, NSRange(location: 0, length: fragment.attributedText.length))
-        return boundedRange.length > 0 ? boundedRange : nil
+        return boundedRange.length > 0 ? [boundedRange] : []
     }
 
     private func drawText(_ fragment: ReaderTextLayoutFragment, in context: CGContext) {
-        if highlightedBlockIndex == fragment.blockIndex {
+        if let map = fragment.sourceMap, let block = highlightedBlockIndex {
+            theme.textColor.withAlphaComponent(0.18).setFill()
+            let geometry = ReaderTextSelectionGeometry(fragment: fragment)
+            for span in map.spans {
+                guard case .text(let index) = span.kind, index == block else { continue }
+                for rect in geometry.selectionRects(for: span.sourceRange) { context.fill(rect) }
+            }
+        } else if fragment.sourceMap == nil, highlightedBlockIndex == fragment.blockIndex {
             theme.textColor.withAlphaComponent(0.18).setFill()
             UIBezierPath(rect: fragment.frame).fill()
         }
@@ -289,6 +314,20 @@ final class ReaderPageContentView: UIView {
         context.translateBy(x: fragment.frame.minX, y: fragment.frame.minY + fragment.frame.height)
         context.scaleBy(x: 1, y: -1)
         CTFrameDraw(frame, context)
+        context.restoreGState()
+    }
+
+    private func drawInlinePlaceholder(in frame: CGRect, context: CGContext) {
+        guard frame.width > 0, frame.height > 0 else { return }
+        context.saveGState()
+        context.clip(to: frame)
+        theme.textColor.withAlphaComponent(0.08).setFill()
+        context.fill(frame)
+        let configuration = UIImage.SymbolConfiguration(pointSize: max(min(frame.width, frame.height) * 0.7, 1))
+        if let icon = UIImage(systemName: "photo", withConfiguration: configuration) {
+            let rect = AVMakeRect(aspectRatio: icon.size, insideRect: frame.insetBy(dx: 1, dy: 1))
+            icon.withTintColor(theme.textColor.withAlphaComponent(0.3), renderingMode: .alwaysOriginal).draw(in: rect)
+        }
         context.restoreGState()
     }
 
@@ -324,7 +363,8 @@ final class ReaderPageContentView: UIView {
                 width: frame.width - 24,
                 height: max(frame.maxY - iconRect.maxY - 16, 18)
             )
-            NSString(string: altText).draw(with: textRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attributes, context: nil)
+            NSString(string: altText).draw(
+                with: textRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attributes, context: nil)
         }
         context.restoreGState()
     }

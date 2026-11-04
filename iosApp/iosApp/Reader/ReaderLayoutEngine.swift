@@ -14,7 +14,24 @@ struct ReaderPageLayout {
     }
 
     var pageText: String {
-        textFragments
+        if textFragments.contains(where: { $0.sourceMap != nil }) {
+            var text = ""
+            var previous: ReaderTextLayoutFragment?
+            for fragment in textFragments {
+                let display = fragment.attributedText.string
+                let part = fragment.sourceMap?.plainText(in: display) ?? display
+                if !part.isEmpty, !text.isEmpty, !fragment.continuesText(from: previous),
+                    text.last?.isNewline != true, part.first?.isNewline != true
+                {
+                    text.append("\n")
+                }
+                text.append(part)
+                previous = fragment
+            }
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return
+            textFragments
             .map { $0.attributedText.string.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.isEmpty == false }
             .joined(separator: "\n")
@@ -23,10 +40,20 @@ struct ReaderPageLayout {
     var accessibilityText: String {
         var fragments: [(text: String, frame: CGRect, index: Int, fragment: ReaderTextLayoutFragment?)] =
             textFragments.enumerated().map { index, fragment in
-                (fragment.attributedText.string, fragment.frame, index, fragment)
+                let display = fragment.attributedText.string
+                return (fragment.sourceMap?.accessibilityText(in: display) ?? display, fragment.frame, index, fragment)
             }
         for (index, attachment) in attachmentFragments.enumerated() {
             guard case .remoteImage(_, let altText) = attachment.source else {
+                continue
+            }
+            if textFragments.contains(where: { fragment in
+                fragment.sourceMap?.spans.contains(where: { span in
+                    guard case .image = span.kind else { return false }
+                    return span.sourceRange == (attachment.inlineAnchorSourceRange ?? attachment.sourceRange)
+                        || span.sourceRange == attachment.sourceRange
+                }) == true
+            }) {
                 continue
             }
             fragments.append((altText ?? "", attachment.frame, textFragments.count + index, nil))
@@ -48,11 +75,18 @@ struct ReaderPageLayout {
                 previousTextFragment = nil
                 continue
             }
-            if item.text.isEmpty { continue }
+            if item.text.isEmpty {
+                if item.fragment?.sourceMap != nil { previousTextFragment = item.fragment }
+                continue
+            }
             let continuesText: Bool
             if let previous = previousTextFragment, let current = item.fragment {
-                continuesText =
-                    current.isContinuation && current.blockIndex == previous.blockIndex && current.kind == previous.kind
+                if previous.sourceMap != nil || current.sourceMap != nil {
+                    continuesText = current.continuesText(from: previous)
+                } else {
+                    continuesText =
+                        current.isContinuation && current.blockIndex == previous.blockIndex && current.kind == previous.kind
+                }
             } else {
                 continuesText = false
             }
@@ -71,12 +105,21 @@ struct ReaderPageLayout {
     func rects(for range: NSRange) -> [CGRect] {
         guard range.length > 0 else { return [] }
         return textFragments.compactMap { fragment in
-            NSIntersectionRange(fragment.sourceRange, range).length > 0 ? fragment.frame : nil
+            if let map = fragment.sourceMap {
+                return map.displayRanges(forSourceRange: range).isEmpty ? nil : fragment.frame
+            }
+            return NSIntersectionRange(fragment.sourceRange, range).length > 0 ? fragment.frame : nil
         }
     }
 
     func characterRange(at point: CGPoint) -> NSRange? {
         if let fragment = textFragments.first(where: { $0.frame.contains(point) }) {
+            if fragment.sourceMap != nil {
+                if let attachment = attachmentFragments.first(where: { $0.frame.contains(point) }) {
+                    return attachment.sourceRange
+                }
+                return ReaderTextSelectionGeometry(fragment: fragment).characterRange(at: point)
+            }
             return fragment.sourceRange
         }
         if let attachment = attachmentFragments.first(where: { $0.frame.contains(point) }) {
@@ -158,8 +201,15 @@ struct ReaderPageLayout {
     /// Returns the text content within the given source range.
     func selectedText(for range: NSRange) -> String {
         guard range.length > 0 else { return "" }
+        if textFragments.contains(where: { $0.sourceMap != nil }) {
+            return Self.mappedSelectedText(for: range, in: [self])
+        }
         var parts: [String] = []
         for fragment in textFragments {
+            if let map = fragment.sourceMap {
+                parts.append(map.selectedText(in: fragment.attributedText.string, sourceRange: range))
+                continue
+            }
             guard let localRange = ReaderTextSelectionGeometry.localSelectionRange(for: range, in: fragment) else {
                 continue
             }
@@ -172,6 +222,9 @@ struct ReaderPageLayout {
     /// Collects only the supplied visible pages; callers keep them within one chapter.
     static func selectedText(for range: NSRange, in pages: [ReaderPageLayout]) -> String {
         guard ReaderTextSelectionGeometry.isValidSelectionRange(range) else { return "" }
+        if pages.contains(where: { $0.textFragments.contains(where: { $0.sourceMap != nil }) }) {
+            return mappedSelectedText(for: range, in: pages)
+        }
         let fragments = pages.flatMap(\.textFragments).enumerated().sorted {
             let lhs = $0.element.sourceRange
             let rhs = $1.element.sourceRange
@@ -223,12 +276,104 @@ struct ReaderPageLayout {
         return result
     }
 
+    private static func mappedSelectedText(for range: NSRange, in pages: [ReaderPageLayout]) -> String {
+        let selectedTextRanges = pages.flatMap(\.textFragments).flatMap { fragment -> [NSRange] in
+            if let map = fragment.sourceMap {
+                return map.selectionDisplayRanges(in: fragment.attributedText.string, sourceRange: range).compactMap {
+                    map.sourceRange(forDisplayRange: $0)
+                }
+            }
+            guard let local = ReaderTextSelectionGeometry.localSelectionRange(for: range, in: fragment) else { return [] }
+            return [NSRange(location: fragment.sourceRange.location + local.location, length: local.length)]
+        }
+        guard let selectionStart = selectedTextRanges.map(\.location).min(),
+            let selectionEnd = selectedTextRanges.map(\.upperBound).max(), selectionEnd > selectionStart
+        else { return "" }
+        // Images at the outer edges are not selectable text and cannot introduce copy-only spaces.
+        let range = NSRange(location: selectionStart, length: selectionEnd - selectionStart)
+        let fragments = pages.flatMap(\.textFragments).enumerated().sorted {
+            let lhs = $0.element.sourceMap?.sourceRange ?? $0.element.sourceRange
+            let rhs = $1.element.sourceMap?.sourceRange ?? $1.element.sourceRange
+            if lhs.location != rhs.location { return lhs.location < rhs.location }
+            // A soft-wrapped virtual-space row belongs before the text starting
+            // at its anchor, even though it consumes no chapter source units.
+            if (lhs.length == 0) != (rhs.length == 0) { return lhs.length == 0 }
+            if lhs.length != rhs.length { return lhs.length > rhs.length }
+            return $0.offset < $1.offset
+        }
+        var result = ""
+        var previousEnd: Int?
+        var previousFragment: ReaderTextLayoutFragment?
+        var previousFragmentIndex: Int?
+        var coveredEnd: Int?
+        for item in fragments {
+            let fragment = item.element
+            let text = fragment.attributedText.string as NSString
+            let map: ReaderTextSourceMap
+            if let sourceMap = fragment.sourceMap {
+                map = sourceMap
+            } else {
+                guard let local = ReaderTextSelectionGeometry.localSelectionRange(for: fragment.sourceRange, in: fragment) else {
+                    continue
+                }
+                map = ReaderTextSourceMap(spans: [
+                    ReaderTextSourceMap.Span(
+                        displayRange: local,
+                        sourceRange: NSRange(location: fragment.sourceRange.location, length: local.length),
+                        kind: .text(blockIndex: fragment.blockIndex))
+                ])
+            }
+            let coverage = map.sourceRange
+            if let coveredEnd, coverage.length > 0, coverage.upperBound <= coveredEnd { continue }
+            var pieces = map.selectionDisplayRanges(in: text as String, sourceRange: range)
+            for span in map.spans {
+                if case .spacing = span.kind,
+                    range.location < span.sourceRange.location, span.sourceRange.location < range.upperBound,
+                    coveredEnd.map({ span.sourceRange.location >= $0 }) ?? true
+                {
+                    pieces.append(NSIntersectionRange(span.displayRange, NSRange(location: 0, length: text.length)))
+                }
+            }
+            for var displayRange in pieces.sorted(by: { $0.location < $1.location }) where displayRange.length > 0 {
+                guard var source = map.sourceRange(forDisplayRange: displayRange) else {
+                    result.append(text.substring(with: displayRange))
+                    continue
+                }
+                if let previousEnd, source.location < previousEnd {
+                    guard source.upperBound > previousEnd else { continue }
+                    let consumed = displayRange.location + previousEnd - source.location
+                    let character = text.rangeOfComposedCharacterSequence(at: consumed)
+                    let start = character.location < consumed ? character.upperBound : consumed
+                    guard start < displayRange.upperBound else { continue }
+                    displayRange = NSRange(location: start, length: displayRange.upperBound - start)
+                    guard let remaining = map.sourceRange(forDisplayRange: displayRange) else { continue }
+                    source = remaining
+                }
+                if let previousEnd, let previous = previousFragment, source.location >= previousEnd,
+                    previousFragmentIndex != item.offset,
+                    !(fragment.isContinuation && fragment.blockIndex == previous.blockIndex && fragment.kind == previous.kind),
+                    result.last?.isNewline != true, text.substring(with: displayRange).first?.isNewline != true
+                {
+                    result.append("\n")
+                }
+                result.append(text.substring(with: displayRange))
+                previousEnd = source.upperBound
+                previousFragment = fragment
+                previousFragmentIndex = item.offset
+            }
+            coveredEnd = max(coveredEnd ?? coverage.upperBound, coverage.upperBound)
+        }
+        return result
+    }
+
     func contains(blockIndex: Int) -> Bool {
-        textFragments.contains { $0.blockIndex == blockIndex }
+        textFragments.contains { fragment in
+            fragment.sourceMap?.blockIndices.contains(blockIndex) ?? (fragment.blockIndex == blockIndex)
+        }
     }
 
     var leadingBlockIndex: Int? {
-        textFragments.first?.blockIndex
+        textFragments.compactMap(\.leadingTextBlockIndex).first
     }
 }
 
@@ -239,6 +384,37 @@ struct ReaderTextLayoutFragment {
     let kind: ReaderTextBlockKind
     let blockIndex: Int
     let isContinuation: Bool
+    let sourceMap: ReaderTextSourceMap?
+
+    init(
+        attributedText: NSAttributedString, sourceRange: NSRange, frame: CGRect,
+        kind: ReaderTextBlockKind, blockIndex: Int, isContinuation: Bool,
+        sourceMap: ReaderTextSourceMap? = nil
+    ) {
+        self.attributedText = attributedText
+        self.sourceRange = sourceRange
+        self.frame = frame
+        self.kind = kind
+        self.blockIndex = blockIndex
+        self.isContinuation = isContinuation
+        self.sourceMap = sourceMap
+    }
+
+    var leadingTextBlockIndex: Int? {
+        guard let sourceMap else { return blockIndex }
+        return sourceMap.spans.compactMap { span in
+            if case .text(let index) = span.kind { return index }
+            return nil
+        }.first
+    }
+
+    func continuesText(from previous: ReaderTextLayoutFragment?) -> Bool {
+        guard let previous, isContinuation, kind == previous.kind else { return false }
+        if sourceMap == nil && previous.sourceMap == nil { return blockIndex == previous.blockIndex }
+        let start = previous.sourceMap?.sourceRange ?? previous.sourceRange
+        let end = sourceMap?.sourceRange ?? sourceRange
+        return start.upperBound == end.location
+    }
 
     func offsetBy(dx: CGFloat, dy: CGFloat) -> ReaderTextLayoutFragment {
         ReaderTextLayoutFragment(
@@ -247,7 +423,8 @@ struct ReaderTextLayoutFragment {
             frame: frame.offsetBy(dx: dx, dy: dy),
             kind: kind,
             blockIndex: blockIndex,
-            isContinuation: isContinuation
+            isContinuation: isContinuation,
+            sourceMap: sourceMap
         )
     }
 }
@@ -259,19 +436,22 @@ struct ReaderAttachmentLayoutFragment {
     let source: ReaderAttachmentSource
     // URL is the UI/cache identity; image request rules must survive URL encoding unchanged.
     let requestRule: String?
+    let inlineAnchorSourceRange: NSRange?
 
     init(
         sourceRange: NSRange,
         frame: CGRect,
         contentMode: UIView.ContentMode,
         source: ReaderAttachmentSource,
-        requestRule: String? = nil
+        requestRule: String? = nil,
+        inlineAnchorSourceRange: NSRange? = nil
     ) {
         self.sourceRange = sourceRange
         self.frame = frame
         self.contentMode = contentMode
         self.source = source
         self.requestRule = requestRule
+        self.inlineAnchorSourceRange = inlineAnchorSourceRange
     }
 }
 

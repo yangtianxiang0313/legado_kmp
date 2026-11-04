@@ -14,7 +14,7 @@ struct ReaderImageLayoutGeometry {
         self.contentSize = availableSize
         occupiesWholePage = style == "SINGLE"
         let placeholder = Self.placeholderSize(style: style, contentSize: availableSize, bodyLineHeight: bodyLineHeight)
-        // TEXT retains its block placeholder; inline image/text composition is not handled here.
+        // Legacy/caller-created TEXT layouts without paragraph hints retain a bounded fallback.
         guard style != "TEXT", let pixelSize,
             Self.positiveFinite(pixelSize.width), Self.positiveFinite(pixelSize.height)
         else {

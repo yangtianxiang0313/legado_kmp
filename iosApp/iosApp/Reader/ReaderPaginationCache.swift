@@ -133,6 +133,15 @@ final class ReaderPaginationCache<Key: Hashable> {
                 guard !isCancelled() else { return nil }
                 let text = fragment.attributedText
                 guard cost.add(text.length, bytesPerItem: 4) else { return nil }
+                if let map = fragment.sourceMap {
+                    guard cost.add(map.spans.count, bytesPerItem: MemoryLayout<ReaderTextSourceMap.Span>.stride * 2 + 64) else {
+                        return nil
+                    }
+                    for span in map.spans {
+                        guard !isCancelled() else { return nil }
+                        if case .image(let altText) = span.kind, let altText, cost.addText(altText) == false { return nil }
+                    }
+                }
                 // Kern changes create runs; charge each dictionary and its style/value objects.
                 var fits = true
                 text.enumerateAttributes(in: NSRange(location: 0, length: text.length), options: []) { _, _, stop in

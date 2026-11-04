@@ -72,10 +72,29 @@ enum ReaderSearchSelectionMapper {
         for page in pages {
             for fragment in page.textFragments where fragment.kind == .paragraph {
                 let text = fragment.attributedText.string as NSString
+                if let map = fragment.sourceMap {
+                    for span in map.spans {
+                        guard case .text = span.kind else { continue }
+                        rendered.append(
+                            text, range: span.displayRange,
+                            sourceStart: span.sourceRange.location - span.displayRange.location)
+                    }
+                    continue
+                }
                 let length = min(text.length, fragment.sourceRange.length)
                 guard fragment.sourceRange.location >= 0, length > 0 else { continue }
                 rendered.append(
                     text, range: NSRange(location: 0, length: length), sourceStart: fragment.sourceRange.location)
+            }
+        }
+
+        if pages.contains(where: { $0.textFragments.contains(where: { $0.sourceMap != nil }) }) {
+            let originalUnits = Array(original.normalizedText.utf16)
+            if originalUnits.count == rendered.units.count {
+                for index in originalUnits.indices where originalUnits[index] == 0x25a9 && rendered.units[index] == 0x25a3 {
+                    // TEXT reserves this glyph for images; escaping a literal must not change source search identity.
+                    rendered.units[index] = originalUnits[index]
+                }
             }
         }
 

@@ -10,8 +10,19 @@ internal fun buildReaderContentBlocks(
     checkActive: () -> Unit = noReaderContentCancellationCheck,
     imageBaseUrl: String = "",
 ): List<ReaderContentBlock> {
+    return buildReaderContent(chapterTitle, content, checkActive, imageBaseUrl).blocks
+}
+
+internal fun buildReaderContent(
+    chapterTitle: String,
+    content: String,
+    checkActive: () -> Unit = noReaderContentCancellationCheck,
+    imageBaseUrl: String = "",
+    includeInlineImages: Boolean = false,
+): ReaderContentBuildResult {
     checkActive()
     val blocks = mutableListOf<ReaderContentBlock>()
+    val inlineImages = if (includeInlineImages) ReaderInlineImageCollector(checkActive) else null
     var nextBlockIndex = 0
     chapterTitle.withReaderCancellationChecks(checkActive).trim().toString().takeIf { it.isNotEmpty() }?.let { title ->
         blocks += ReaderContentBlock(
@@ -27,9 +38,11 @@ internal fun buildReaderContentBlocks(
         .toString()
 
     if (normalized.isEmpty()) {
-        return blocks.ifEmpty {
-            listOf(ReaderContentBlock(blockIndex = nextBlockIndex, type = ReaderContentBlockType.PARAGRAPH, text = ""))
-        }
+        return ReaderContentBuildResult(
+            blocks = blocks.ifEmpty {
+                listOf(ReaderContentBlock(blockIndex = nextBlockIndex, type = ReaderContentBlockType.PARAGRAPH, text = ""))
+            },
+        )
     }
 
     val paragraphSeparator = Regex("""\n\s*\n+""")
@@ -38,10 +51,23 @@ internal fun buildReaderContentBlocks(
         checkActive()
         val paragraphCandidates = paragraphSeparator
             .splitToSequence(rawText.normalizeReaderLineEndings(checkActive).withReaderCancellationChecks(checkActive))
-            .map { it.withReaderCancellationChecks(checkActive).trim().toString() }
-            .filter { it.isNotEmpty() }
-        paragraphCandidates.forEach { rawParagraph ->
-            splitReadableParagraphs(rawParagraph.stripSimpleHtml(checkActive), checkActive).forEach { paragraph ->
+        var firstCandidate = true
+        for (candidate in paragraphCandidates) {
+            if (!firstCandidate) inlineImages?.endParagraph()
+            firstCandidate = false
+            val rawParagraph = candidate.withReaderCancellationChecks(checkActive).trim().toString()
+            if (rawParagraph.isEmpty()) {
+                inlineImages?.appendWhitespace(candidate)
+                continue
+            }
+            val firstBlockIndex = nextBlockIndex
+            val strippedText = rawParagraph.stripSimpleHtml(
+                checkActive,
+                onUntrimmedText = inlineImages?.let { collector ->
+                    { text: String -> collector.appendText(candidate, rawParagraph.length, text, firstBlockIndex) }
+                },
+            )
+            splitReadableParagraphs(strippedText, checkActive).forEach { paragraph ->
                 checkActive()
                 blocks += ReaderContentBlock(
                     blockIndex = nextBlockIndex++,
@@ -60,6 +86,7 @@ internal fun buildReaderContentBlocks(
             appendTextParagraphs(content.substring(cursor, image.range.first))
         }
         if (image.source.withReaderCancellationChecks(checkActive).isNotBlank()) {
+            inlineImages?.appendImage(nextBlockIndex)
             blocks += ReaderContentBlock(
                 blockIndex = nextBlockIndex++,
                 type = ReaderContentBlockType.IMAGE,
@@ -74,12 +101,18 @@ internal fun buildReaderContentBlocks(
     }
 
     checkActive()
-    return blocks.ifEmpty {
-        listOf(ReaderContentBlock(blockIndex = nextBlockIndex, type = ReaderContentBlockType.PARAGRAPH, text = normalized.stripSimpleHtml(checkActive)))
-    }
+    return ReaderContentBuildResult(
+        blocks = blocks.ifEmpty {
+            listOf(ReaderContentBlock(blockIndex = nextBlockIndex, type = ReaderContentBlockType.PARAGRAPH, text = normalized.stripSimpleHtml(checkActive)))
+        },
+        inlineImageParagraphs = inlineImages?.build().orEmpty(),
+    )
 }
 
-private fun String.stripSimpleHtml(checkActive: () -> Unit): String {
+private fun String.stripSimpleHtml(
+    checkActive: () -> Unit,
+    onUntrimmedText: ((String) -> Unit)? = null,
+): String {
     var text = this
     for ((pattern, replacement) in listOf(
         Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE) to "\n",
@@ -90,6 +123,7 @@ private fun String.stripSimpleHtml(checkActive: () -> Unit): String {
         checkActive()
         text = pattern.replace(text.withReaderCancellationChecks(checkActive), replacement)
     }
+    onUntrimmedText?.invoke(text)
     return text.withReaderCancellationChecks(checkActive)
         .trim()
         .toString()
@@ -104,7 +138,7 @@ private fun splitReadableParagraphs(text: String, checkActive: () -> Unit): Sequ
         .filter { it.isNotEmpty() }
 }
 
-private fun String.normalizeReaderLineEndings(checkActive: () -> Unit): String {
+internal fun String.normalizeReaderLineEndings(checkActive: () -> Unit): String {
     if (checkActive === noReaderContentCancellationCheck) {
         return replace("\r\n", "\n").replace('\r', '\n')
     }

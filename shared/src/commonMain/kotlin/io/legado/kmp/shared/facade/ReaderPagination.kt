@@ -117,6 +117,7 @@ data class ReaderChapterLayout(
     val pages: List<ReaderPageSlice>,
     val searchableText: String,
     val imageStyle: String? = null,
+    val inlineImageParagraphs: List<ReaderInlineImageParagraph> = emptyList(),
 ) {
     fun pageIndexByChapterPosition(position: Int): Int {
         if (pages.isEmpty()) return 0
@@ -161,8 +162,13 @@ class ReaderPaginationService {
         checkActive: () -> Unit = {},
     ): ReaderChapterLayout {
         checkActive()
-        val blocks = buildReaderContentBlocks(chapterTitle, content, checkActive)
-            .withTitleVisibility(config, content, checkActive)
+        val contentBuild = buildReaderContent(
+            chapterTitle,
+            content,
+            checkActive,
+            includeInlineImages = config.normalizedImageStyle() == IMAGE_STYLE_TEXT,
+        )
+        val blocks = contentBuild.blocks.withTitleVisibility(config, content, checkActive)
         val metrics = PaginationMetrics(config, viewport)
         val pages = mutableListOf<ReaderPageSlice>()
         var current = PageAccumulator(index = 0)
@@ -369,6 +375,7 @@ class ReaderPaginationService {
                     convertText(it.text, config.chineseMode).withReaderCancellationChecks(checkActive)
                 }.also { checkActive() },
             imageStyle = config.normalizedImageStyle(),
+            inlineImageParagraphs = contentBuild.inlineImageParagraphs,
         )
     }
 

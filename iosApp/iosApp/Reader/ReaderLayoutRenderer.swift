@@ -30,6 +30,9 @@ final class ReaderLayoutRenderer {
         var pendingTextFragments: [ReaderPageFragment] = []
         let searchableText = layout.searchableText as NSString
         var searchableLocation = 0
+        let inlineComposer = imageStyle == "TEXT" ? ReaderInlineImageComposer(layout: layout, isCancelled: { self.isCancelled }) : nil
+        var composedGroups: Set<Int> = []
+        var unavailableGroups: Set<Int> = []
 
         func flushTextFragments() {
             guard !isCancelled else { return }
@@ -74,6 +77,40 @@ final class ReaderLayoutRenderer {
             guard !isCancelled else { return [] }
             for fragment in sourcePage.fragments {
                 guard !isCancelled else { return [] }
+                if let inlineComposer, let group = inlineComposer.groupIndex(for: Int(fragment.blockIndex)),
+                    !unavailableGroups.contains(group)
+                {
+                    if composedGroups.contains(group) { continue }
+                    flushTextFragments()
+                    guard !isCancelled else { return [] }
+                    let paragraph = inlineComposer.compose(
+                        group: group, searchableText: searchableText, searchableStart: searchableLocation,
+                        contentSize: contentSize, lineHeight: minimumLineHeight(for: .paragraph, theme: theme),
+                        makeText: { text in
+                            self.makeAttributedText(
+                                block: ReaderContentBlock(
+                                    blockIndex: 0, type: .paragraph, text: text, imageUrl: nil, imageAlt: nil,
+                                    imageWidth: 0, imageHeight: 0),
+                                theme: theme)
+                        },
+                        adjustLine: { text, continuation, end in
+                            self.adjustedFragmentText(
+                                text, isContinuation: continuation, isParagraphEnd: end, kind: .paragraph,
+                                suppressParagraphSpacing: true, contentWidth: contentSize.width, theme: theme)
+                        },
+                        isCancelled: { self.isCancelled })
+                    guard !isCancelled else { return [] }
+                    if let paragraph {
+                        searchableLocation = paragraph.searchableEnd
+                        appendInlineParagraph(
+                            paragraph, to: &page, pages: &pages, chapterTitle: layout.chapterTitle,
+                            contentSize: contentSize, theme: theme)
+                        composedGroups.insert(group)
+                        continue
+                    }
+                    // Invalid caller-supplied hints must not hide the legacy chapter content.
+                    unavailableGroups.insert(group)
+                }
                 switch fragment.kind {
                 case .heading, .paragraph:
                     if let previous = pendingTextFragments.last,
@@ -127,6 +164,36 @@ final class ReaderLayoutRenderer {
         previous.kind == next.kind && previous.blockIndex == next.blockIndex && previous.isParagraphEnd == false
             && next.isContinuation
             && previous.chapterEndPosition == next.chapterStartPosition
+    }
+
+    private func appendInlineParagraph(
+        _ paragraph: ReaderInlineImageComposer.Paragraph,
+        to page: inout ReaderPageBuildState,
+        pages: inout [ReaderPageLayout],
+        chapterTitle: String,
+        contentSize: CGSize,
+        theme: ReaderThemeController
+    ) {
+        let height = minimumLineHeight(for: .paragraph, theme: theme)
+        for line in paragraph.lines {
+            guard !isCancelled else { return }
+            let source = line.sourceMap.sourceRange
+            preparePageForContent(
+                height: height, sourceLocation: source.location, to: &page, pages: &pages,
+                chapterTitle: chapterTitle, contentSize: contentSize, theme: theme)
+            let y = page.cursorY
+            page.appendText(
+                line.text, sourceRange: source, height: height, kind: .paragraph, blockIndex: line.blockIndex,
+                isContinuation: line.isContinuation, advance: theme.bodyLineHeight, sourceMap: line.sourceMap)
+            for image in line.images {
+                guard !isCancelled else { return }
+                page.appendAttachment(
+                    sourceRange: image.sourceRange, frame: image.frame.offsetBy(dx: 0, dy: y),
+                    contentMode: .scaleAspectFit, source: .remoteImage(url: image.url, altText: image.altText),
+                    previewText: nil, requestRule: image.requestRule, inlineAnchorSourceRange: source)
+            }
+            if line.endsParagraph { page.pendingBlockSpacing = paragraphSpacing(for: .paragraph, theme: theme) }
+        }
     }
 
     private func appendTextFragments(
