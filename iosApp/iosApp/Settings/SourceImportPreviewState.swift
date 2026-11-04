@@ -155,6 +155,12 @@ enum SourceImportPreviewText {
         )
     }
 
+    static func importError(_ detail: String) -> String {
+        String(
+            format: L10n.text("source.consumer.import.preview_error", "导入失败：%@"),
+            locale: Locale.current, detail)
+    }
+
     private static func text(_ key: String, _ fallback: String) -> String {
         Bundle.main.localizedString(forKey: "source_import.preview.\(key)", value: fallback, table: nil)
     }

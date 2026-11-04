@@ -8,7 +8,7 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
     private let initialURL: URL
     private let screen: SourceLoginScreenAdapter
     private let webSession: SourceLoginWebSession
-    private let toolbar = AndroidEditorTitleBar(title: "登录")
+    private let toolbar = AndroidEditorTitleBar(title: L10n.SourceEdit.loginAction)
     private let progress = UIProgressView(progressViewStyle: .bar)
     private let errorView = UIStackView()
     private let errorLabel = UILabel()
@@ -54,13 +54,13 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
         view.accessibilityIdentifier = "source.login.web"
         toolbar.backButton.accessibilityIdentifier = "source.login.web.back"
         toolbar.saveButton.accessibilityIdentifier = "source.login.web.confirm"
-        toolbar.saveButton.accessibilityLabel = "完成登录"
+        toolbar.saveButton.accessibilityLabel = L10n.text("source.consumer.login.complete_action", "完成登录")
         toolbar.saveButton.setImage(
             UIImage(named: "ReaderTocAndroidCheck")?.withRenderingMode(.alwaysTemplate), for: .normal)
         for case let tooltip as UIToolTipInteraction in toolbar.saveButton.interactions {
             toolbar.saveButton.removeInteraction(tooltip)
         }
-        toolbar.saveButton.addInteraction(UIToolTipInteraction(defaultToolTip: "完成登录"))
+        toolbar.saveButton.addInteraction(UIToolTipInteraction(defaultToolTip: toolbar.saveButton.accessibilityLabel ?? ""))
         toolbar.backButton.addTarget(self, action: #selector(cancel), for: .touchUpInside)
         toolbar.saveButton.addTarget(self, action: #selector(confirm), for: .touchUpInside)
         toolbar.saveButton.isEnabled = false
@@ -81,9 +81,9 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
         retryButton.setImage(
             UIImage(named: "ReaderMenuAndroidRefresh")?.withRenderingMode(.alwaysTemplate), for: .normal)
         retryButton.tintColor = AndroidReplicaTheme.accent
-        retryButton.accessibilityLabel = "重新加载"
+        retryButton.accessibilityLabel = L10n.text("source.consumer.login.reload_action", "重新加载")
         retryButton.accessibilityIdentifier = "source.login.web.retry"
-        retryButton.addInteraction(UIToolTipInteraction(defaultToolTip: "重新加载"))
+        retryButton.addInteraction(UIToolTipInteraction(defaultToolTip: retryButton.accessibilityLabel ?? ""))
         retryButton.addTarget(self, action: #selector(retry), for: .touchUpInside)
         errorView.addArrangedSubview(errorLabel)
         errorView.addArrangedSubview(retryButton)
@@ -277,9 +277,11 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
                     ? sourceSeed : try await screen.loadWebCookieSeed(sourceURL: sourceURL, targetURL: initialURL.absoluteString)
                 try Task.checkCancellation()
                 guard isCurrent(id) else { return }
-                title = "登录 \(configuration.name)"
+                title = String(
+                    format: L10n.text("source.consumer.login.title_format", "登录 %@"),
+                    locale: Locale.current, configuration.name)
                 toolbar.titleButton.setAttributedTitle(
-                    NSAttributedString(string: title ?? "登录", attributes: [.kern: CGFloat(0)]), for: .normal)
+                    NSAttributedString(string: title ?? L10n.SourceEdit.loginAction, attributes: [.kern: CGFloat(0)]), for: .normal)
                 toolbar.titleButton.accessibilityLabel = title
                 let headers = try Self.headers(configuration.headersJson, source: sourceURL, target: initialURL)
                 if URL(string: sourceURL)?.host?.lowercased() != initialURL.host?.lowercased() {
@@ -313,7 +315,7 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
             } catch is CancellationError {
             } catch {
                 guard isCurrent(id) else { return }
-                showFailure("网页加载失败，请重试")
+                showFailure(L10n.text("source.consumer.login.page_load_failed", "网页加载失败，请重试"))
             }
         }
         updateControls()
@@ -348,11 +350,11 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
                 try Task.checkCancellation()
                 guard isCurrent(id) else { return }
                 completed = true
-                close(message: "已保存登录状态")
+                close(message: L10n.text("source.consumer.login.state_saved", "已保存登录状态"))
             } catch is CancellationError {
             } catch {
                 guard isCurrent(id) else { return }
-                showFailure("登录状态保存失败，请重试", hidesPage: false)
+                showFailure(L10n.text("source.consumer.login.state_save_failed", "登录状态保存失败，请重试"), hidesPage: false)
             }
         }
         updateControls()
@@ -413,7 +415,10 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
         webView.isHidden = hidesPage
         progress.isHidden = true
         if hidesPage { loaded = false }
-        retryButton.accessibilityLabel = hidesPage ? "重新加载" : "重试保存登录状态"
+        retryButton.accessibilityLabel =
+            hidesPage
+            ? L10n.text("source.consumer.login.reload_action", "重新加载")
+            : L10n.text("source.consumer.login.retry_save_action", "重试保存登录状态")
         for case let tooltip as UIToolTipInteraction in retryButton.interactions {
             retryButton.removeInteraction(tooltip)
         }
@@ -453,7 +458,7 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard !completed, navigationController?.topViewController === self else { return }
         retrySavesLogin = false
-        showFailure("网页加载已中断，请重试")
+        showFailure(L10n.text("source.consumer.login.page_load_interrupted", "网页加载已中断，请重试"))
     }
 
     private func navigationFailed(_ error: Error) {
@@ -462,7 +467,7 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
             (error as NSError).domain != NSURLErrorDomain || (error as NSError).code != NSURLErrorCancelled
         else { return }
         retrySavesLogin = false
-        showFailure("网页加载失败，请重试")
+        showFailure(L10n.text("source.consumer.login.page_load_failed", "网页加载失败，请重试"))
     }
 
     func webView(
@@ -491,7 +496,9 @@ final class SourceLoginWebViewController: UIViewController, WKNavigationDelegate
                 }
             } catch {
                 decisionHandler(.cancel)
-                if isCurrent(id) { showFailure("登录站点状态准备失败，请重试", hidesPage: false) }
+                if isCurrent(id) {
+                    showFailure(L10n.text("source.consumer.login.site_prepare_failed", "登录站点状态准备失败，请重试"), hidesPage: false)
+                }
             }
         }
     }

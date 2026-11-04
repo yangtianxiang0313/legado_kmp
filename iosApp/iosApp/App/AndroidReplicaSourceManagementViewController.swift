@@ -314,37 +314,40 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
         guard !isUpdatingSources, !selectedSourceURLs.isEmpty else { return }
         let revision = selectionRevision
         var items: [ReaderOverflowMenuView.Item] = [
-            batchOption(title: "启用所选", flag: .enabled, enabled: true, revision: revision),
-            batchOption(title: "禁用所选", flag: .enabled, enabled: false, revision: revision),
-            batchAction("menu_add_group", title: "添加分组", revision: revision) { coordinator, urls, _ in
+            batchOption(title: L10n.SourceConsumer.enableSelected, flag: .enabled, enabled: true, revision: revision),
+            batchOption(title: L10n.SourceConsumer.disableSelected, flag: .enabled, enabled: false, revision: revision),
+            batchAction("menu_add_group", title: L10n.SourceConsumer.addGroup, revision: revision) { coordinator, urls, _ in
                 coordinator.editGroup(sourceURLs: urls, removing: false)
             },
-            batchAction("menu_remove_group", title: "移除分组", revision: revision) { coordinator, urls, _ in
+            batchAction("menu_remove_group", title: L10n.SourceConsumer.removeGroup, revision: revision) { coordinator, urls, _ in
                 coordinator.editGroup(sourceURLs: urls, removing: true)
             },
         ]
         // book_source_sel.xml always includes these commands; the row menu is conditional.
         items += [
-            batchOption(title: "启用发现", flag: .explore, enabled: true, revision: revision),
-            batchOption(title: "禁用发现", flag: .explore, enabled: false, revision: revision),
+            batchOption(title: L10n.SourceConsumer.enableExplore, flag: .explore, enabled: true, revision: revision),
+            batchOption(title: L10n.SourceConsumer.disableExplore, flag: .explore, enabled: false, revision: revision),
         ]
         items += [
-            batchAction("menu_top_sel", title: "置顶所选", revision: revision) { coordinator, urls, _ in
+            batchAction("menu_top_sel", title: L10n.SourceConsumer.topSelected, revision: revision) { coordinator, urls, _ in
                 coordinator.move(sourceURLs: urls, toStart: true)
             },
-            batchAction("menu_bottom_sel", title: "置底所选", revision: revision) { coordinator, urls, _ in
+            batchAction("menu_bottom_sel", title: L10n.SourceConsumer.bottomSelected, revision: revision) { coordinator, urls, _ in
                 coordinator.move(sourceURLs: urls, toStart: false)
             },
-            batchAction("menu_export_selection", title: "导出所选", revision: revision) { coordinator, urls, anchor in
+            batchAction("menu_export_selection", title: L10n.SourceConsumer.exportSelected, revision: revision) {
+                coordinator, urls, anchor in
                 coordinator.export(sourceURLs: urls, sharing: false, anchor: anchor)
             },
-            batchAction("menu_share_source", title: "分享选中源", revision: revision) { coordinator, urls, anchor in
+            batchAction("menu_share_source", title: L10n.SourceConsumer.shareSelected, revision: revision) { coordinator, urls, anchor in
                 coordinator.export(sourceURLs: urls, sharing: true, anchor: anchor)
             },
         ]
         items += [
-            menuItem("menu_check_source", title: "校验所选") { $0.verifySelectedSources(revision: revision) },
-            menuItem("menu_check_selected_interval", title: "选中所选区间") { $0.checkSelectedInterval(revision: revision) },
+            menuItem("menu_check_source", title: L10n.SourceConsumer.checkSelected) { $0.verifySelectedSources(revision: revision) },
+            menuItem("menu_check_selected_interval", title: L10n.SourceConsumer.selectInterval) {
+                $0.checkSelectedInterval(revision: revision)
+            },
         ]
         presentPopup(items, anchor: selectionBar.menuAnchor) { [weak self] in self?.selectionRevision == revision }
     }
@@ -378,7 +381,7 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
     ) -> ReaderOverflowMenuView.Item {
         menuItem(id, title: title) { controller in
             guard controller.selectionRevision == revision else {
-                controller.showMessage("列表或选择已更新，请重新选择批量操作")
+                controller.showMessage(L10n.SourceConsumer.selectionChanged)
                 return
             }
             let urls = controller.filteredSources.filter { controller.selectedSourceURLs.contains($0.bookSourceUrl) }
@@ -393,7 +396,7 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
     {
         menuItem("batch.\(flag).\(enabled)", title: title) { controller in
             guard controller.selectionRevision == revision else {
-                controller.showMessage("列表或选择已更新，请重新选择批量操作")
+                controller.showMessage(L10n.SourceConsumer.selectionChanged)
                 return
             }
             let urls = controller.filteredSources.filter { controller.selectedSourceURLs.contains($0.bookSourceUrl) }
@@ -452,25 +455,29 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
     @objc private func showImportMenu() {
         presentPopup(
             [
-                menuItem("menu_add_book_source", title: "新建书源") { $0.createSource() },
-                menuItem("menu_import_local", title: "本地导入") { $0.importCoordinator.openFile() },
-                menuItem("menu_import_onLine", title: "网络导入") { $0.importCoordinator.openOnline() },
-                menuItem("menu_import_qr", title: "二维码导入") { $0.importCoordinator.openQR() },
-                menuItem("menu_group_sources_by_domain", title: "按域名分组", checked: listConfiguration.groupsByDomain) {
+                menuItem("menu_add_book_source", title: L10n.SourceEdit.createTitle) { $0.createSource() },
+                menuItem("menu_import_local", title: L10n.SourceManagement.importLocalAction) { $0.importCoordinator.openFile() },
+                menuItem("menu_import_onLine", title: L10n.SourceManagement.importOnlineAction) { $0.importCoordinator.openOnline() },
+                menuItem("menu_import_qr", title: L10n.SourceConsumer.importQR) { $0.importCoordinator.openQR() },
+                menuItem(
+                    "menu_group_sources_by_domain", title: L10n.SourceManagement.groupByDomainAction,
+                    checked: listConfiguration.groupsByDomain
+                ) {
                     $0.listConfiguration.groupsByDomain.toggle()
                     $0.saveListConfiguration()
                 },
-                menuItem("menu_help", title: "帮助") { $0.showSourceHelp() },
+                menuItem("menu_help", title: L10n.SourceManagement.helpAction) { $0.showSourceHelp() },
             ], anchor: topBar.moreButton)
     }
 
     @objc private func showSortMenu() {
         guard canPresentMenu else { return }
-        let titles = ["手动排序", "智能排序", "名称排序", "地址排序", "更新时间排序", "响应时间排序", "是否启用"]
+        let titles = L10n.SourceConsumer.sortTitles
         let items =
             [
                 SearchOverflowMenuView.Item(
-                    id: "menu_sort_desc", title: "反序", selection: .checkbox, isSelected: !listConfiguration.ascending)
+                    id: "menu_sort_desc", title: L10n.SourceConsumer.reverseOrder, selection: .checkbox,
+                    isSelected: !listConfiguration.ascending)
             ]
             + zip(SourceManagementListSort.allCases, titles).map { sort, title in
                 .init(id: sort.rawValue, title: title, selection: .radio, isSelected: listConfiguration.sort == sort)
@@ -500,15 +507,16 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
             SourceManagementListPolicy.FilterQuery.exploreDisabled,
         ]
         var items = [
-            menuItem("menu_group_manage", title: "分组管理") { controller in
+            menuItem("menu_group_manage", title: L10n.SourceConsumer.groupManagement) { controller in
                 controller.present(
                     BookSourceGroupManagementDialogViewController(screen: controller.screen) { [weak controller] in
                         Task { await controller?.reloadSources() }
                     }, animated: true)
             }
         ]
+        let titles = L10n.SourceConsumer.filterTitles
         items += filters.enumerated().map { index, query in
-            menuItem("group.filter.\(index)", title: query) { $0.setFilterQuery(query) }
+            menuItem("group.filter.\(index)", title: titles[index]) { $0.setFilterQuery(query, display: titles[index]) }
         }
         items += groups.enumerated().map { index, group in
             menuItem("group.name.\(index)", title: group) { $0.setFilterQuery("group:" + group) }
@@ -516,8 +524,8 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
         presentPopup(items, anchor: topBar.groupButton) { [weak self] in self?.sourceGroups == groups }
     }
 
-    private func setFilterQuery(_ query: String) {
-        searchField.text = query
+    private func setFilterQuery(_ query: String, display: String? = nil) {
+        searchField.text = display ?? query
         searchKeyword = query
         topBar.queryChanged()
         applyFilter()
@@ -593,7 +601,7 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
         statusLabel.text = message
         statusLabel.isHidden = !active
         statusLabel.accessibilityTraits = .button
-        statusLabel.accessibilityHint = "暂停、继续或取消校验"
+        statusLabel.accessibilityHint = L10n.SourceConsumer.checkControlsHint
         statusHeightConstraint?.constant = active ? 28 : 0
         view.layoutIfNeeded()
     }
@@ -630,7 +638,7 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
             self.setUpdatingSources(false)
             if !failures.isEmpty {
                 let message =
-                    "已更新 \(completed)/\(targetURLs.count) 条，失败 \(failures.count) 条。已成功的修改不会回滚。\n\n"
+                    L10n.SourceConsumer.partialFlagFailure(completed: completed, total: targetURLs.count, failed: failures.count)
                     + failures.joined(separator: "\n\n")
                 let alert = UIAlertController(
                     title: L10n.Common.unavailableTitle, message: message, preferredStyle: .alert)
@@ -708,14 +716,14 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
         if listConfiguration.sort == .manual {
             let ascending = listConfiguration.ascending
             items += [
-                menuItem("source.top", title: "置顶") { controller in
+                menuItem("source.top", title: L10n.SourceManagement.moveToTopAction) { controller in
                     guard controller.listConfiguration.sort == .manual,
                         controller.listConfiguration.ascending == ascending,
                         controller.filteredSources.contains(where: { $0.bookSourceUrl == url })
                     else { return }
                     controller.actionCoordinator.move(sourceURLs: [url], toStart: ascending)
                 },
-                menuItem("source.bottom", title: "置底") { controller in
+                menuItem("source.bottom", title: L10n.SourceManagement.moveToBottomAction) { controller in
                     guard controller.listConfiguration.sort == .manual,
                         controller.listConfiguration.ascending == ascending,
                         controller.filteredSources.contains(where: { $0.bookSourceUrl == url })
@@ -752,7 +760,9 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
         ]
         if source.hasExploreUrl {
             items.append(
-                menuItem("source.explore", title: source.enabledExplore ? "禁用发现" : "启用发现") {
+                menuItem(
+                    "source.explore", title: source.enabledExplore ? L10n.SourceConsumer.disableExplore : L10n.SourceConsumer.enableExplore
+                ) {
                     $0.toggleExplore(sourceURL: url)
                 })
         }

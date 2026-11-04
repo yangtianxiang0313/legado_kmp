@@ -118,7 +118,9 @@ final class SourceLoginScreenAdapter {
                         nil,
                         NSError(
                             domain: "io.legado.sourceLogin", code: 2,
-                            userInfo: [NSLocalizedDescriptionKey: "书源登录操作失败，请检查登录配置后重试"]))
+                            userInfo: [
+                                NSLocalizedDescriptionKey: L10n.text("source.consumer.login.operation_failed", "书源登录操作失败，请检查登录配置后重试")
+                            ]))
                 } else {
                     completion(response, nil)
                 }
@@ -136,6 +138,6 @@ final class SourceLoginScreenAdapter {
     static func invalidConfiguration() -> NSError {
         NSError(
             domain: "io.legado.sourceLogin", code: 1,
-            userInfo: [NSLocalizedDescriptionKey: "书源登录配置无效，请检查后重试"])
+            userInfo: [NSLocalizedDescriptionKey: L10n.text("source.consumer.login.invalid_configuration", "书源登录配置无效，请检查后重试")])
     }
 }

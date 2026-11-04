@@ -1,6 +1,46 @@
 import Foundation
 
 extension L10n {
+    enum SourceConsumer {
+        static let enableSelected = text("source.consumer.menu.enable_selected", "启用所选")
+        static let disableSelected = text("source.consumer.menu.disable_selected", "禁用所选")
+        static let addGroup = text("source.consumer.menu.add_group", "添加分组")
+        static let removeGroup = text("source.consumer.menu.remove_group", "移除分组")
+        static let enableExplore = text("source.consumer.menu.enable_explore", "启用发现")
+        static let disableExplore = text("source.consumer.menu.disable_explore", "禁用发现")
+        static let topSelected = text("source.consumer.menu.top_selected", "置顶所选")
+        static let bottomSelected = text("source.consumer.menu.bottom_selected", "置底所选")
+        static let exportSelected = text("source.consumer.menu.export_selected", "导出所选")
+        static let shareSelected = text("source.consumer.menu.share_selected", "分享选中源")
+        static let checkSelected = text("source.consumer.menu.check_selected", "校验所选")
+        static let selectInterval = text("source.consumer.menu.select_interval", "选中所选区间")
+        static let selectionChanged = text("source.consumer.menu.selection_changed", "列表或选择已更新，请重新选择批量操作")
+        static let importQR = text("source.consumer.menu.import_qr", "二维码导入")
+        static let groupManagement = text("source.consumer.menu.group_management", "分组管理")
+        static let reverseOrder = text("source.consumer.menu.reverse_order", "反序")
+        static let checkControlsHint = text("source.consumer.menu.check_controls_hint", "暂停、继续或取消校验")
+        static let sortTitles = [
+            text("source.consumer.menu.sort_manual", "手动排序"),
+            text("source.consumer.menu.sort_auto", "智能排序"),
+            text("source.consumer.menu.sort_name", "名称排序"),
+            text("source.consumer.menu.sort_url", "地址排序"),
+            text("source.consumer.menu.sort_update", "更新时间排序"),
+            text("source.consumer.menu.sort_respond", "响应时间排序"),
+            text("source.consumer.menu.sort_enabled", "是否启用"),
+        ]
+        static let filterTitles = [
+            SourceManagement.enabledBadge, SourceManagement.disabledBadge,
+            text("source.consumer.menu.filter_login", "需要登录"),
+            text("source.consumer.menu.filter_ungrouped", "未分组"),
+            text("source.consumer.menu.filter_explore_enabled", "已启用发现"),
+            text("source.consumer.menu.filter_explore_disabled", "已禁用发现"),
+        ]
+
+        static func partialFlagFailure(completed: Int, total: Int, failed: Int) -> String {
+            format("source.consumer.menu.partial_failure", "已更新 %ld/%ld 条，失败 %ld 条。已成功的修改不会回滚。\n\n", completed, total, failed)
+        }
+    }
+
     enum SourceManagement {
         static let title = text("source_management.title", "书源管理")
         static let searchPlaceholder = text("source_management.search_placeholder", "搜索书源")

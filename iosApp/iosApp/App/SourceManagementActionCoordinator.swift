@@ -12,7 +12,10 @@ enum SourceManagementOrderPlan {
         guard targets.count == requested.count, !targets.isEmpty else {
             throw NSError(
                 domain: "io.legado.sourceManagement", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "书源列表已更新，请重新选择"])
+                userInfo: [
+                    NSLocalizedDescriptionKey: L10n.text(
+                        "source.consumer.management.sources_changed", "书源列表已更新，请重新选择")
+                ])
         }
         let edge = (toStart ? sources.map(\.customOrder).min() : sources.map(\.customOrder).max()) ?? 0
         // Preflight every value before the first write. Never wrap the persisted Int32 order.
@@ -21,7 +24,10 @@ enum SourceManagementOrderPlan {
             guard let order = Int32(exactly: value) else {
                 throw NSError(
                     domain: "io.legado.sourceManagement", code: 2,
-                    userInfo: [NSLocalizedDescriptionKey: "书源排序已到边界"])
+                    userInfo: [
+                        NSLocalizedDescriptionKey: L10n.text(
+                            "source.consumer.management.order_limit", "书源排序已到边界")
+                    ])
             }
             return (targets[index].bookSourceUrl, order)
         }
@@ -68,7 +74,11 @@ final class SourceManagementActionCoordinator: NSObject, UIDocumentPickerDelegat
             } catch {
                 throw NSError(
                     domain: "io.legado.sourceManagement", code: 3,
-                    userInfo: [NSLocalizedDescriptionKey: "已更新 \(completed)/\(plan.count) 条排序。\n\(error.userFacingMessage)"])
+                    userInfo: [
+                        NSLocalizedDescriptionKey: String(
+                            format: L10n.text("source.consumer.management.order_partial_failure", "已更新 %ld/%ld 条排序。\n%@"),
+                            locale: Locale.current, completed, plan.count, error.userFacingMessage)
+                    ])
             }
         }
     }
@@ -77,7 +87,9 @@ final class SourceManagementActionCoordinator: NSObject, UIDocumentPickerDelegat
         guard canBegin, let presenter else { return }
         let id = lifetime
         let editor = SourceImportPreviewGroupViewController(
-            groupName: nil, appendGroup: false, titleText: removing ? "移除分组" : "添加分组", showsAppendGroup: false)
+            groupName: nil, appendGroup: false,
+            titleText: removing ? L10n.SourceManagement.removeGroupAction : BookSourceGroupManagementText.add,
+            showsAppendGroup: false)
         editor.onSave = { [weak self] name, _ in
             guard let self, self.lifetime == id, let name, !name.isEmpty else { return }
             self.perform(changesSources: true) { [self] in
@@ -207,6 +219,9 @@ final class SourceManagementActionCoordinator: NSObject, UIDocumentPickerDelegat
     private static func missingSource() -> NSError {
         NSError(
             domain: "io.legado.sourceManagement", code: 1,
-            userInfo: [NSLocalizedDescriptionKey: "书源列表已更新，请重新选择"])
+            userInfo: [
+                NSLocalizedDescriptionKey: L10n.text(
+                    "source.consumer.management.sources_changed", "书源列表已更新，请重新选择")
+            ])
     }
 }

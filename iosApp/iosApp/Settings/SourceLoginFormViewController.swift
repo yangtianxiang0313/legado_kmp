@@ -11,7 +11,7 @@ final class SourceLoginFormViewController: UIViewController, NavigationContentCh
     private var buttonFlows: [SourceLoginButtonFlowView] = []
     private let scrollView = SourceLoginFormScrollView()
     private let contentArea = UIView()
-    private let toolbar = AndroidEditorTitleBar(title: "登录", showsMore: true)
+    private let toolbar = AndroidEditorTitleBar(title: L10n.SourceEdit.loginAction, showsMore: true)
     private let content = UIStackView()
     private let statusLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -231,9 +231,11 @@ final class SourceLoginFormViewController: UIViewController, NavigationContentCh
     }
 
     private func render(_ configuration: SourceLoginConfiguration) throws {
-        title = "登录 \(configuration.name)"
+        title = String(
+            format: L10n.text("source.consumer.login.title_format", "登录 %@"),
+            locale: Locale.current, configuration.name)
         toolbar.titleButton.setAttributedTitle(
-            NSAttributedString(string: title ?? "登录", attributes: [.kern: CGFloat(0)]), for: .normal)
+            NSAttributedString(string: title ?? L10n.SourceEdit.loginAction, attributes: [.kern: CGFloat(0)]), for: .normal)
         toolbar.titleButton.accessibilityLabel = title
         guard configuration.hasForm else {
             guard let raw = configuration.webUrl, let url = Self.webURL(raw),
@@ -365,12 +367,12 @@ final class SourceLoginFormViewController: UIViewController, NavigationContentCh
                     if let raw = result.webUrl, let url = Self.webURL(raw) {
                         self.present(SFSafariViewController(url: url), animated: true)
                     } else if result.executedJs {
-                        self.setStatus("操作已执行")
+                        self.setStatus(L10n.text("source.consumer.login.action_executed", "操作已执行"))
                     }
                 case .header(let header):
                     self.present(SourceLoginHeaderViewController(text: header ?? ""), animated: true)
                 case .clearedHeader:
-                    self.setStatus("已清除登录头")
+                    self.setStatus(L10n.text("source.consumer.login.header_cleared", "已清除登录头"))
                 }
             } catch is CancellationError {
             } catch {
@@ -401,7 +403,7 @@ final class SourceLoginFormViewController: UIViewController, NavigationContentCh
     }
 
     private func showFailure() {
-        setStatus("书源登录操作失败，请检查登录配置后重试")
+        setStatus(L10n.text("source.consumer.login.operation_failed", "书源登录操作失败，请检查登录配置后重试"))
     }
 
     private func revokePendingResult() {
@@ -418,7 +420,10 @@ final class SourceLoginFormViewController: UIViewController, NavigationContentCh
         let hasForm = configuration?.hasForm == true
         toolbar.saveButton.setImage(
             hasForm ? ReaderTocAndroidIcon.check.image() : ReaderMenuAndroidIcon.refresh.image(), for: .normal)
-        toolbar.saveButton.accessibilityLabel = hasForm ? "提交登录" : "重新加载"
+        toolbar.saveButton.accessibilityLabel =
+            hasForm
+            ? L10n.text("source.consumer.login.submit_action", "提交登录")
+            : L10n.text("source.consumer.login.reload_action", "重新加载")
         for case let tooltip as UIToolTipInteraction in toolbar.saveButton.interactions {
             toolbar.saveButton.removeInteraction(tooltip)
         }
@@ -432,20 +437,20 @@ final class SourceLoginFormViewController: UIViewController, NavigationContentCh
         let id = lifetime
         let menu = ReaderOverflowMenuView(
             items: [
-                .init(identifier: "menu_show_login_header", title: "查看登录头") { [weak self] in
+                .init(identifier: "menu_show_login_header", title: L10n.text("source.consumer.login.show_header", "查看登录头")) { [weak self] in
                     guard let self, self.lifetime == id, self.isCurrent else { return }
                     self.perform { [screen = self.screen, sourceURL = self.sourceURL] in
                         .header(try await screen.loadLoginHeader(sourceURL: sourceURL))
                     }
                 },
-                .init(identifier: "menu_del_login_header", title: "清除登录头") { [weak self] in
+                .init(identifier: "menu_del_login_header", title: L10n.text("source.consumer.login.clear_header", "清除登录头")) { [weak self] in
                     guard let self, self.lifetime == id, self.isCurrent else { return }
                     self.perform { [screen = self.screen, sourceURL = self.sourceURL] in
                         try await screen.clearLoginHeader(sourceURL: sourceURL)
                         return .clearedHeader
                     }
                 },
-                .init(identifier: "menu_log", title: "日志") { [weak self] in
+                .init(identifier: "menu_log", title: L10n.Bookshelf.logTitle) { [weak self] in
                     guard let self, self.lifetime == id, self.isCurrent else { return }
                     let controller = ReaderAppLogDialogViewController()
                     controller.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
@@ -467,7 +472,7 @@ final class SourceLoginFormViewController: UIViewController, NavigationContentCh
     }
 
     private func finishSubmittedLogin() {
-        let message = fields.isEmpty ? nil : "成功"
+        let message = fields.isEmpty ? nil : L10n.text("source.consumer.login.success", "成功")
         for field in fields { field.input.value = "" }
         completed = true
         close(message: message)

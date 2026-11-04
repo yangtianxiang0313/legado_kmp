@@ -108,8 +108,12 @@ final class BookSourceGroupManagementCell: UITableViewCell {
         editButton.titleLabel?.font = font
         deleteButton.titleLabel?.font = font
         setActionsEnabled(enabled)
-        editButton.accessibilityLabel = "\(L10n.Common.edit)，\(group)"
-        deleteButton.accessibilityLabel = "\(L10n.Common.delete)，\(group)"
+        editButton.accessibilityLabel = String(
+            format: L10n.text("source.consumer.management.group_action_accessibility", "%1$@，%2$@"),
+            locale: Locale.current, L10n.Common.edit, group)
+        deleteButton.accessibilityLabel = String(
+            format: L10n.text("source.consumer.management.group_action_accessibility", "%1$@，%2$@"),
+            locale: Locale.current, L10n.Common.delete, group)
         editButton.accessibilityIdentifier = "sourceManagement.groupManage.edit.\(group)"
         deleteButton.accessibilityIdentifier = "sourceManagement.groupManage.delete.\(group)"
         groupLabel.accessibilityIdentifier = "sourceManagement.groupManage.name.\(group)"

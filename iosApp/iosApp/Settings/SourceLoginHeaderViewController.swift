@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class SourceLoginHeaderViewController: UIViewController, NavigationContentChromeProviding {
     private let text: String
-    private let toolbar = AndroidEditorTitleBar(title: "登录头")
+    private let toolbar = AndroidEditorTitleBar(title: L10n.text("source.consumer.login.header_title", "登录头"))
     private let textView = UITextView()
     private let privacyCover = UIView()
 
@@ -25,12 +25,12 @@ final class SourceLoginHeaderViewController: UIViewController, NavigationContent
         toolbar.translatesAutoresizingMaskIntoConstraints = false
         toolbar.backButton.addTarget(self, action: #selector(close), for: .touchUpInside)
         toolbar.saveButton.setImage(UIImage(systemName: "doc.on.doc"), for: .normal)
-        toolbar.saveButton.accessibilityLabel = "复制登录头"
+        toolbar.saveButton.accessibilityLabel = L10n.text("source.consumer.login.copy_header", "复制登录头")
         toolbar.saveButton.isEnabled = !text.isEmpty
         for case let tooltip as UIToolTipInteraction in toolbar.saveButton.interactions {
             toolbar.saveButton.removeInteraction(tooltip)
         }
-        toolbar.saveButton.addInteraction(UIToolTipInteraction(defaultToolTip: "复制登录头"))
+        toolbar.saveButton.addInteraction(UIToolTipInteraction(defaultToolTip: toolbar.saveButton.accessibilityLabel ?? ""))
         toolbar.saveButton.addTarget(self, action: #selector(copyHeader), for: .touchUpInside)
         textView.translatesAutoresizingMaskIntoConstraints = false
         textView.text = text
@@ -42,7 +42,7 @@ final class SourceLoginHeaderViewController: UIViewController, NavigationContent
         textView.adjustsFontForContentSizeCategory = true
         textView.textContainerInset = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
         textView.textContainer.lineBreakMode = .byCharWrapping
-        textView.accessibilityLabel = "登录头"
+        textView.accessibilityLabel = L10n.text("source.consumer.login.header_title", "登录头")
         privacyCover.translatesAutoresizingMaskIntoConstraints = false
         privacyCover.isHidden = true
         view.addSubview(toolbar)
@@ -134,7 +134,7 @@ final class SourceLoginHeaderViewController: UIViewController, NavigationContent
         UIPasteboard.general.setItems(
             [[UTType.utf8PlainText.identifier: text]],
             options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(60)])
-        showTransientMessage("已复制登录头")
+        showTransientMessage(L10n.text("source.consumer.login.header_copied", "已复制登录头"))
     }
 
     @objc private func close() {

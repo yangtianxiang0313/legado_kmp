@@ -399,7 +399,7 @@ final class SourceImportPreviewViewController: UIViewController, UIAdaptivePrese
                 self.preparationTask = nil
                 self.preparationID = nil
                 self.isPreparing = false
-                self.emptyLabel.text = "ImportError:\(error.userFacingMessage)"
+                self.emptyLabel.text = SourceImportPreviewText.importError(error.userFacingMessage)
                 self.updateControls()
             }
         }

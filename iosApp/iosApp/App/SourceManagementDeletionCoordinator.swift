@@ -79,9 +79,14 @@ final class SourceManagementDeletionCoordinator: NSObject {
         guard ownsLifecycle(pending), presenter.presentedViewController == nil else { return }
         generation = pending.generation
         request = pending
-        let message = sourceName.map { "是否确认删除？\n" + $0 } ?? "是否确认删除？"
+        let message =
+            sourceName.map {
+                String(
+                    format: L10n.text("source.consumer.management.delete_named_confirm", "是否确认删除？\n%@"),
+                    locale: Locale.current, $0)
+            } ?? L10n.text("source.consumer.management.delete_confirm", "是否确认删除？")
         let dialog = ReaderRestoreProgressDialogViewController(
-            title: "提醒", message: message,
+            title: L10n.text("source.consumer.management.delete_title", "提醒"), message: message,
             accessibilityIdentifierPrefix: "sourceManagement.delete"
         ) { [weak self, weak pending] confirmed in
             guard let self, let pending, self.matches(pending) else { return }
