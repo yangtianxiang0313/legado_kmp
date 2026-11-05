@@ -8,9 +8,13 @@ final class ReaderPaginationCoordinator {
         guard let previous else { return true }
         let old = previous.effectiveReaderStyle(userInterfaceStyle: userInterfaceStyle)
         let new = updated.effectiveReaderStyle(userInterfaceStyle: userInterfaceStyle)
-        // Info colors repaint chrome only. Preserve the page, selection and scroll offset.
+        // Android UP_CONFIG repaints colors/backgrounds without resetting the live page offset.
         return !new.isEqual(
             old.androidCopy(
+                backgroundMode: new.backgroundMode,
+                backgroundColorHex: .some(new.backgroundColorHex), textColorHex: .some(new.textColorHex),
+                backgroundAlpha: new.backgroundAlpha, backgroundImagePath: .some(new.backgroundImagePath),
+                darkStatusIcon: new.darkStatusIcon,
                 tipColorHex: .some(new.tipColorHex), tipDividerColorHex: .some(new.tipDividerColorHex)))
     }
 

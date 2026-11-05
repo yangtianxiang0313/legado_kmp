@@ -397,7 +397,6 @@ extension ReaderContainerViewController {
     func toggleNightTheme() {
         let currentMode = preferences?.themeMode ?? ThemeMode.system
         let nextMode: ThemeMode = isNightTheme(currentMode) ? .light : .dark
-        applyThemeMode(nextMode)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -433,7 +432,8 @@ extension ReaderContainerViewController {
         applyReaderBrightnessIfNeeded()
         guard refresh else { return }
         applyTheme()
-        repaginate(restoreLocation: currentCharacterOffset())
+        // Preference/runtime subscriptions own geometry changes; appearance refresh is paint-only.
+        refreshChromeSnapshot(force: true)
         setNeedsStatusBarAppearanceUpdate()
     }
 

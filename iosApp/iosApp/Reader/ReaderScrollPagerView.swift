@@ -472,8 +472,11 @@ final class ReaderScrollPagerView: UIView, UIScrollViewDelegate {
         self.renderState = renderState
         if let theme { chromeView.theme = theme }
         chromeView.chrome = chromes[safe: lastReportedPageIndex]
-        for (_, pageView) in pageViews {
-            pageView.setNeedsDisplay()
+        for pageView in pageViews.values {
+            pageView.theme = renderState.theme
+        }
+        for pageView in autoReadContinuationViews {
+            pageView.theme = renderState.theme
         }
         rebuildAccessibilityElements()
     }

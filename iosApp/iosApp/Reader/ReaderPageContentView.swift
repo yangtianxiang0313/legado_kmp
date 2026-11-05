@@ -269,6 +269,40 @@ final class ReaderPageContentView: UIView {
     }
 
     private func attributedText(for fragment: ReaderTextLayoutFragment) -> NSAttributedString {
+        let original = fragment.attributedText
+        let textColor = theme.textColor.resolvedColor(with: traitCollection)
+        let runDelegateKey = NSAttributedString.Key(kCTRunDelegateAttributeName as String)
+        let textRanges =
+            fragment.sourceMap?.spans.compactMap { span -> NSRange? in
+                if case .image = span.kind { return nil }
+                return span.displayRange
+            } ?? [NSRange(location: 0, length: original.length)]
+        var painted: NSMutableAttributedString?
+        var textRunRanges: [NSRange] = []
+
+        func mutableText() -> NSMutableAttributedString {
+            if let painted { return painted }
+            let copy = NSMutableAttributedString(attributedString: original)
+            painted = copy
+            return copy
+        }
+
+        for textRange in textRanges {
+            original.enumerateAttributes(in: textRange) { attributes, range, _ in
+                // Image placeholders keep their original attributes, even when transparent text changes color.
+                guard attributes[runDelegateKey] == nil else { return }
+                textRunRanges.append(range)
+                if (attributes[.foregroundColor] as? UIColor)?.isEqual(textColor) != true {
+                    mutableText().addAttribute(.foregroundColor, value: textColor, range: range)
+                }
+                if attributes[.strokeColor] != nil,
+                    (attributes[.strokeColor] as? UIColor)?.isEqual(textColor) != true
+                {
+                    mutableText().addAttribute(.strokeColor, value: textColor, range: range)
+                }
+            }
+        }
+
         let readAloudRanges: [NSRange]
         if let map = fragment.sourceMap {
             readAloudRanges = highlightedBlockIndex.map { map.textRanges(forBlockIndex: $0) } ?? []
@@ -278,18 +312,25 @@ final class ReaderPageContentView: UIView {
         }
         let searchRanges = localSearchResultRanges(for: fragment)
         guard !readAloudRanges.isEmpty || !searchRanges.isEmpty else {
-            return fragment.attributedText
+            return painted ?? original
         }
-        let highlighted = NSMutableAttributedString(attributedString: fragment.attributedText)
         for range in readAloudRanges {
-            highlighted.addAttribute(.backgroundColor, value: theme.textColor.withAlphaComponent(0.18), range: range)
-            highlighted.addAttribute(.foregroundColor, value: theme.textColor, range: range)
+            for textRunRange in textRunRanges {
+                let intersection = NSIntersectionRange(range, textRunRange)
+                guard intersection.length > 0 else { continue }
+                mutableText().addAttribute(.backgroundColor, value: textColor.withAlphaComponent(0.18), range: intersection)
+                mutableText().addAttribute(.foregroundColor, value: textColor, range: intersection)
+            }
         }
+        let searchColor = AndroidReplicaTheme.accent.resolvedColor(with: traitCollection)
         for searchRange in searchRanges {
-            highlighted.addAttribute(
-                .foregroundColor, value: AndroidReplicaTheme.accent.resolvedColor(with: traitCollection), range: searchRange)
+            for textRunRange in textRunRanges {
+                let intersection = NSIntersectionRange(searchRange, textRunRange)
+                guard intersection.length > 0 else { continue }
+                mutableText().addAttribute(.foregroundColor, value: searchColor, range: intersection)
+            }
         }
-        return highlighted
+        return painted ?? original
     }
 
     private func localSearchResultRanges(for fragment: ReaderTextLayoutFragment) -> [NSRange] {
