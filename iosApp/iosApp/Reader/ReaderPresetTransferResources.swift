@@ -7,14 +7,14 @@ import shared
 enum ReaderPresetTransferResources {
     final class PreparedImport {
         let json: String
-        let createdImages: [URL]
+        private let imageLeases: [ReaderBackgroundTextFiles.ImportLease]
         private let fontLease: ReaderFontStore.ImportLease?
         private let lock = NSLock()
         private var settled = false
 
-        init(json: String, createdImages: [URL], fontLease: ReaderFontStore.ImportLease?) {
+        init(json: String, imageLeases: [ReaderBackgroundTextFiles.ImportLease], fontLease: ReaderFontStore.ImportLease?) {
             self.json = json
-            self.createdImages = createdImages
+            self.imageLeases = imageLeases
             self.fontLease = fontLease
         }
 
@@ -24,6 +24,7 @@ enum ReaderPresetTransferResources {
             defer { lock.unlock() }
             guard !settled else { return }
             fontLease?.commit()
+            for lease in imageLeases { lease.commit() }
             settled = true
         }
 
@@ -33,17 +34,8 @@ enum ReaderPresetTransferResources {
             guard !settled else { return }
             var failure: Error?
             do { try fontLease?.rollback() } catch { failure = error }
-            for url in createdImages {
-                do {
-                    try FileManager.default.removeItem(at: url)
-                } catch {
-                    let value = error as NSError
-                    if value.domain != NSCocoaErrorDomain
-                        || ![NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(value.code)
-                    {
-                        if failure == nil { failure = error }
-                    }
-                }
+            for lease in imageLeases {
+                do { try lease.rollback() } catch { if failure == nil { failure = error } }
             }
             if let failure { throw failure }
             settled = true
@@ -103,8 +95,9 @@ enum ReaderPresetTransferResources {
         }
         let codec = ReaderPresetTransferCodec()
         var row = try object(codec.encode(preset: codec.decode(jsonString: text)))
-        var createdImages: [URL] = []
+        var imageLeases: [ReaderBackgroundTextFiles.ImportLease] = []
         var importedImages: [String: String] = [:]
+        var importedPaths: [String: String] = [:]
         var fontLease: ReaderFontStore.ImportLease?
         do {
             for suffix in ["", "Night", "EInk"] {
@@ -116,32 +109,56 @@ enum ReaderPresetTransferResources {
                     row["bgType" + suffix] = 1
                     continue
                 }
+                if let storedPath = importedPaths[path] {
+                    row[key] = storedPath
+                    row["bgType" + suffix] = 2
+                    continue
+                }
+                let image: Data
+                let existingLease: ReaderBackgroundTextFiles.ImportLease?
                 if path.hasPrefix("legado-background-file:"),
                     let url = ReaderBackgroundImageCatalog.resourceURL(forStoredPath: path),
                     FileManager.default.fileExists(atPath: url.path)
                 {
-                    row["bgType" + suffix] = 2
-                    continue
-                }
-                let name = resourceName(path)
-                guard let encoded = entries[name], let image = Data(base64Encoded: encoded) else {
-                    throw error(
-                        String.localizedStringWithFormat(
-                            NSLocalizedString("reader.preset.consumer.background_missing", value: "配置缺少背景图片：%@", comment: ""), name))
+                    let lease = try ReaderBackgroundTextFiles.leaseImage(forStoredPath: path)
+                    imageLeases.append(lease)
+                    existingLease = lease
+                    image = try ReaderBackgroundTextFiles.read(url, limit: resourceLimit)
+                } else {
+                    let name = resourceName(path)
+                    guard let encoded = entries[name], let bytes = Data(base64Encoded: encoded) else {
+                        throw error(
+                            String.localizedStringWithFormat(
+                                NSLocalizedString("reader.preset.consumer.background_missing", value: "配置缺少背景图片：%@", comment: ""), name))
+                    }
+                    image = bytes
+                    existingLease = nil
+                    try validateImage(image)
                 }
                 let digest = SHA256.hash(data: image).description
                 let storedPath: String
                 if let existing = importedImages[digest] {
                     storedPath = existing
-                } else {
-                    try validateImage(image)
-                    storedPath = try ReaderBackgroundTextFiles.importImage(image)
-                    guard let url = ReaderBackgroundImageCatalog.resourceURL(forStoredPath: storedPath) else {
-                        throw error(NSLocalizedString("reader.preset.consumer.background_save_failed", value: "无法保存背景图片", comment: ""))
+                    if let existingLease {
+                        try existingLease.rollback()
+                        imageLeases.removeLast()
                     }
-                    createdImages.append(url)
+                } else {
+                    if let existingLease {
+                        storedPath = existingLease.storedPath
+                    } else {
+                        let lease = try ReaderBackgroundTextFiles.leaseImageImport(image)
+                        imageLeases.append(lease)
+                        storedPath = lease.storedPath
+                        guard ReaderBackgroundImageCatalog.resourceURL(forStoredPath: storedPath) != nil else {
+                            throw error(NSLocalizedString("reader.preset.consumer.background_save_failed", value: "无法保存背景图片", comment: ""))
+                        }
+                    }
                     importedImages[digest] = storedPath
                 }
+                importedPaths[path] = storedPath
+                importedPaths[storedPath] = storedPath
+                if let existingLease { importedPaths[existingLease.storedPath] = storedPath }
                 row[key] = storedPath
                 row["bgType" + suffix] = 2
             }
@@ -171,15 +188,35 @@ enum ReaderPresetTransferResources {
             }
             let json = try encode(row)
             _ = try codec.decode(jsonString: json)
-            return PreparedImport(json: json, createdImages: createdImages, fontLease: fontLease)
+            return PreparedImport(json: json, imageLeases: imageLeases, fontLease: fontLease)
         } catch {
-            throw PreparedImport(json: "", createdImages: createdImages, fontLease: fontLease).discardResources(after: error)
+            throw PreparedImport(json: "", imageLeases: imageLeases, fontLease: fontLease).discardResources(after: error)
         }
     }
 
     static func prepareExport(json: String, fontStore: ReaderFontStore = .shared) throws -> Export {
         let codec = ReaderPresetTransferCodec()
         var row = try object(codec.encode(preset: codec.decode(jsonString: json)))
+        var imageLeases: [ReaderBackgroundTextFiles.ImportLease] = []
+        var leasedPaths: [String: String] = [:]
+        defer {
+            // Export only borrows resources; rollback must not commit another import's pending image.
+            let borrowed = PreparedImport(json: "", imageLeases: imageLeases, fontLease: nil)
+            do { try borrowed.discardResources() } catch {
+                NSLog("ReaderPresetTransferResources export rollback: %@", error.localizedDescription)
+            }
+        }
+        // Hold every owned background before reading or packaging any of them.
+        for suffix in ["", "Night", "EInk"] {
+            let kind = (row["bgType" + suffix] as? NSNumber)?.intValue ?? 0
+            guard kind != 0, let path = row["bgStr" + suffix] as? String,
+                ReaderBackgroundImageCatalog.item(forStoredPath: path) == nil,
+                path.hasPrefix("legado-background-file:"), leasedPaths[path] == nil
+            else { continue }
+            let lease = try ReaderBackgroundTextFiles.leaseImage(forStoredPath: path)
+            imageLeases.append(lease)
+            leasedPaths[path] = lease.storedPath
+        }
         var entries: [String: String] = [:]
         var imageNames: [String: String] = [:]
         var total = 0
@@ -192,7 +229,7 @@ enum ReaderPresetTransferResources {
                 row["bgType" + suffix] = 1
                 continue
             }
-            guard let url = ReaderBackgroundImageCatalog.resourceURL(forStoredPath: path) else {
+            guard let url = ReaderBackgroundImageCatalog.resourceURL(forStoredPath: leasedPaths[path] ?? path) else {
                 throw error(NSLocalizedString("reader.preset.consumer.background_read_failed", value: "无法读取配置背景图片", comment: ""))
             }
             let image = try ReaderBackgroundTextFiles.read(url, limit: resourceLimit)
