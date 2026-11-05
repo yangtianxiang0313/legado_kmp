@@ -26,6 +26,16 @@ enum BookReadingDestination {
             let controller = PdfReaderViewController(bookURL: book.bookUrl, initialChapterIndex: chapterIndex)
             navigation.pushViewController(controller.configuredForDrillDownPresentation(), animated: true)
         } else if book.isImage, let navigation = presenter.navigationController {
+            if let detail = presenter as? AndroidReplicaBookDetailViewController,
+                detail.bookURL == book.bookUrl, navigation.topViewController === detail,
+                let existing = navigation.viewControllers.dropLast().reversed().first(where: {
+                    ($0 as? MangaReaderViewController)?.bookURL == book.bookUrl
+                }) as? MangaReaderViewController
+            {
+                existing.requestResumeFromBookInfo(chapterIndex: index, chapterPosition: chapterPosition)
+                navigation.popToViewController(existing, animated: true)
+                return
+            }
             let controller = MangaReaderViewController(
                 bookURL: book.bookUrl, initialChapterIndex: index, initialChapterPosition: chapterPosition)
             navigation.pushViewController(controller.configuredForDrillDownPresentation(), animated: true)

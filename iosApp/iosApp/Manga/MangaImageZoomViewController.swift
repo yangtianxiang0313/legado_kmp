@@ -2,6 +2,19 @@ import UIKit
 
 @MainActor
 final class MangaImageZoomViewController: UIViewController, UIScrollViewDelegate {
+    static func present(
+        _ item: MangaWindowPage, pipeline: MangaImagePipeline, options: MangaReadingOptions,
+        from owner: UIViewController
+    ) {
+        let controller = MangaImageZoomViewController(
+            imageURL: item.page.mImageUrl, title: "\(item.position + 1) / \(item.chapter.pages.count)",
+            pipeline: pipeline, displayStyle: options.displayStyle, colorFilter: options.colorFilter)
+        let navigation = UINavigationController(rootViewController: controller)
+        navigation.overrideUserInterfaceStyle = .dark
+        navigation.modalPresentationStyle = .fullScreen
+        owner.present(navigation, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
     private let imageURL: String
     private let pipeline: MangaImagePipeline
     private let displayStyle: MangaImageDisplayStyle

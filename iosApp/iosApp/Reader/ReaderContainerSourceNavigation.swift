@@ -5,8 +5,12 @@ import shared
 @MainActor
 enum BookSourceChangeNavigation {
     static func flushReadingProgress(for bookURL: String, in controllers: [UIViewController]) async {
-        for case let reader as ReaderContainerViewController in controllers where reader.bookURL == bookURL {
-            await reader.screen.flushReadingProgressNow()
+        for controller in controllers {
+            if let reader = controller as? ReaderContainerViewController, reader.bookURL == bookURL {
+                await reader.screen.flushReadingProgressNow()
+            } else if let reader = controller as? MangaReaderViewController, reader.bookURL == bookURL {
+                await reader.flushReadingProgressForBookInfo()
+            }
         }
     }
 
@@ -26,6 +30,8 @@ enum BookSourceChangeNavigation {
                 reader.chapterLoadCoordinator.load(
                     in: reader, index: Int(result.book.durChapterIndex), restorePosition: nil,
                     restoresBookProgress: true)
+            } else if let reader = controller as? MangaReaderViewController, reader.bookURL == originalBookURL {
+                reader.adoptBookInfoSourceChange(result, replacing: originalBookURL)
             }
         }
     }

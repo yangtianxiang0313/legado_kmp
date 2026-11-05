@@ -490,7 +490,7 @@ final class MangaReaderAdapter {
                 reader.beginReadSession(bookUrl: url)
                 needsReadTimeSettlement = true
             } else {
-                guard needsReadTimeSettlement else { return }
+                guard !isRetired, needsReadTimeSettlement else { return }
                 do {
                     try await SharedAsync.void { completion in
                         reader.endReadSession(bookUrl: url, completionHandler: completion)
@@ -503,6 +503,35 @@ final class MangaReaderAdapter {
                 }
             }
         }
+    }
+
+    func snapshotForBookInfo() async throws -> Book? {
+        try Task.checkCancellation()
+        guard !isRetired, !isRecovering, !isLoadingSuspended, books != nil,
+            let expected = chapter, expected.book.bookUrl == bookURL, expected.book.isImage
+        else { throw CancellationError() }
+        let generation = recoveryGeneration
+        let binding = bindingID
+        let progressBinding = progress.currentBindingID
+
+        try await progress.flushForExit()
+        try Task.checkCancellation()
+        guard !isRetired, !isRecovering, !isLoadingSuspended,
+            recoveryGeneration == generation, bindingID == binding,
+            progress.currentBindingID == progressBinding, chapter === expected
+        else { throw CancellationError() }
+
+        let book = try await resolveForExit()
+        try Task.checkCancellation()
+        guard !isRetired, !isRecovering, !isLoadingSuspended,
+            recoveryGeneration == generation, bindingID == binding,
+            progress.currentBindingID == progressBinding, chapter === expected
+        else { throw CancellationError() }
+        guard let book else { return nil }
+        guard book.bookUrl == bookURL, book.isImage, ReaderSyncClient.sameIdentity(book, expected.book),
+            book.isNotShelf == expected.book.isNotShelf
+        else { throw CancellationError() }
+        return book
     }
 
     func resolveForExit() async throws -> Book? {

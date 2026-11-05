@@ -28,6 +28,7 @@ enum BookDetailNavigationActions {
     static func closeRemovedBook(_ url: String, in navigation: UINavigationController) {
         let remaining = navigation.viewControllers.filter { controller in
             if let reader = controller as? ReaderContainerViewController { return reader.bookURL != url }
+            if let reader = controller as? MangaReaderViewController { return reader.bookURL != url }
             if let detail = controller as? AndroidReplicaBookDetailViewController { return detail.bookURL != url }
             return true
         }
