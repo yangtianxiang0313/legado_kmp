@@ -3,7 +3,9 @@ import UIKit
 /// ReadBookActivity.restoreLastBookProcess at Legado 5f5d31404af9957684703747ecee2b91e7161f1d.
 /// Use a fresh instance per presentation; the caller owns progress and presentation styling.
 @MainActor
-final class ReaderRestoreProgressDialogViewController: UIViewController, UIAdaptivePresentationControllerDelegate {
+final class ReaderRestoreProgressDialogViewController: UIViewController,
+    UIAdaptivePresentationControllerDelegate
+{
     enum ActionLayout {
         case yesNo
         /// LoadMoreView only declares a neutral Retry; outside / Escape cancellation reports false.
@@ -35,8 +37,8 @@ final class ReaderRestoreProgressDialogViewController: UIViewController, UIAdapt
     private let actionLayout: ActionLayout
 
     init(
-        title: String = "提醒",
-        message: String = "是否恢复到跳转前的阅读进度？",
+        title: String = L10n.text("reader.navigation.restore_progress_title", "提醒"),
+        message: String = L10n.text("reader.navigation.restore_progress_message", "是否恢复到跳转前的阅读进度？"),
         accessibilityIdentifierPrefix: String = "reader.restoreProgress",
         actionLayout: ActionLayout = .yesNo,
         onDecision: @escaping (Bool) -> Void
@@ -64,12 +66,15 @@ final class ReaderRestoreProgressDialogViewController: UIViewController, UIAdapt
     override var keyCommands: [UIKeyCommand]? {
         guard canInteract else { return nil }
         return [
-            UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel(_:))),
+            UIKeyCommand(
+                input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel(_:))),
             UIKeyCommand(input: ".", modifierFlags: .command, action: #selector(cancel(_:))),
         ].map { command in
             command.discoverabilityTitle =
                 actionLayout == .yesNo
-                ? NSLocalizedString("common.no", value: "否", comment: "Android negative confirmation action") : L10n.Common.cancel
+                ? NSLocalizedString(
+                    "common.no", value: "否", comment: "Android negative confirmation action")
+                : L10n.Common.cancel
             command.wantsPriorityOverSystemBehavior = true
             return command
         }
@@ -200,7 +205,8 @@ final class ReaderRestoreProgressDialogViewController: UIViewController, UIAdapt
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         guard isViewLoaded,
-            previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory
+            previousTraitCollection?.preferredContentSizeCategory
+                != traitCollection.preferredContentSizeCategory
                 || previousTraitCollection?.displayScale != traitCollection.displayScale
         else { return }
         dialogView.applyFonts(traits: traitCollection)

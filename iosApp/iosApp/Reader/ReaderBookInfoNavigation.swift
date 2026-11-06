@@ -2,9 +2,9 @@ import UIKit
 import shared
 
 @MainActor
-final class MangaReaderBookInfoNavigation: NSObject {
+final class ReaderBookInfoNavigation: NSObject {
     private weak var owner: UIViewController?
-    private let bookURL: String
+    private let bookURL: @MainActor () -> String
     private let currentBook: @MainActor () -> Book?
     private let snapshot: @MainActor () async throws -> Book?
     private let canInteract: @MainActor () -> Bool
@@ -15,7 +15,7 @@ final class MangaReaderBookInfoNavigation: NSObject {
     var isPreparing: Bool { task != nil }
 
     init(
-        owner: UIViewController, bookURL: String,
+        owner: UIViewController, bookURL: @escaping @MainActor () -> String,
         currentBook: @escaping @MainActor () -> Book?,
         snapshot: @escaping @MainActor () async throws -> Book?,
         canInteract: @escaping @MainActor () -> Bool,
@@ -35,11 +35,13 @@ final class MangaReaderBookInfoNavigation: NSObject {
         NotificationCenter.default.removeObserver(self)
     }
 
-    func open(expectedOrigin: String) {
-        guard task == nil, !bookURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+    func open(expectedOrigin: String, isCurrent: @escaping @MainActor () -> Bool = { true }) {
+        guard task == nil else { return }
+        let bookURL = self.bookURL()
+        guard isCurrent(), !bookURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             !expectedOrigin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             let expected = currentBook(), expected.bookUrl == bookURL,
-            expected.origin == expectedOrigin, expected.isImage,
+            expected.origin == expectedOrigin,
             let owner, let navigation = owner.navigationController,
             let window = owner.viewIfLoaded?.window, let scene = window.windowScene,
             canNavigate(owner: owner, navigation: navigation, window: window, scene: scene)
@@ -51,32 +53,36 @@ final class MangaReaderBookInfoNavigation: NSObject {
         let snapshot = snapshot
         task = Task { @MainActor [weak self, weak owner, weak navigation, weak window, weak scene] in
             defer { self?.finishPreparation() }
-            guard
+            guard isCurrent(),
                 self?.accepts(
-                    token, expected: expected, owner: owner, navigation: navigation, window: window, scene: scene) == true
+                    token, expected: expected, owner: owner, navigation: navigation, window: window,
+                    scene: scene) == true
             else { return }
             do {
                 // The owner stages progress first; this closure flushes it and returns a fresh, identity-bound book.
                 let book = try await snapshot()
-                guard let self, let owner, let navigation,
+                guard isCurrent(), let self, let owner, let navigation,
                     self.accepts(
-                        token, expected: expected, owner: owner, navigation: navigation, window: window, scene: scene),
+                        token, expected: expected, owner: owner, navigation: navigation, window: window,
+                        scene: scene),
                     self.matches(book, expected: expected)
                 else { return }
 
-                let destination = AndroidReplicaBookDetailViewController(bookURL: self.bookURL)
+                let destination = AndroidReplicaBookDetailViewController(bookURL: expected.bookUrl)
                     .configuredForDrillDownPresentation()
                 self.onWillNavigate?()
-                guard
+                guard isCurrent(),
                     self.accepts(
-                        token, expected: expected, owner: owner, navigation: navigation, window: window, scene: scene),
+                        token, expected: expected, owner: owner, navigation: navigation, window: window,
+                        scene: scene),
                     self.matches(book, expected: expected)
                 else { return }
                 navigation.pushViewController(destination, animated: !UIAccessibility.isReduceMotionEnabled)
             } catch {
-                guard !(error is CancellationError), let self, let owner,
+                guard !(error is CancellationError), isCurrent(), let self, let owner,
                     self.accepts(
-                        token, expected: expected, owner: owner, navigation: navigation, window: window, scene: scene)
+                        token, expected: expected, owner: owner, navigation: navigation, window: window,
+                        scene: scene)
                 else { return }
                 owner.showTransientMessage(error.userFacingMessage)
             }
@@ -90,16 +96,29 @@ final class MangaReaderBookInfoNavigation: NSObject {
         task?.cancel()
     }
 
+    func currentBookDidChange(from previous: Book?) {
+        guard task != nil else { return }
+        guard let previous, matches(currentBook(), expected: previous) else {
+            cancel()
+            return
+        }
+    }
+
     private func observeEnvironment(window: UIWindow, scene: UIWindowScene) {
         let center = NotificationCenter.default
         center.addObserver(
-            self, selector: #selector(environmentInvalidated), name: UIApplication.willResignActiveNotification,
+            self, selector: #selector(environmentInvalidated),
+            name: UIApplication.willResignActiveNotification,
             object: nil)
         for name in [UIScene.willDeactivateNotification, UIScene.didDisconnectNotification] {
-            center.addObserver(self, selector: #selector(environmentInvalidated), name: name, object: scene)
+            center.addObserver(
+                self, selector: #selector(environmentInvalidated), name: name, object: scene)
         }
-        for name in [UIWindow.didBecomeHiddenNotification, .appLockWillCover] {
-            center.addObserver(self, selector: #selector(environmentInvalidated), name: name, object: window)
+        for name in [
+            UIWindow.didResignKeyNotification, UIWindow.didBecomeHiddenNotification, .appLockWillCover,
+        ] {
+            center.addObserver(
+                self, selector: #selector(environmentInvalidated), name: name, object: window)
         }
     }
 
@@ -124,14 +143,17 @@ final class MangaReaderBookInfoNavigation: NSObject {
     private func matches(_ book: Book?, expected: Book) -> Bool {
         guard let book else { return false }
         // Preview books may open their natural detail page without being added to the shelf.
-        return book.bookUrl == bookURL && book.isImage && ReaderSyncClient.sameIdentity(book, expected)
+        return book.bookUrl == bookURL() && book.type == expected.type
+            && ReaderSyncClient.sameIdentity(book, expected)
             && book.isNotShelf == expected.isNotShelf
     }
 
     private func canNavigate(
-        owner: UIViewController, navigation: UINavigationController, window: UIWindow, scene: UIWindowScene
+        owner: UIViewController, navigation: UINavigationController, window: UIWindow,
+        scene: UIWindowScene
     ) -> Bool {
-        canInteract() && owner.navigationController === navigation && navigation.topViewController === owner
+        canInteract() && owner.navigationController === navigation
+            && navigation.topViewController === owner
             && owner.viewIfLoaded?.window === window && navigation.viewIfLoaded?.window === window
             && window.windowScene === scene && scene.activationState == .foregroundActive
             && UIApplication.shared.applicationState == .active && window.isKeyWindow

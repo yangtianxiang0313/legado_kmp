@@ -6,6 +6,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     private(set) var bookURL: String {
         didSet {
             if oldValue != bookURL {
+                bookInfoNavigation.cancel()
                 exitCoordinator.readerContextDidChange(resetProgress: true)
                 chapterPrefetchCoordinator.contextDidChange()
                 txtTocSelectionCoordinator.cancel()
@@ -15,6 +16,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     var chapterIndex: Int {
         didSet {
             if oldValue != chapterIndex {
+                bookInfoNavigation.cancel()
                 exitCoordinator.readerContextDidChange()
                 chapterPrefetchCoordinator.contextDidChange()
             }
@@ -37,6 +39,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     lazy var chapterMessageCoordinator = ReaderChapterMessageCoordinator(reader: self)
     let jumpNavigationCoordinator = ReaderJumpNavigationCoordinator()
     lazy var exitCoordinator = ReaderExitCoordinator(reader: self)
+    lazy var bookInfoNavigation = makeBookInfoNavigation()
     lazy var progressSyncCoordinator = ReaderProgressSyncCoordinator(reader: self)
     lazy var chapterPrefetchCoordinator = ReaderChapterPrefetchCoordinator(reader: self)
     private let paginationCoordinator = ReaderPaginationCoordinator()
@@ -53,6 +56,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     var book: Book? {
         didSet {
             isInBookshelf = book.map { !$0.isNotShelf } ?? false
+            bookInfoNavigation.currentBookDidChange(from: oldValue)
             exitCoordinator.bookDidChange(from: oldValue)
             progressSyncCoordinator.contextDidChange()
             chapterPrefetchCoordinator.contextDidChange()
@@ -67,6 +71,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     var readAloudContent = ReaderReadAloudContent(pages: [])
     var pages: [ReaderPageLayout] = [] {
         didSet {
+            bookInfoNavigation.cancel()
             exitCoordinator.readerContextDidChange()
             cancelPageTurnForContentChange()
             // Selection may have reopened on the old pages while pagination was pending.
@@ -76,7 +81,12 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
         }
     }
     var currentPageIndex = 0 {
-        didSet { if oldValue != currentPageIndex { exitCoordinator.readerContextDidChange() } }
+        didSet {
+            if oldValue != currentPageIndex {
+                bookInfoNavigation.cancel()
+                exitCoordinator.readerContextDidChange()
+            }
+        }
     }
     var themeController = ReaderThemeController()
     var preferences: AppUiPreferences?
@@ -109,6 +119,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     var currentChapterURL: String? {
         didSet {
             if oldValue != currentChapterURL {
+                bookInfoNavigation.cancel()
                 exitCoordinator.readerContextDidChange()
                 chapterPrefetchCoordinator.contextDidChange()
             }
@@ -247,6 +258,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        bookInfoNavigation.cancel()
         chapterPrefetchCoordinator.suspend()
         progressSyncCoordinator.suspend()
         exitCoordinator.readerWillDisappear()
@@ -489,10 +501,12 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
     }
 
     func loadChapter(index: Int, restorePosition: Int?, forceRefresh: Bool = false) {
+        bookInfoNavigation.cancel()
         chapterLoadCoordinator.load(in: self, index: index, restorePosition: restorePosition, forceRefresh: forceRefresh)
     }
 
     func adoptSourceChangeResult(_ result: BookDetailRefreshResult) {
+        bookInfoNavigation.cancel()
         clearSearchSelection()
         searchMenu.resetResults(currentChapterIndex: Int(result.book.durChapterIndex))
         bookURL = result.book.bookUrl
@@ -689,6 +703,7 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
         guard result.book.bookUrl == bookURL,
             let chapter = result.chapters.first(where: { $0.index == result.book.durChapterIndex })
         else { return }
+        bookInfoNavigation.cancel()
         book = result.book
         chapters = result.chapters
         screen.rebindBookURL(bookURL, book: result.book, chapters: result.chapters)

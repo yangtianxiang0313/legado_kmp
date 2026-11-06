@@ -1069,6 +1069,16 @@ final class ReaderScreenAdapter: ReaderScreenAdapterSearchable, ReaderBookmarkLi
         await progressQueue.flushNow()
     }
 
+    @MainActor
+    func flushReadingProgressForNavigation() async throws {
+        try Task.checkCancellation()
+        let bindingID = bookBindingID
+        let url = bookURL
+        try await progressQueue.flushForExit()
+        try Task.checkCancellation()
+        guard bindingID == bookBindingID, url == bookURL else { throw CancellationError() }
+    }
+
     func unbind() {
         cachedContentSearchClient?.invalidate()
         bookBindingID = UUID()

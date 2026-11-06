@@ -44,7 +44,15 @@ final class ReaderChapterListPresentationCoordinator {
                     && reader.currentChapterURL == chapterURL && self.canPresent(in: reader)
             }
             guard isCurrent() else { return }
-            await reader.screen.flushReadingProgressNow()
+            reader.stageProgress(immediate: true)
+            guard isCurrent() else { return }
+            do {
+                try await reader.screen.flushReadingProgressForNavigation()
+            } catch {
+                guard !(error is CancellationError), isCurrent() else { return }
+                reader.showToast(error.userFacingMessage)
+                return
+            }
             guard isCurrent() else { return }
             let items: [ReaderChapterListItem]
             do {

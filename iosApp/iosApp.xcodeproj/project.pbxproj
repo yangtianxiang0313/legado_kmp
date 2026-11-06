@@ -70,7 +70,7 @@
 		F028F0010000000000000005 /* MangaReaderRecoveryActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028F0020000000000000005; };
 		F02B04010000000000000001 /* MangaReaderRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B04020000000000000001; };
 		F02B04010000000000000002 /* MangaReaderGestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B04020000000000000002; };
-		F02B04010000000000000003 /* MangaReaderBookInfoNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B04020000000000000003; };
+		F02B04010000000000000003 /* ReaderBookInfoNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B04020000000000000003; };
 		F02B04010000000000000004 /* MangaReaderMenuCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02B04020000000000000004; };
 		F028E0010000000000000001 /* LocalBookImportResultViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028E0020000000000000001; };
 		F028D0010000000000000001 /* MangaReadingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D0020000000000000001; };
@@ -852,7 +852,7 @@
 		F028F0020000000000000005 /* MangaReaderRecoveryActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReaderRecoveryActions.swift"; sourceTree = "<group>"; };
 		F02B04020000000000000001 /* MangaReaderRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReaderRootView.swift"; sourceTree = "<group>"; };
 		F02B04020000000000000002 /* MangaReaderGestures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReaderGestures.swift"; sourceTree = "<group>"; };
-		F02B04020000000000000003 /* MangaReaderBookInfoNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReaderBookInfoNavigation.swift"; sourceTree = "<group>"; };
+		F02B04020000000000000003 /* ReaderBookInfoNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Reader/ReaderBookInfoNavigation.swift"; sourceTree = "<group>"; };
 		F02B04020000000000000004 /* MangaReaderMenuCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReaderMenuCommands.swift"; sourceTree = "<group>"; };
 		F028E0020000000000000001 /* LocalBookImportResultViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bookshelf/LocalBookImportResultViewController.swift"; sourceTree = "<group>"; };
 		F028D0020000000000000001 /* MangaReadingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Manga/MangaReadingSettings.swift"; sourceTree = "<group>"; };
@@ -1650,7 +1650,7 @@
 				F028F0020000000000000005 /* MangaReaderRecoveryActions.swift */,
 				F02B04020000000000000001 /* MangaReaderRootView.swift */,
 				F02B04020000000000000002 /* MangaReaderGestures.swift */,
-				F02B04020000000000000003 /* MangaReaderBookInfoNavigation.swift */,
+				F02B04020000000000000003 /* ReaderBookInfoNavigation.swift */,
 				F02B04020000000000000004 /* MangaReaderMenuCommands.swift */,
 				F02900020000000000000001 /* PdfSearchCoordinator.swift */,
 				F02900020000000000000002 /* PdfSearchViewController.swift */,
@@ -2738,7 +2738,7 @@
 				F028F0010000000000000005 /* MangaReaderRecoveryActions.swift in Sources */,
 				F02B04010000000000000001 /* MangaReaderRootView.swift in Sources */,
 				F02B04010000000000000002 /* MangaReaderGestures.swift in Sources */,
-				F02B04010000000000000003 /* MangaReaderBookInfoNavigation.swift in Sources */,
+				F02B04010000000000000003 /* ReaderBookInfoNavigation.swift in Sources */,
 				F02B04010000000000000004 /* MangaReaderMenuCommands.swift in Sources */,
 				F02900010000000000000001 /* PdfSearchCoordinator.swift in Sources */,
 				F02900010000000000000002 /* PdfSearchViewController.swift in Sources */,

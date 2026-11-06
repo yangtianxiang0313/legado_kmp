@@ -2,7 +2,9 @@ import UIKit
 
 /// Reuses the AndroidAlertBuilder yes/no body; cancellation is not the destructive No action.
 @MainActor
-final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdaptivePresentationControllerDelegate {
+final class ReaderExitConfirmationDialogViewController: UIViewController,
+    UIAdaptivePresentationControllerDelegate
+{
     var canDecide: (() -> Bool)?
 
     private enum Phase {
@@ -27,8 +29,9 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
     private let accessibilityIdentifierPrefix: String
 
     init(
-        title: String, message: String, confirmTitle: String = "确定",
-        accessibilityIdentifierPrefix: String = "reader.exitPreview", onDecision: @escaping (Bool?) -> Void
+        title: String, message: String, confirmTitle: String = L10n.Common.ok,
+        accessibilityIdentifierPrefix: String = "reader.exitPreview",
+        onDecision: @escaping (Bool?) -> Void
     ) {
         body = ReaderRestoreProgressDialogBodyView(
             title: title, message: message, confirmTitle: confirmTitle,
@@ -52,10 +55,11 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
     override var keyCommands: [UIKeyCommand]? {
         guard canInteract else { return nil }
         return [
-            UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel(_:))),
+            UIKeyCommand(
+                input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel(_:))),
             UIKeyCommand(input: ".", modifierFlags: .command, action: #selector(cancel(_:))),
         ].map { command in
-            command.discoverabilityTitle = "取消"
+            command.discoverabilityTitle = L10n.Common.cancel
             command.wantsPriorityOverSystemBehavior = true
             return command
         }
@@ -87,7 +91,9 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
         super.viewWillAppear(animated)
         if !hasBegunPresentation {
             sourcePresenter = presentingViewController
-            sourceNavigation = (presentingViewController as? UINavigationController) ?? presentingViewController?.navigationController
+            sourceNavigation =
+                (presentingViewController as? UINavigationController)
+                ?? presentingViewController?.navigationController
         }
         hasBegunPresentation = true
         presentationController?.delegate = self
@@ -159,7 +165,8 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
         isVisible = false
         if isViewLoaded { updateInteraction() }
         resignFirstResponder()
-        guard let presenter = presentingViewController, presenter.presentedViewController === self else {
+        guard let presenter = presentingViewController, presenter.presentedViewController === self
+        else {
             scheduleDismissalCompletion()
             return
         }
@@ -190,7 +197,9 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
         scheduleDismissalCompletion()
     }
 
-    func presentationControllerDidAttemptToDismiss(_: UIPresentationController) { close(decision: nil) }
+    func presentationControllerDidAttemptToDismiss(_: UIPresentationController) {
+        close(decision: nil)
+    }
 
     override func accessibilityPerformEscape() -> Bool {
         guard canInteract else { return false }
@@ -199,14 +208,17 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
     }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        if action == #selector(cancel(_:)) || action == #selector(cancelOperation(_:)) { return canInteract }
+        if action == #selector(cancel(_:)) || action == #selector(cancelOperation(_:)) {
+            return canInteract
+        }
         return super.canPerformAction(action, withSender: sender)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         guard isViewLoaded,
-            previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory
+            previousTraitCollection?.preferredContentSizeCategory
+                != traitCollection.preferredContentSizeCategory
                 || previousTraitCollection?.displayScale != traitCollection.displayScale
         else { return }
         body.applyFonts(traits: traitCollection)
@@ -219,8 +231,10 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
         let safe = view.safeAreaLayoutGuide.layoutFrame
         guard safe.width > 0, safe.height > 0 else { return }
         let width = min(safe.width, view.bounds.width * dialogWidthFraction)
-        let height = min(safe.height, body.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
-        body.frame = CGRect(x: safe.midX - width / 2, y: safe.midY - height / 2, width: width, height: height)
+        let height = min(
+            safe.height, body.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+        body.frame = CGRect(
+            x: safe.midX - width / 2, y: safe.midY - height / 2, width: width, height: height)
     }
 
     private var dialogWidthFraction: CGFloat {
@@ -322,10 +336,16 @@ final class ReaderExitConfirmationDialogViewController: UIViewController, UIAdap
 
     private func waitForOwnedDismissalTransition() -> Bool {
         if waitsForDismissalTransition { return true }
-        guard let transition = sourceNavigation?.transitionCoordinator ?? sourcePresenter?.transitionCoordinator else {
+        guard
+            let transition = sourceNavigation?.transitionCoordinator
+                ?? sourcePresenter?.transitionCoordinator
+        else {
             return false
         }
-        guard transition.viewController(forKey: .from) === self || transition.viewController(forKey: .to) === self else {
+        guard
+            transition.viewController(forKey: .from) === self
+                || transition.viewController(forKey: .to) === self
+        else {
             pendingDecision = nil
             return false
         }

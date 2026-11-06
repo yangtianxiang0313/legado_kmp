@@ -1,6 +1,108 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "reader.exit.read_aloud_paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read aloud paused"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "朗读暂停"
+          }
+        }
+      }
+    },
+    "reader.exit.progress_save_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save reading progress. You are still in the reader. Go back again to retry."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读进度未能保存，已留在阅读页，请再次返回重试"
+          }
+        }
+      }
+    },
+    "reader.exit.book_source_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The book's source has changed. Go back and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍来源已变化，请返回后重试"
+          }
+        }
+      }
+    },
+    "reader.exit.book_state_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The book's status has changed. Go back again to retry."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍状态已变化，请再次返回重试"
+          }
+        }
+      }
+    },
+    "reader.navigation.restore_progress_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提醒"
+          }
+        }
+      }
+    },
+    "reader.navigation.restore_progress_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore the reading position from before the jump?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "是否恢复到跳转前的阅读进度？"
+          }
+        }
+      }
+    },
     "source.consumer.login.title_format": {
       "extractionState": "manual",
       "localizations": {

@@ -30,15 +30,15 @@ final class MangaReaderViewController: UIViewController {
         },
         onSuspendForLogin: { [weak self] in self?.suspendForLogin() })
     private lazy var sourceDestination = MangaReaderSourceChangeDestination(owner: self, adapter: adapter)
-    private lazy var bookInfo = MangaReaderBookInfoNavigation(
-        owner: self, bookURL: bookURL, currentBook: { [weak self] in self?.chapter?.book },
-        snapshot: { [weak self] in
+    private lazy var bookInfo = ReaderBookInfoNavigation(
+        owner: self, bookURL: { [weak self] in self?.bookURL ?? "" },
+        currentBook: { [weak self] in self?.chapter?.book }, snapshot: { [weak self] in
             guard let self else { throw CancellationError() }
             self.recordPosition(immediate: true)
             return try await self.adapter.snapshotForBookInfo()
         },
         canInteract: { [weak self] in
-            self?.canUseActions == true && self?.isReadingVisible == true && self?.presentedViewController == nil
+            self?.canUseActions == true && self?.isReadingVisible == true && self?.presentedViewController == nil && self?.chapter?.book.isImage == true
         },
         onWillNavigate: { [weak self] in
             guard let self else { return }
