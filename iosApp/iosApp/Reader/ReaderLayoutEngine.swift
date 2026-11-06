@@ -129,7 +129,7 @@ struct ReaderPageLayout {
     }
 
     func characterRangeForSelection(at point: CGPoint) -> NSRange? {
-        guard attachmentFragments.contains(where: { $0.frame.contains(point) }) == false else { return nil }
+        guard imageFragment(at: point) == nil else { return nil }
         for fragment in textFragments {
             if let range = ReaderTextSelectionGeometry(fragment: fragment).characterRange(at: point) {
                 return range
@@ -150,7 +150,7 @@ struct ReaderPageLayout {
 
     /// Returns a word in chapter UTF-16 coordinates only when a text character is hit.
     func wordRange(at point: CGPoint) -> (range: NSRange, word: String)? {
-        guard attachmentFragments.contains(where: { $0.frame.contains(point) }) == false else { return nil }
+        guard imageFragment(at: point) == nil else { return nil }
         let visibleBounds = CGRect(origin: .zero, size: contentSize)
         for (index, fragment) in textFragments.enumerated() where fragment.frame.contains(point) {
             // ReadView.onLongPress collects the touched paragraph's rows from its

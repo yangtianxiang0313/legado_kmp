@@ -401,7 +401,8 @@ final class ReaderTextSelectionCoordinator {
     private func selectionHit(at point: CGPoint) -> CharacterTarget? {
         guard let reader else { return nil }
         func geometryHit(in page: ReaderPageLayout, at point: CGPoint) -> ReaderTextSelectionGeometry.Hit? {
-            guard !page.attachmentFragments.contains(where: { $0.frame.contains(point) }) else { return nil }
+            // Paragraph spacers can overlap glyph descenders; only images obscure selectable text.
+            guard page.imageFragment(at: point) == nil else { return nil }
             for fragment in page.textFragments {
                 if let hit = ReaderTextSelectionGeometry(fragment: fragment).selectionHit(at: point) { return hit }
             }
