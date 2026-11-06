@@ -708,18 +708,14 @@ final class SettingsViewController: UIViewController, UITableViewDataSource, UIT
                 URLCache.shared.removeAllCachedResponses()
                 MediaAudioDiskCache.shared.removeAll()
                 DispatchQueue.main.async {
-                    let alert = UIAlertController(title: L10n.Settings.clearCacheSuccess, message: nil, preferredStyle: .alert)
-                    alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-                    self?.present(alert, animated: true)
+                    self?.showTransientMessage(L10n.Settings.clearCacheSuccess)
                 }
             }
         }
     }
 
     private func presentSimpleAlert(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
-        present(alert, animated: true)
+        showTransientMessage([title, message].filter { !$0.isEmpty }.joined(separator: "\n"))
     }
 
     private func themeModeText(_ mode: ThemeMode?) -> String {

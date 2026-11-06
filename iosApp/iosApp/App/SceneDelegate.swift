@@ -17,6 +17,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
 
+        AppLockManager.shared.refreshStatus()
         let window = UIWindow(windowScene: windowScene)
         let startupViewController = StartupViewController()
         startupViewController.onRetry = { [weak self] in

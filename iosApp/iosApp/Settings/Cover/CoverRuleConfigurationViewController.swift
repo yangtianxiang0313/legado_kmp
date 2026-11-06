@@ -188,8 +188,6 @@ final class CoverRuleConfigurationViewController: UITableViewController {
     }
 
     private func showError(_ message: String) {
-        let alert = UIAlertController(title: "无法保存封面规则", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "好", style: .default))
-        present(alert, animated: true)
+        showTransientMessage("无法保存封面规则：\(message)")
     }
 }

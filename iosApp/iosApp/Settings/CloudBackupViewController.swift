@@ -672,21 +672,8 @@ final class CloudBackupViewController: UITableViewController {
     private func showResult(_ message: String) {
         let id = requestID
         guard currentContext(id), canUseCloudScreen else { return }
-        let alert = UIAlertController(title: CloudBackupCopy.title, message: message, preferredStyle: .alert)
-        alert.view.accessibilityIdentifier = "backup.cloud.result"
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.ok, style: .default) { [weak self, weak alert] _ in
-                guard let self, let alert, self.task == nil, self.restorePresentation === alert, self.currentContext(id) else { return }
-                self.task = Task { [weak self] in
-                    guard let self else { return }
-                    await dismissRestorePresentation(alert)
-                    guard currentContext(id) else { return }
-                    task = nil
-                    reloadBackups()
-                }
-            })
-        restorePresentation = alert
-        present(alert, animated: true)
+        showTransientMessage(message, duration: 6)
+        if task == nil { reloadBackups() }
     }
 }
 

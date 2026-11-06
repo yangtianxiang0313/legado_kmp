@@ -27,7 +27,6 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
     private var isSceneActive = false
     private var interactionGeneration = 0
     private var directorySessionID: UUID?
-    private var chapterFailureID: UUID?
     private var needsAppearanceLoad = true
     private var isOpeningReader = false
     private var isChangingSource = false
@@ -162,7 +161,6 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         onRelinkCommitted: { [weak self] updated in
             guard let self, self.bookURL == updated.bookUrl else { return }
             self.directorySessionID = nil
-            self.chapterFailureID = nil
             self.book = updated
             self.chapters = []
             self.needsInfo = false
@@ -275,7 +273,6 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         overflowActions.cancelRelink()
         interactionGeneration &+= 1
         directorySessionID = nil
-        chapterFailureID = nil
         needsAppearanceLoad = true
         sourceChangeActions.cancelPreparation()
         groupActions.cancelPreparation()
@@ -451,7 +448,6 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         }
         cancelLoading()
         directorySessionID = nil
-        chapterFailureID = nil
         bookURL = result.book.bookUrl
         seed = nil
         book = result.book
@@ -755,27 +751,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
 
     private func showChapterListFailure(_ message: String) {
         guard canInteract(allowing: .navigation) else { return }
-        let presentationID = UUID()
-        chapterFailureID = presentationID
-        let expectedBookURL = bookURL
-        let alert = UIAlertController(
-            title: L10n.BookDetail.refreshChaptersFailed, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak alert] _ in
-                guard let self, let alert, self.chapterFailureID == presentationID,
-                    self.bookURL == expectedBookURL, self.isDetailActive, self.isSceneActive, !self.isBusy()
-                else { return }
-                BookDetailInteractionOwner.dismissOwnedForAction(alert, owner: self, scene: self.detailScene) {
-                    [weak self] in
-                    guard let self, self.chapterFailureID == presentationID, self.bookURL == expectedBookURL,
-                        self.canInteract()
-                    else { return }
-                    self.chapterFailureID = nil
-                    self.openChapterList()
-                }
-            })
-        present(alert, animated: true)
+        showTransientMessage(message, duration: 3.5)
     }
 
     private func showMessage(_ message: String) {

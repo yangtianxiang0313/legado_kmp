@@ -299,9 +299,7 @@ final class ReaderReadAloudSettingsViewController: ReaderSettingsBoundViewContro
                 )
                 present(controller.wrappedInReaderBottomSheet(fixedHeight: min(CGFloat(100 + options.count * 64), 560)), animated: true)
             } catch {
-                let alert = UIAlertController(title: "加载朗读引擎失败", message: error.userFacingMessage, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-                present(alert, animated: true)
+                showTransientMessage("加载朗读引擎失败：\(error.userFacingMessage)")
             }
         }
     }

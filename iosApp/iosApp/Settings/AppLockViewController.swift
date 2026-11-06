@@ -16,7 +16,10 @@ final class AppLockViewController: UIViewController, UITextFieldDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.accessibilityIdentifier = "app-lock.authentication"
-        form.heading.text = "应用已锁定"
+        view.backgroundColor = AndroidReplicaTheme.background
+        view.isOpaque = true
+        form.heading.textColor = AndroidReplicaTheme.primaryText
+        form.message.textColor = AndroidReplicaTheme.secondaryText
         field = form.addPasswordField(title: "应用密码", identifier: "app-lock.password")
         field.delegate = self
         form.submit.addTarget(self, action: #selector(submit), for: .touchUpInside)
@@ -52,15 +55,18 @@ final class AppLockViewController: UIViewController, UITextFieldDelegate {
     private func updateMode() {
         switch mode {
         case .loading:
-            form.message.text = "正在读取安全凭据"
-            form.submit.configuration?.title = "请稍候"
+            form.heading.text = "正在准备"
+            form.message.text = "请稍候"
         case .password:
+            form.heading.text = "应用已锁定"
             form.message.text = "请输入应用密码以继续"
             form.submit.configuration?.title = "解锁"
         case .unavailable:
+            form.heading.text = "无法验证应用锁"
             form.message.text = "暂时无法读取应用锁凭据。请确认设备已解锁后重试；不会自动关闭应用锁。"
             form.submit.configuration?.title = "重试"
         }
+        form.submit.isHidden = mode == .loading
         form.showFields(mode == .password)
         form.setProcessing(processing || mode == .loading)
     }

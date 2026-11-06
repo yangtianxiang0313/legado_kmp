@@ -520,7 +520,7 @@ final class AndroidReplicaExploreViewController: UIViewController, UITableViewDe
             let url = kind.url, !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return }
         if kind.title.hasPrefix("ERROR:") {
-            present(ExploreErrorTextDialogViewController(text: url, owner: self), animated: true)
+            showTransientMessage(url, duration: 3.5)
         } else {
             navigationController?.pushViewController(
                 AndroidReplicaExploreDetailViewController(source: source, initialKind: kind), animated: true)

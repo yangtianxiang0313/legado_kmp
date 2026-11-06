@@ -48,7 +48,6 @@ final class RssArticleFavoriteEditorViewController: UITableViewController, UITex
     private var originalPopGestureEnabled: Bool?
     private var originalNavigationModalInPresentation: Bool?
     private var pendingFailure: (context: PresentationContext, title: String, message: String)?
-    private var failureAlert: UIAlertController?
 
     init(star: RssStar, groups: [String] = []) {
         self.groups = groups
@@ -438,46 +437,13 @@ final class RssArticleFavoriteEditorViewController: UITableViewController, UITex
         guard let failure = pendingFailure else { return }
         guard matches(failure.context) else {
             pendingFailure = nil
-            dismissFailureAlert()
             return
         }
-        guard canUsePresentationUI, !isClosing, presentedViewController == nil, failureAlert == nil
+        guard canUsePresentationUI, !isClosing, presentedViewController == nil
         else { return }
         invalidateGroupMenu()
-        let alert = UIAlertController(title: failure.title, message: failure.message, preferredStyle: .alert)
-        alert.view.accessibilityIdentifier = "rss.favorite.error"
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.ok, style: .default) { [weak self, weak alert] _ in
-                guard let self, let alert, self.failureAlert === alert else { return }
-                if self.pendingFailure?.context === failure.context { self.pendingFailure = nil }
-                self.dismissFailureAlert(animated: true)
-            })
-        failureAlert = alert
-        present(alert, animated: true) { [weak self, weak alert] in
-            guard let self, let alert, self.failureAlert === alert else { return }
-            if !self.matches(failure.context) || !self.canUsePresentationUI
-                || self.pendingFailure?.context !== failure.context
-            {
-                self.dismissFailureAlert()
-            }
-        }
-    }
-
-    private func dismissFailureAlert(animated: Bool = false) {
-        guard let alert = failureAlert else { return }
-        // The present completion will retry if suspension happened during presentation.
-        guard !alert.isBeingPresented, !alert.isBeingDismissed else { return }
-        guard alert.presentingViewController?.presentedViewController === alert else {
-            if alert.viewIfLoaded?.window == nil { failureAlert = nil }
-            return
-        }
-        let context = presentationContext
-        alert.dismiss(animated: animated) { [weak self, weak alert] in
-            guard let self, let alert, self.failureAlert === alert else { return }
-            self.failureAlert = nil
-            guard let context, self.matches(context) else { return }
-            self.resumePresentationFeedback()
-        }
+        pendingFailure = nil
+        showTransientMessage("\(failure.title)\n\(failure.message)")
     }
 
     private var isForegroundAndUnlocked: Bool {
@@ -509,7 +475,7 @@ final class RssArticleFavoriteEditorViewController: UITableViewController, UITex
             if let tab = current as? UITabBarController, child?.parent === tab, tab.selectedViewController !== child {
                 return nil
             }
-            if current !== self, let presented = current.presentedViewController, presented !== failureAlert,
+            if current !== self, let presented = current.presentedViewController,
                 !hierarchy.contains(where: { $0 === presented })
             {
                 return nil
@@ -549,7 +515,6 @@ final class RssArticleFavoriteEditorViewController: UITableViewController, UITex
         presentationContext = nil
         pendingFailure = nil
         invalidateGroupMenu()
-        dismissFailureAlert()
         restoreSubmissionNavigation()
     }
 
@@ -594,7 +559,6 @@ final class RssArticleFavoriteEditorViewController: UITableViewController, UITex
     @objc private func suspendPresentationUI() {
         isPresentationSuspended = true
         invalidateGroupMenu()
-        dismissFailureAlert()
     }
 
     @objc private func presentationMayResume(_ notification: Notification) {

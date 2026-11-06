@@ -211,8 +211,9 @@ final class ReaderLoadFailureView: UIView, UIGestureRecognizerDelegate {
     private func show(message: String, theme: ReaderThemeController, presentation: Presentation) {
         invalidateInteraction()
         self.presentation = presentation
-        needsAccessibilityAnnouncement = true
-        accessibilityViewIsModal = true
+        needsAccessibilityAnnouncement = !message.isEmpty
+        accessibilityViewIsModal = presentation.kind == .failure
+        messageView.isHidden = message.isEmpty
         messageView.setMessage(message, theme: theme)
         setNeedsLayout()
         if isHidden {

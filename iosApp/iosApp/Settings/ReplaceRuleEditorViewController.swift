@@ -227,7 +227,7 @@ final class ReplaceRuleEditorViewController: UIViewController,
             } catch {
                 self.state = .editing
                 self.setBusy(false)
-                self.showError(error.userFacingMessage, allowsRetry: true)
+                self.showError(error.userFacingMessage)
             }
         }
     }
@@ -316,20 +316,10 @@ final class ReplaceRuleEditorViewController: UIViewController,
         present(ReplaceRuleEditorHelpViewController(), animated: true)
     }
 
-    private func showError(_ message: String, allowsRetry: Bool = false, title: String? = nil) {
+    private func showError(_ message: String, title: String? = nil) {
         guard presentedViewController == nil else { return }
-        let alert = UIAlertController(
-            title: title ?? NSLocalizedString("replace_rule.editor.not_saved", value: "未保存", comment: "Rule not saved error title"),
-            message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .cancel))
-        if allowsRetry {
-            alert.addAction(
-                UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak alert] _ in
-                    guard let self, let alert else { return }
-                    self.afterDismissing(alert) { [weak self] in self?.handleSave() }
-                })
-        }
-        present(alert, animated: true)
+        let title = title ?? NSLocalizedString("replace_rule.editor.not_saved", value: "未保存", comment: "Rule not saved error title")
+        showTransientMessage("\(title)\n\(message)")
     }
 
     private func afterDismissing(_ alert: UIAlertController, action: @escaping () -> Void) {

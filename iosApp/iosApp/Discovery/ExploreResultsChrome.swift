@@ -173,9 +173,7 @@ final class ExploreResultsFooterCell: UITableViewCell {
             "discovery.results.footer.empty", value: "空", comment: "Legado string empty")
         static let end = NSLocalizedString(
             "discovery.results.footer.end", value: "我是有底线的", comment: "Legado string bottom_line")
-        static let error = NSLocalizedString(
-            "discovery.results.footer.error", value: "加载失败\n点击查看详情",
-            comment: "Legado error_load_msg with LoadMoreView's detail action")
+        static let error = "\(L10n.Common.loadFailedTitle)\n\(L10n.Common.retry)"
         static let loading = NSLocalizedString(
             "discovery.results.footer.loading", value: "加载中…", comment: "Legado string loading; accessibility only")
     }
@@ -350,6 +348,7 @@ final class ExploreResultsFooterCell: UITableViewCell {
             accessibilityHint = canActivate ? L10n.Common.retry : nil
         case .error:
             accessibilityLabel = Text.error
+            accessibilityHint = canActivate ? L10n.Common.retry : nil
         }
     }
 

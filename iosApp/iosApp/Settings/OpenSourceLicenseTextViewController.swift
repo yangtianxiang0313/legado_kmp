@@ -206,9 +206,7 @@ final class OpenSourceLicenseTextViewController: UIViewController, NavigationCus
             guard !opened else { return }
             Task { @MainActor [weak self] in
                 guard let self, self.canPerformNavigationAction else { return }
-                let alert = UIAlertController(title: OpenSourceLicensesText.linkFailure, message: nil, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: OpenSourceLicensesText.close, style: .cancel))
-                self.present(alert, animated: true)
+                self.showTransientMessage(OpenSourceLicensesText.linkFailure)
             }
         }
     }

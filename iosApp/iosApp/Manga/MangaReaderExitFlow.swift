@@ -96,10 +96,8 @@ final class MangaReaderExitFlow {
     private func failed(_ error: Error) {
         isExiting = false
         stateDidChange(false)
-        guard !(error is CancellationError), canNavigate(), let owner, owner.presentedViewController == nil else { return }
-        let alert = UIAlertController(
-            title: L10n.text("manga.flow.exit.progress_unsaved", "进度尚未保存"), message: error.localizedDescription, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-        owner.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
+        guard !(error is CancellationError), canNavigate(), let owner else { return }
+        owner.showTransientMessage(
+            "\(L10n.text("manga.flow.exit.progress_unsaved", "进度尚未保存"))\n\(error.localizedDescription)")
     }
 }

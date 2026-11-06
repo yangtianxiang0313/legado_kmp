@@ -273,10 +273,7 @@ final class RssSourceManagementActions {
                 clearExport()
                 isBusy = false
                 onChange?()
-                showFailure(error) { [weak self, weak anchor] in
-                    guard let self, let anchor = anchor ?? self.presenter?.view else { return }
-                    self.export(sourceURLs: targets, anchor: anchor)
-                }
+                showFailure(error)
             }
         }
     }
@@ -306,7 +303,7 @@ final class RssSourceManagementActions {
             } catch {
                 isBusy = false
                 onChange?()
-                showFailure(error) { [weak self] in self?.perform(onSuccess: onSuccess, operation: operation) }
+                showFailure(error)
             }
         }
     }
@@ -386,13 +383,9 @@ final class RssSourceManagementActions {
         }
     }
 
-    private func showFailure(_ error: Error, retry: @escaping () -> Void) {
+    private func showFailure(_ error: Error) {
         guard canStartAction else { return }
-        let alert = UIAlertController(
-            title: "操作失败", message: "\(error.userFacingMessage)\n操作可能已部分生效，可重试。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
-        alert.addAction(UIAlertAction(title: L10n.Common.retry, style: .default) { _ in retry() })
-        presentAlert(alert)
+        presenter?.showTransientMessage("\(error.userFacingMessage)\n操作可能已部分生效，可重试。", duration: 3.5)
     }
 
     private func clearExport() {

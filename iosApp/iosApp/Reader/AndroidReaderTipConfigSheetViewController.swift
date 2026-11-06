@@ -402,24 +402,7 @@ final class AndroidReaderTipConfigSheetViewController: UIViewController {
     private func showSaveErrorIfNeeded() {
         guard canInteract, selectionSession == nil, let error = pendingSaveError else { return }
         pendingSaveError = nil
-        let epoch = interactionEpoch
-        let alert = UIAlertController(
-            title: L10n.Common.loadFailedTitle, message: error.userFacingMessage, preferredStyle: .alert)
-        alert.overrideUserInterfaceStyle = .unspecified
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak alert] _ in
-                guard let self, let alert, self.interactionEpoch == epoch,
-                    self.isSourceCurrent(allowing: alert), self.presentedViewController === alert,
-                    alert.presentingViewController === self
-                else { return }
-                // Wait for this alert, never an untracked presentation, before retrying the write barrier.
-                alert.dismiss(animated: true) { [weak self] in
-                    guard let self, self.interactionEpoch == epoch else { return }
-                    self.close()
-                }
-            })
-        alert.addAction(UIAlertAction(title: L10n.Common.close, style: .cancel))
-        present(alert, animated: true)
+        showTransientMessage(error.userFacingMessage)
     }
 
     private var canInteract: Bool { !isClosing && isSourceCurrent() }

@@ -155,23 +155,12 @@ extension UIViewController {
     private static let transientMessageBottomConstraintIdentifier = "legado.transient.message.bottom"
 
     func presentError(_ error: Error) {
-        let alert = UIAlertController(
-            title: L10n.Common.loadFailedTitle,
-            message: error.userFacingMessage,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
-        topmostPresentedViewController.present(alert, animated: true)
+        topmostPresentedViewController.showTransientMessage(error.userFacingMessage, duration: 3.5)
     }
 
     func presentNotImplemented(feature: String, message: String? = nil) {
-        let alert = UIAlertController(
-            title: L10n.Common.unavailableTitle,
-            message: message ?? String(format: L10n.Common.notImplementedMessage, feature),
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
-        topmostPresentedViewController.present(alert, animated: true)
+        topmostPresentedViewController.showTransientMessage(
+            message ?? String(format: L10n.Common.notImplementedMessage, feature), duration: 3.5)
     }
 
     var topmostPresentedViewController: UIViewController {
@@ -204,6 +193,7 @@ extension UIViewController {
             banner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             banner.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 20),
             banner.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -20),
+            banner.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
             bottomConstraint,
         ])
 
@@ -248,6 +238,9 @@ private final class TransientMessageView: UIVisualEffectView {
 
     init(message: String) {
         super.init(effect: UIBlurEffect(style: .systemChromeMaterialDark))
+        isUserInteractionEnabled = false
+        accessibilityViewIsModal = false
+        accessibilityIdentifier = "legado.toast"
         translatesAutoresizingMaskIntoConstraints = false
         layer.cornerRadius = 18
         layer.cornerCurve = .continuous
@@ -258,7 +251,8 @@ private final class TransientMessageView: UIVisualEffectView {
         label.text = message
         label.textColor = .white
         label.font = .preferredFont(forTextStyle: .subheadline)
-        label.numberOfLines = 0
+        label.numberOfLines = 4
+        label.lineBreakMode = .byTruncatingTail
         label.textAlignment = .center
 
         contentView.addSubview(label)

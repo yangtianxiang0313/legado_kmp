@@ -195,21 +195,16 @@ final class ConfigurationEditorViewController: UITableViewController {
 
     private func showError(_ message: String, field: String? = nil) {
         guard isVisible, presentedViewController == nil else { return }
-        let alert = UIAlertController(title: "未保存", message: message, preferredStyle: .alert)
-        alert.view.accessibilityIdentifier = "configuration.editor.error"
-        alert.addAction(
-            UIAlertAction(title: "确定", style: .default) { [weak self] _ in
-                guard let self, let field, self.isVisible else { return }
-                for (section, group) in self.draft.sections.enumerated() {
-                    if let row = group.fields.firstIndex(where: { $0.key == field }) {
-                        let path = IndexPath(row: row, section: section)
-                        self.tableView.scrollToRow(at: path, at: .middle, animated: false)
-                        self.tableView.layoutIfNeeded()
-                        (self.tableView.cellForRow(at: path) as? ConfigurationEditorFieldCell)?.focus()
-                        break
-                    }
-                }
-            })
-        present(alert, animated: true)
+        showTransientMessage("未保存：\(message)")
+        guard let field else { return }
+        for (section, group) in draft.sections.enumerated() {
+            if let row = group.fields.firstIndex(where: { $0.key == field }) {
+                let path = IndexPath(row: row, section: section)
+                tableView.scrollToRow(at: path, at: .middle, animated: false)
+                tableView.layoutIfNeeded()
+                (tableView.cellForRow(at: path) as? ConfigurationEditorFieldCell)?.focus()
+                break
+            }
+        }
     }
 }

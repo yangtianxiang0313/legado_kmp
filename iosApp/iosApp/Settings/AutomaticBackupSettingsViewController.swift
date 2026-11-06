@@ -457,11 +457,7 @@ final class AutomaticBackupSettingsViewController: UITableViewController, UIText
     private func showError(_ message: String) {
         guard readyForAction() else { return }
         invalidatePage()
-        let prompt = UIAlertController(
-            title: NSLocalizedString("backup.automatic.title", value: "自动备份", comment: "Automatic backup settings title"),
-            message: message, preferredStyle: .alert)
-        prompt.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-        present(prompt, animated: true)
+        showTransientMessage(message)
     }
 
     private func beginOwnership() {

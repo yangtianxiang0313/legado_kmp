@@ -640,10 +640,7 @@ final class AndroidReplicaSourceManagementViewController: UIViewController, UITe
                 let message =
                     L10n.SourceConsumer.partialFlagFailure(completed: completed, total: targetURLs.count, failed: failures.count)
                     + failures.joined(separator: "\n\n")
-                let alert = UIAlertController(
-                    title: L10n.Common.unavailableTitle, message: message, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
-                self.topmostPresentedViewController.present(alert, animated: true)
+                self.showTransientMessage(message)
             }
         }
     }

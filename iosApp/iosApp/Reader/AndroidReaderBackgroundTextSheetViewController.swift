@@ -18,6 +18,15 @@ final class AndroidReaderBackgroundTextSheetViewController: UIViewController, UI
     private weak var imagePicker: UIDocumentPickerViewController?
     private var isVisible = false
     private var isSceneActive = false
+    private let recoveryBar = UIView()
+    private let retryWritesButton = UIButton(type: .system)
+    private let discardWritesButton = UIButton(type: .system)
+    private var recoveryBarHeight: NSLayoutConstraint?
+    private var bodyContentHeight: CGFloat = 380
+    private weak var failedWriteQueue: ReaderBackgroundTextWriteQueue?
+    private var writeFailureID: UUID?
+    private var failedDuringRebinding = false
+    private var recoveryTask: Task<Void, Never>?
     var isBookCurrent: (() -> Bool)?
     var isUnderlineAvailable = true
     lazy var configTransfer = ReaderPresetTransferCoordinator(owner: self)
@@ -52,12 +61,58 @@ final class AndroidReaderBackgroundTextSheetViewController: UIViewController, UI
         NotificationCenter.default.removeObserver(self)
     }
 
-    override func loadView() { view = body }
+    override func loadView() {
+        view = UIView()
+        for child in [body, recoveryBar] {
+            child.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(child)
+        }
+        recoveryBar.isHidden = true
+        recoveryBar.accessibilityIdentifier = "readerAppearance.backgroundText.recovery"
+        let height = recoveryBar.heightAnchor.constraint(equalToConstant: 0)
+        recoveryBarHeight = height
+        NSLayoutConstraint.activate([
+            body.topAnchor.constraint(equalTo: view.topAnchor),
+            body.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            body.bottomAnchor.constraint(equalTo: recoveryBar.topAnchor),
+            recoveryBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            recoveryBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            recoveryBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            height,
+        ])
+        for (button, symbol, title, identifier, discard) in [
+            (retryWritesButton, "arrow.clockwise", "重试背景配置", "retry", false),
+            (discardWritesButton, "xmark", "放弃未保存的背景改动", "discard", true),
+        ] {
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.setImage(UIImage(systemName: symbol), for: .normal)
+            button.accessibilityLabel = title
+            button.accessibilityIdentifier = "readerAppearance.backgroundText.recovery.\(identifier)"
+            button.addInteraction(UIToolTipInteraction(defaultToolTip: title))
+            button.addAction(UIAction { [weak self] _ in self?.recoverFailedWrites(discard: discard) }, for: .touchUpInside)
+            recoveryBar.addSubview(button)
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 44),
+                button.heightAnchor.constraint(equalToConstant: 44),
+                button.topAnchor.constraint(equalTo: recoveryBar.topAnchor, constant: 4),
+            ])
+        }
+        NSLayoutConstraint.activate([
+            discardWritesButton.trailingAnchor.constraint(equalTo: recoveryBar.safeAreaLayoutGuide.trailingAnchor, constant: -10),
+            retryWritesButton.trailingAnchor.constraint(equalTo: discardWritesButton.leadingAnchor, constant: -4),
+            retryWritesButton.leadingAnchor.constraint(greaterThanOrEqualTo: recoveryBar.safeAreaLayoutGuide.leadingAnchor, constant: 10),
+        ])
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.accessibilityIdentifier = "readerAppearance.backgroundText"
-        body.onContentHeightChange = { [weak self] height in self?.preferredContentSize.height = height }
+        body.onContentHeightChange = { [weak self] height in
+            guard let self else { return }
+            self.bodyContentHeight = height
+            self.preferredContentSize.height = height + (self.recoveryBarHeight?.constant ?? 0)
+        }
         visualBinding.onChange = { [weak self] in self?.refresh() }
         visualBinding.onFailure = { [weak self] in self?.showWriteFailure($0) }
         configureActions()
@@ -83,6 +138,12 @@ final class AndroidReaderBackgroundTextSheetViewController: UIViewController, UI
         super.viewDidAppear(animated)
         isVisible = true
         isSceneActive = view.window?.windowScene?.activationState == .foregroundActive
+        refresh()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        refresh()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -109,6 +170,7 @@ final class AndroidReaderBackgroundTextSheetViewController: UIViewController, UI
             body.cancelPendingTracking()
             imageQueue = nil
         }
+        refresh()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -139,8 +201,25 @@ final class AndroidReaderBackgroundTextSheetViewController: UIViewController, UI
 
     func refresh() {
         guard isViewLoaded else { return }
+        if let failedWriteQueue, !visualBinding.isSwitching,
+            writes !== failedWriteQueue || (!failedDuringRebinding && !writes.isPending)
+        {
+            writeFailureID = nil
+            self.failedWriteQueue = nil
+            failedDuringRebinding = false
+        }
         body.apply(name: presetName, style: writes.style, isBusy: isPerformingCommand || visualBinding.isSwitching)
         body.apply(palette: ReaderMenuPalette(readerTheme: ReaderThemeController(), traits: traitCollection))
+        view.backgroundColor = AndroidReplicaTheme.bottomBackground
+        recoveryBar.isHidden = writeFailureID == nil
+        recoveryBar.accessibilityElementsHidden = recoveryBar.isHidden
+        recoveryBarHeight?.constant = recoveryBar.isHidden ? 0 : 52 + view.safeAreaInsets.bottom
+        preferredContentSize.height = bodyContentHeight + (recoveryBarHeight?.constant ?? 0)
+        let canRecover = writeFailureID != nil && recoveryTask == nil && canUseControls && failedWriteQueue === writes
+        retryWritesButton.isEnabled = canRecover
+        discardWritesButton.isEnabled = canRecover
+        retryWritesButton.tintColor = AndroidReplicaTheme.accent
+        discardWritesButton.tintColor = ReaderSearchChromePalette.foreground
     }
 
     @objc private func changeDarkStatus() {
@@ -195,17 +274,46 @@ final class AndroidReaderBackgroundTextSheetViewController: UIViewController, UI
 
     func showActionError(_ error: Error) {
         guard canPresentBackgroundAction, presentedViewController == nil else { return }
-        let alert = UIAlertController(title: nil, message: error.userFacingMessage, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .cancel))
-        present(alert, animated: true)
+        presentError(error)
     }
 
     private func showWriteFailure(_ error: Error) {
+        failedDuringRebinding = visualBinding.isSwitching || (failedWriteQueue === writes && failedDuringRebinding)
+        failedWriteQueue = writes
+        writeFailureID = UUID()
+        refresh()
         guard canPresentBackgroundAction, presentedViewController == nil else { return }
-        let alert = UIAlertController(title: nil, message: error.userFacingMessage, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self] _ in self?.visualBinding.retry() })
-        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.visualBinding.discardFailedChanges() })
-        present(alert, animated: true)
+        showTransientMessage(error.userFacingMessage)
+    }
+
+    private func recoverFailedWrites(discard: Bool) {
+        guard let failureID = writeFailureID, let failedWriteQueue,
+            failedWriteQueue === writes, recoveryTask == nil, canUseControls
+        else { return }
+        body.cancelPendingTracking()
+        recoveryTask = Task { @MainActor [self] in
+            defer {
+                recoveryTask = nil
+                refresh()
+            }
+            guard writeFailureID == failureID, failedWriteQueue === writes, canUseControls else { return }
+            if discard {
+                visualBinding.discardFailedChanges()
+            } else {
+                visualBinding.retry()
+            }
+            do {
+                try await visualBinding.flush()
+                // A rebind reports through onFailure before flush returns; never clear that newer failure.
+                guard writeFailureID == failureID, !visualBinding.isSwitching, !writes.isPending else { return }
+                writeFailureID = nil
+                self.failedWriteQueue = nil
+                failedDuringRebinding = false
+            } catch {
+                if writeFailureID == failureID { showWriteFailure(error) }
+            }
+        }
+        refresh()
     }
 
     func showColor(_ target: AndroidReaderStyleColorTarget) {

@@ -620,37 +620,10 @@ final class ReaderContentEditViewController: UIViewController, UITextViewDelegat
 
     private func presentError(_ error: Error, operation: Operation) {
         guard canPerformCommand else { return }
-        let alert = UIAlertController(
-            title: operation == .save
-                ? NSLocalizedString("reader.content_edit.save_failed", value: "保存失败", comment: "")
-                : NSLocalizedString("reader.content_edit.reset_failed", value: "重置失败", comment: ""),
-            message: error.userFacingMessage, preferredStyle: .alert)
-        alert.view.accessibilityIdentifier = "reader.contentEdit.error"
-        alert.addAction(
-            dialogAction(in: alert, title: L10n.Common.retry, identifier: "retry") {
-                switch operation {
-                case .save: $0.handleSave()
-                case .reset: $0.resetContent()
-                }
-            })
-        let cancel = UIAlertAction(title: L10n.Common.cancel, style: .cancel)
-        cancel.accessibilityIdentifier = "reader.contentEdit.error.cancel"
-        alert.addAction(cancel)
-        present(alert, animated: true)
-    }
-
-    private func dialogAction(
-        in alert: UIAlertController, title: String, identifier: String,
-        action: @escaping (ReaderContentEditViewController) -> Void
-    ) -> UIAlertAction {
-        let result = UIAlertAction(title: title, style: .default) { [weak self, weak alert] _ in
-            alert?.dismiss(animated: true) { [weak self] in
-                guard let self, self.canPerformCommand else { return }
-                action(self)
-            }
-        }
-        result.accessibilityIdentifier = "reader.contentEdit.\(identifier)"
-        return result
+        let title = operation == .save
+            ? NSLocalizedString("reader.content_edit.save_failed", value: "保存失败", comment: "")
+            : NSLocalizedString("reader.content_edit.reset_failed", value: "重置失败", comment: "")
+        showTransientMessage("\(title)\n\(error.userFacingMessage)")
     }
 
     func textView(_: UITextView, shouldChangeTextIn _: NSRange, replacementText _: String) -> Bool {

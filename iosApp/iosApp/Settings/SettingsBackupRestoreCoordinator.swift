@@ -207,12 +207,9 @@ final class SettingsBackupRestoreCoordinator: NSObject, UIDocumentPickerDelegate
                     return
                 }
                 reset(id)
-                let done = UIAlertController(
-                    title: warnings.isEmpty ? L10n.Settings.restoreSuccess : Self.text("backup.restore.completed_with_notes", "恢复完成，请查看说明"),
-                    message: Self.summary(result, warnings: warnings), preferredStyle: .alert)
-                done.view.accessibilityIdentifier = "settings.backup.restore.completed"
-                done.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-                owner?.present(done, animated: true)
+                let title = warnings.isEmpty
+                    ? L10n.Settings.restoreSuccess : Self.text("backup.restore.completed_with_notes", "恢复完成，请查看说明")
+                owner?.showTransientMessage("\(title)\n\(Self.summary(result, warnings: warnings))", duration: 8)
             } catch {
                 await finish(error: error, id: id, hud: hud, mayHaveCommitted: mayHaveCommitted)
             }
@@ -241,16 +238,13 @@ final class SettingsBackupRestoreCoordinator: NSObject, UIDocumentPickerDelegate
         reset(id)
         guard canPresent else { return }
         if error is CancellationError {
-            let alert = UIAlertController(
-                title: mayHaveCommitted
-                    ? Self.text("backup.restore.request_stopped", "恢复请求已停止")
-                    : Self.text("backup.restore.preparation_stopped", "备份准备已停止"),
-                message: mayHaveCommitted
-                    ? Self.text("backup.restore.commit_uncertain", "提交阶段可能已经完成，请核对当前书架和设置。")
-                    : Self.text("backup.restore.nothing_restored", "未恢复任何数据。"),
-                preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-            owner?.present(alert, animated: true)
+            let title = mayHaveCommitted
+                ? Self.text("backup.restore.request_stopped", "恢复请求已停止")
+                : Self.text("backup.restore.preparation_stopped", "备份准备已停止")
+            let message = mayHaveCommitted
+                ? Self.text("backup.restore.commit_uncertain", "提交阶段可能已经完成，请核对当前书架和设置。")
+                : Self.text("backup.restore.nothing_restored", "未恢复任何数据。")
+            owner?.showTransientMessage("\(title)\n\(message)", duration: 6)
         } else {
             onError(error)
         }

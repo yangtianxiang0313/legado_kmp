@@ -67,7 +67,7 @@ final class WebBookFileCoordinator {
             } catch {
                 await closeBusy()
                 if !(error is CancellationError), isCurrent(token) {
-                    showFailure(error, book: book, openAfterImport: openAfterImport)
+                    showFailure(error)
                 }
             }
         }
@@ -145,7 +145,7 @@ final class WebBookFileCoordinator {
             } catch {
                 await closeBusy()
                 if !(error is CancellationError), isCurrent(token) {
-                    showFailure(error, book: book, openAfterImport: openAfterImport)
+                    showFailure(error)
                 }
             }
         }
@@ -270,21 +270,9 @@ final class WebBookFileCoordinator {
         owner.present(alert, animated: true)
     }
 
-    private func showFailure(_ error: Error, book: Book, openAfterImport: Bool) {
+    private func showFailure(_ error: Error) {
         guard let owner, owner.canPerformNavigationAction else { return }
-        let alert = UIAlertController(
-            title: WebBookFileCopy.downloadFailed, message: WebBookFileErrorCopy.message(error), preferredStyle: .alert)
-        alert.view.accessibilityIdentifier = "webBookFile.failure"
-        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak alert] _ in
-                guard let self, let alert else { return }
-                Task { @MainActor [weak self] in
-                    await Self.dismiss(alert)
-                    self?.start(book: book, openAfterImport: openAfterImport)
-                }
-            })
-        owner.present(alert, animated: true)
+        owner.showTransientMessage(WebBookFileErrorCopy.message(error), duration: 3.5)
     }
 
     private func confirmDownloadOnly(_ option: WebBookFileOption, token: UUID) async -> Bool {

@@ -394,6 +394,17 @@ struct ReaderLocalSettings {
 }
 
 extension ReaderContainerViewController {
+    func prepareInitialReaderAppearance() {
+        guard case .success(let settings) = SharedRuntime.settingsFacade() else { return }
+        let appearance = settings.themeSettings
+        let initialPreferences = appearance.currentPreferences
+        let initialRuntime = appearance.currentRuntimeConfig
+        preferences = initialPreferences
+        runtimeConfig = initialRuntime
+        themeController.apply(preferences: initialPreferences, userInterfaceStyle: traitCollection.userInterfaceStyle)
+        themeController.apply(runtimeConfig: initialRuntime)
+    }
+
     func toggleNightTheme() {
         let currentMode = preferences?.themeMode ?? ThemeMode.system
         let nextMode: ThemeMode = isNightTheme(currentMode) ? .light : .dark

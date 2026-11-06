@@ -1,6 +1,8 @@
 package io.legado.kmp.shared.facade
 
 import io.legado.kmp.shared.preferences.AppPreferencesStore
+import io.legado.kmp.shared.preferences.AppRuntimeConfig
+import io.legado.kmp.shared.preferences.AppUiPreferences
 import io.legado.kmp.shared.preferences.ThemeColorField
 import io.legado.kmp.shared.preferences.ThemeColorPalette
 import io.legado.kmp.shared.preferences.ThemePreset
@@ -12,6 +14,8 @@ class ThemeSettingsFacade internal constructor(private val preferences: AppPrefe
     private val backgrounds = ThemeBackgroundPreferences(preferences)
     private val backgroundMutex = Mutex()
     val presets: List<ThemePreset> get() = preferences.themePresets
+    val currentPreferences: AppUiPreferences get() = preferences.preferences.value
+    val currentRuntimeConfig: AppRuntimeConfig get() = preferences.runtimeConfig.value
 
     fun palette(isNightTheme: Boolean): ThemeColorPalette = preferences.themePalette(isNightTheme)
 

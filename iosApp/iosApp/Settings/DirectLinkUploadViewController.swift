@@ -188,9 +188,7 @@ final class DirectLinkUploadViewController: UITableViewController, UIDocumentPic
     }
 
     private func showError(_ message: String) {
-        guard isVisibleInNavigationStack, presentedViewController == nil else { return }
-        let alert = UIAlertController(title: "直链上传", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
-        present(alert, animated: true)
+        guard isVisibleInNavigationStack else { return }
+        showTransientMessage(message)
     }
 }

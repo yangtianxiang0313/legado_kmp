@@ -599,9 +599,7 @@ final class LocalBookImportCoordinator {
                 "consumer.directory_selection.issue_line", "%1$@：%2$@",
                 issue.fileName, LocalBookImportResultText.ownedIssue(issue.message) ?? issue.message)
         }.joined(separator: "\n")
-        let alert = UIAlertController(title: LocalBookImportResultText.failed, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-        presenter.present(alert, animated: true)
+        presenter.showTransientMessage(message)
     }
 
     private func failure(_ message: String) -> NSError {

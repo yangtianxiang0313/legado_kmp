@@ -558,24 +558,15 @@ final class CacheExportOptionsViewController: UITableViewController, UITextField
 
     private func showTemplateError(_ message: String) {
         guard canInteract, presentedViewController == nil else { return }
-        let alert = UIAlertController(title: "EPUB 模板", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
-        ownedPresentation = alert
-        present(alert, animated: true)
+        showTransientMessage("EPUB 模板：\(message)")
     }
 
     private func showError(_ message: String, field: UIView, at indexPath: IndexPath) {
-        let alert = UIAlertController(title: "导出设置", message: message, preferredStyle: .alert)
-        var consumed = false
-        alert.addAction(
-            UIAlertAction(title: "确定", style: .default) { [weak self, weak field, weak alert] _ in
-                guard let self, let alert, !consumed, self.ownedPresentation === alert, self.canInteract else { return }
-                consumed = true
-                self.tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
-                field?.becomeFirstResponder()
-            })
-        ownedPresentation = alert
-        present(alert, animated: true)
+        guard canInteract, presentedViewController == nil else { return }
+        showTransientMessage(message)
+        tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
+        tableView.layoutIfNeeded()
+        field.becomeFirstResponder()
     }
 }
 

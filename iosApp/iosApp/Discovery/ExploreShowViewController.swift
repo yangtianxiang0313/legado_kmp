@@ -346,13 +346,7 @@ final class ExploreShowViewController: UIViewController, UITableViewDataSource, 
     private func showErrorKindAlert(_ kind: ExploreKind) {
         let message = String(kind.title.dropFirst("ERROR:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
         let detail = kind.url ?? ""
-        let alert = UIAlertController(
-            title: L10n.Discovery.kindErrorTitle,
-            message: detail.isEmpty ? message : "\(message)\n\n\(detail)",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-        present(alert, animated: true)
+        showTransientMessage(detail.isEmpty ? message : "\(message)\n\n\(detail)")
     }
 
     private func reloadRuntimeAndKinds() {

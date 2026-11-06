@@ -263,8 +263,6 @@ final class CoverConfigurationViewController: UITableViewController, UIDocumentP
     }
 
     private func showError(_ error: Error) {
-        let alert = UIAlertController(title: "封面配置失败", message: error.localizedDescription, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "好", style: .default))
-        present(alert, animated: true)
+        showTransientMessage("封面配置失败：\(error.localizedDescription)")
     }
 }

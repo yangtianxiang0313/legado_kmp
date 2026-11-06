@@ -32,7 +32,6 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
         return list
     }()
     private var requestGeneration = UUID()
-    private var footerPresentationID = UUID()
     private var requestTask: Task<Void, Never>?
     private weak var pageNavigationController: UINavigationController?
 
@@ -76,7 +75,6 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         hasAppeared = false
-        footerPresentationID = UUID()
         resultList.setPresentationActive(false)
         toolbar.setInteractionEnabled(false)
     }
@@ -102,7 +100,6 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
     @objc private func sceneStateChanged(_ notification: Notification) {
         guard let scene = notification.object as? UIScene, scene === viewIfLoaded?.window?.windowScene else { return }
         let active = notification.name == UIScene.didActivateNotification && canInteract
-        if notification.name != UIScene.didActivateNotification { footerPresentationID = UUID() }
         resultList.setPresentationActive(active)
         toolbar.setInteractionEnabled(active)
         if active { schedulePaginationCheck() }
@@ -268,6 +265,7 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
         retryAction = retry
         footerState = .error(message)
         renderBooks()
+        showTransientMessage(message, duration: 3.5)
     }
 
     private func retry() {
@@ -346,60 +344,8 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
 
     private func activateFooter(expected: ExploreResultsFooterCell.State) {
         guard canInteract, !isLoading, footerState == expected else { return }
-        if case .error(let message) = footerState {
-            // LoadMoreView skips its detail dialog when the diagnostic is blank.
-            guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                retry()
-                return
-            }
-            guard let window = viewIfLoaded?.window, let scene = window.windowScene,
-                let navigation = navigationController
-            else { return }
-            let generation = requestGeneration
-            let presentationID = UUID()
-            footerPresentationID = presentationID
-            let isCurrentFailure = { [weak self, weak window, weak scene, weak navigation] in
-                guard let self, let window, let scene, let navigation,
-                    self.footerPresentationID == presentationID, self.isCurrent(generation),
-                    self.footerState == expected, !self.isLoading,
-                    self.navigationController === navigation, navigation.topViewController === self,
-                    self.viewIfLoaded?.window === window, window.isKeyWindow, !window.isHidden,
-                    window.alpha > 0.01, window.windowScene === scene, scene.activationState == .foregroundActive,
-                    UIApplication.shared.applicationState == .active
-                else { return false }
-                var owner: UIViewController? = self
-                while let controller = owner {
-                    guard !controller.isBeingPresented, !controller.isBeingDismissed,
-                        !controller.isMovingFromParent, !controller.isMovingToParent
-                    else { return false }
-                    owner = controller.parent
-                }
-                return true
-            }
-            var shouldRetry = false
-            let dialog = ReaderRestoreProgressDialogViewController(
-                title: NSLocalizedString("discovery.results.error_title", value: "错误", comment: ""),
-                message: message, accessibilityIdentifierPrefix: "discovery.explore.error",
-                actionLayout: .retry
-            ) { shouldRetry = $0 }
-            dialog.canConfirm = { [weak self, weak dialog] in
-                guard let self, let dialog, isCurrentFailure() else { return false }
-                if dialog.presentingViewController == nil {
-                    return self.canInteract
-                }
-                return self.presentedViewController === dialog
-                    && dialog.presentingViewController?.presentedViewController === dialog
-                    && dialog.viewIfLoaded?.window === self.viewIfLoaded?.window
-            }
-            dialog.onClose = { [weak self] in
-                guard let self else { return }
-                self.updatePresentation()
-                guard shouldRetry, self.canInteract, isCurrentFailure() else { return }
-                self.retry()
-            }
-            resultList.setPresentationActive(false)
-            toolbar.setInteractionEnabled(false)
-            present(dialog, animated: !UIAccessibility.isReduceMotionEnabled)
+        if case .error = footerState {
+            retry()
         } else if currentPage == 0 {
             if !isRuntimeReady { bootstrap() } else if selectedKind == nil { loadKinds() } else { requestBooks(page: 1) }
         } else {

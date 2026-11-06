@@ -28,9 +28,9 @@ final class ReaderChapterMessageCoordinator {
 
     func loading(index: Int, message: String? = nil) {
         guard let reader else { return }
-        let context = begin(index: index, in: reader)
+        let context = begin(index: index, in: reader, replacesBody: message?.isEmpty == false)
         reader.loadFailureView.showLoading(
-            message: message ?? L10n.Reader.chapterLoading,
+            message: message ?? "",
             theme: reader.readerRenderTheme(),
             onMenu: { [weak self] in
                 self?.openMenu(for: context, isFailure: false)
@@ -128,18 +128,18 @@ final class ReaderChapterMessageCoordinator {
                 reader.renderView.chapterMessageContentFrame, to: overlay
             )
         }
-        overlay.accessibilityViewIsModal = !reader.isMenuVisible
+        overlay.accessibilityViewIsModal = overlay.isShowingFailure && !reader.isMenuVisible
     }
 
-    private func begin(index: Int, in reader: ReaderContainerViewController) -> Context {
+    private func begin(index: Int, in reader: ReaderContainerViewController, replacesBody: Bool = true) -> Context {
         let context = Context(id: UUID(), bookURL: reader.bookURL, index: index)
         self.context = context
         awaitsPageRender = false
         successMessage = nil
         reader.cancelPageTurnForContentChange()
         reader.dismissTextSelectionMenu(clearSelection: true)
-        // Like TextPageFactory(msg), replace only the body; retain background and chrome.
-        setChapterMessageVisible(true, in: reader)
+        // Loading keeps the last rendered page; only a failure replaces its body with recovery actions.
+        setChapterMessageVisible(replacesBody, in: reader)
         return context
     }
 

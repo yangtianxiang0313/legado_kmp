@@ -120,9 +120,7 @@ final class DirectLinkUploadRuleEditorViewController: UITableViewController, Nav
                 }
             } catch {
                 guard isVisibleInNavigationStack, presentedViewController == nil else { return }
-                let alert = UIAlertController(title: "保存失败", message: error.userFacingMessage, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-                present(alert, animated: true)
+                showTransientMessage("保存失败：\(error.userFacingMessage)")
             }
         }
     }

@@ -22,7 +22,8 @@ final class AppLockSceneSession {
         active = scene.activationState == .foregroundActive
         shieldWindow = UIWindow(windowScene: scene)
         shieldWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue + 1)
-        shieldWindow.backgroundColor = .systemBackground
+        shieldWindow.backgroundColor = AndroidReplicaTheme.background
+        shieldWindow.overrideUserInterfaceStyle = window.overrideUserInterfaceStyle
         shieldWindow.rootViewController = root
         root.install(controller)
     }
@@ -79,6 +80,7 @@ final class AppLockSceneSession {
 
     private func protectContent() {
         guard let contentWindow else { return }
+        shieldWindow.overrideUserInterfaceStyle = contentWindow.overrideUserInterfaceStyle
         if contentInteraction == nil { contentInteraction = contentWindow.isUserInteractionEnabled }
         if contentAccessibility == nil { contentAccessibility = contentWindow.accessibilityElementsHidden }
         contentWindow.isUserInteractionEnabled = false
@@ -100,10 +102,12 @@ private final class AppLockShieldViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AndroidReplicaTheme.background
+        view.isOpaque = true
         view.accessibilityViewIsModal = true
         view.accessibilityIdentifier = "app-lock.shield"
-        privacyView.backgroundColor = .systemBackground
+        privacyView.backgroundColor = AndroidReplicaTheme.background
+        privacyView.isOpaque = true
         privacyView.accessibilityIdentifier = "app-lock.privacy"
         privacyView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(privacyView)
@@ -112,19 +116,6 @@ private final class AppLockShieldViewController: UIViewController {
             privacyView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             privacyView.topAnchor.constraint(equalTo: view.topAnchor),
             privacyView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-        let icon = UIImageView(image: UIImage(systemName: "lock.fill"))
-        icon.tintColor = .secondaryLabel
-        icon.contentMode = .scaleAspectFit
-        icon.isAccessibilityElement = true
-        icon.accessibilityLabel = "应用已锁定"
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        privacyView.addSubview(icon)
-        NSLayoutConstraint.activate([
-            icon.widthAnchor.constraint(equalToConstant: 32),
-            icon.heightAnchor.constraint(equalToConstant: 40),
-            icon.centerXAnchor.constraint(equalTo: privacyView.centerXAnchor),
-            icon.centerYAnchor.constraint(equalTo: privacyView.centerYAnchor),
         ])
     }
 

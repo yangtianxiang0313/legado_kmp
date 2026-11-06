@@ -12,16 +12,10 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import platform.Foundation.NSURL
 import platform.Foundation.NSThread
-import platform.UIKit.UIAlertController
-import platform.UIKit.UIAlertControllerStyleAlert
 import platform.UIKit.UIApplication
 import platform.UIKit.UINavigationController
 import platform.UIKit.UITabBarController
 import platform.UIKit.UIViewController
-import platform.darwin.DISPATCH_TIME_NOW
-import platform.darwin.dispatch_after
-import platform.darwin.dispatch_get_main_queue
-import platform.darwin.dispatch_time
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -141,21 +135,7 @@ class IosInteractiveSourceCapability(
         val sourceName = source?.bookSourceName?.takeIf { it.isNotBlank() }
         val displayMessage = if (sourceName != null) "$sourceName: $message" else message
         val durationMillis = if (long) 3_500L else 2_000L
-        onMain {
-            val presenter = topViewController() ?: return@onMain
-            val alert = UIAlertController.alertControllerWithTitle(
-                title = null,
-                message = displayMessage,
-                preferredStyle = UIAlertControllerStyleAlert
-            )
-            presenter.presentViewController(alert, animated = true, completion = null)
-            dispatch_after(
-                dispatch_time(DISPATCH_TIME_NOW, durationMillis * 1_000_000L),
-                dispatch_get_main_queue()
-            ) {
-                alert.dismissViewControllerAnimated(true, completion = null)
-            }
-        }
+        IosSourceToastPresenter.show(displayMessage, durationMillis, ::topViewController)
     }
 
     private fun browserVerification() = IosBrowserVerification(cookieRepository, headerResolver, sourceStateStore)

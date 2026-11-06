@@ -19,7 +19,7 @@ final class RssArticleImageCoordinator: NSObject {
         case selected(Destination)
         case loaded(RssArticleImageFile, Destination)
         case completed(String?)
-        case failed(Error, Destination)
+        case failed(Error)
         case cancelled
     }
 
@@ -137,7 +137,7 @@ final class RssArticleImageCoordinator: NSObject {
 
     private func load(_ previous: Operation, destination: Destination) {
         guard accepts(previous), presentation == nil else { cancelIfCurrent(previous); return }
-        // A retry owns a new transport and identity; a completed/cancelled URLSession is never reused.
+        // Each attempt owns a new transport and identity; completed/cancelled sessions are never reused.
         previous.loader.cancel()
         task?.cancel()
         visibilityTask?.cancel()
@@ -162,7 +162,7 @@ final class RssArticleImageCoordinator: NSObject {
                 guard let self else { return }
                 guard self.accepts(captured), self.presentation === busy else { self.cancelIfCurrent(captured); return }
                 self.task = nil
-                if error is CancellationError { self.cancel() } else { busy.finish(.failed(error, destination)) }
+                if error is CancellationError { self.cancel() } else { busy.finish(.failed(error)) }
             }
         }
     }
@@ -186,7 +186,7 @@ final class RssArticleImageCoordinator: NSObject {
             let handle = makePresentation(share, file: file, captured: captured)
             share.completionWithItemsHandler = { [weak handle] _, _, _, error in
                 Task { @MainActor in
-                    if let error { handle?.finish(.failed(error, .share)) } else { handle?.finish(.completed(nil)) }
+                    if let error { handle?.finish(.failed(error)) } else { handle?.finish(.completed(nil)) }
                 }
             }
             show(handle, captured: captured)
@@ -226,7 +226,7 @@ final class RssArticleImageCoordinator: NSObject {
                 guard let self else { return }
                 guard self.accepts(captured), self.presentation === busy else { self.cancelIfCurrent(captured); return }
                 self.task = nil
-                if error is CancellationError { self.cancel() } else { busy.finish(.failed(error, .photos)) }
+                if error is CancellationError { self.cancel() } else { busy.finish(.failed(error)) }
             }
         }
     }
@@ -257,20 +257,10 @@ final class RssArticleImageCoordinator: NSObject {
         }
     }
 
-    private func showFailure(_ error: Error, destination: Destination, captured: Operation) {
+    private func showFailure(_ error: Error, captured: Operation) {
         guard accepts(captured), presentation == nil, ownerCanPresent else { cancelIfCurrent(captured); return }
-        let alert = UIAlertController(
-            title: L10n.RSS.imageProcessingFailed, message: error.localizedDescription, preferredStyle: .alert)
-        let handle = makePresentation(alert, captured: captured)
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak handle] _ in
-                guard let self, self.accepts(captured), let handle else { return }
-                handle.finish(.selected(destination))
-            })
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.cancelIfCurrent(captured)
-            })
-        show(handle, captured: captured)
+        cancelIfCurrent(captured)
+        owner?.showTransientMessage(error.localizedDescription, duration: 3.5)
     }
 
     private func showBusy(_ title: String, captured: Operation) -> Presentation? {
@@ -303,7 +293,7 @@ final class RssArticleImageCoordinator: NSObject {
             switch outcome {
             case let .selected(destination): self.load(captured, destination: destination)
             case let .loaded(file, destination): self.deliver(file, to: destination, captured: captured)
-            case let .failed(error, destination): self.showFailure(error, destination: destination, captured: captured)
+            case let .failed(error): self.showFailure(error, captured: captured)
             case let .completed(message):
                 self.complete(captured)
                 if let message, self.canUseActions(), self.ownerCanPresent { self.owner?.showTransientMessage(message) }

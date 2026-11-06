@@ -622,23 +622,11 @@ final class RssSourceManagementViewController: UIViewController, UITableViewData
             do {
                 let count = try await self?.screen.importSources(payload: jsonText) ?? 0
                 await MainActor.run {
-                    let resultAlert = UIAlertController(
-                        title: L10n.RSS.sourceManagementImportAction,
-                        message: L10n.RSS.sourceManagementImportSuccess(count),
-                        preferredStyle: .alert
-                    )
-                    resultAlert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-                    self?.present(resultAlert, animated: true)
+                    self?.showTransientMessage(L10n.RSS.sourceManagementImportSuccess(count))
                 }
             } catch {
                 await MainActor.run {
-                    let errorAlert = UIAlertController(
-                        title: L10n.RSS.sourceManagementImportFailed,
-                        message: error.userFacingMessage,
-                        preferredStyle: .alert
-                    )
-                    errorAlert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-                    self?.present(errorAlert, animated: true)
+                    self?.presentError(error)
                 }
             }
         }
@@ -646,13 +634,7 @@ final class RssSourceManagementViewController: UIViewController, UITableViewData
 
     private func handleExportAll() {
         guard !allSources.isEmpty else {
-            let alert = UIAlertController(
-                title: L10n.RSS.sourceManagementExportAction,
-                message: L10n.RSS.sourceManagementExportEmpty,
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-            present(alert, animated: true)
+            showTransientMessage(L10n.RSS.sourceManagementExportEmpty)
             return
         }
         let urls = allSources.map(\.sourceUrl)

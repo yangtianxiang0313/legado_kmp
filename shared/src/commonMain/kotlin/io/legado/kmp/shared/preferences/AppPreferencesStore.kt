@@ -1,10 +1,9 @@
 package io.legado.kmp.shared.preferences
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 interface AppPreferencesStore {
-    val preferences: Flow<AppUiPreferences>
+    val preferences: StateFlow<AppUiPreferences>
     /** Lifecycle entry points need the current recording flag without suspending. */
     val runtimeConfig: StateFlow<AppRuntimeConfig>
     val themePresets: List<ThemePreset>

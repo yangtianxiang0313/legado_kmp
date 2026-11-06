@@ -404,9 +404,6 @@ final class AndroidReaderStyleSheetViewController: UIViewController {
 
     private func showWriteFailure(_ error: Error) {
         guard presentedViewController == nil, viewIfLoaded?.window != nil else { return }
-        let alert = UIAlertController(title: nil, message: error.userFacingMessage, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self] _ in self?.writes?.retry() })
-        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.writes?.discardFailedChanges() })
-        present(alert, animated: true)
+        presentError(error)
     }
 }

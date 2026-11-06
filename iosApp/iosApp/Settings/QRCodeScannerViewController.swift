@@ -7,6 +7,8 @@ final class QRCodeScannerViewController: UIViewController, AVCaptureMetadataOutp
     private let captureSession = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var hasProcessedCode = false
+    private var isScannerVisible = false
+    private var pendingCameraUnavailable = false
 
     var onQRCodeScanned: ((String) -> Void)?
 
@@ -34,15 +36,25 @@ final class QRCodeScannerViewController: UIViewController, AVCaptureMetadataOutp
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
-        if !captureSession.isRunning {
+        if !captureSession.isRunning, !pendingCameraUnavailable {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.captureSession.startRunning()
             }
         }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        isScannerVisible = true
+        if pendingCameraUnavailable {
+            pendingCameraUnavailable = false
+            showCameraUnavailable()
+        }
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        isScannerVisible = false
         if captureSession.isRunning {
             captureSession.stopRunning()
         }
@@ -151,15 +163,14 @@ final class QRCodeScannerViewController: UIViewController, AVCaptureMetadataOutp
     }
 
     private func showCameraUnavailable() {
-        let alert = UIAlertController(
-            title: L10n.SourceMgmt.cameraUnavailableTitle,
-            message: L10n.SourceMgmt.cameraUnavailableMessage,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default) { [weak self] _ in
-            self?.navigationController?.popViewController(animated: true)
-        })
-        present(alert, animated: true)
+        guard isScannerVisible else {
+            pendingCameraUnavailable = true
+            return
+        }
+        let presenter: UIViewController = navigationController ?? self
+        navigationController?.popViewController(animated: true)
+        presenter.showTransientMessage(
+            "\(L10n.SourceMgmt.cameraUnavailableTitle)\n\(L10n.SourceMgmt.cameraUnavailableMessage)")
     }
 
     // MARK: - AVCaptureMetadataOutputObjectsDelegate

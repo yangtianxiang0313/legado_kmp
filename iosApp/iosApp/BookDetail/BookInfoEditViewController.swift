@@ -492,9 +492,7 @@ final class BookInfoEditViewController: UIViewController, UITextFieldDelegate, U
 
     private func showError(title: String, message: String) {
         guard isActuallyVisible, !isClosing, presentedViewController == nil else { return }
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
-        present(alert, animated: true)
+        showTransientMessage("\(title)\n\(message)")
     }
 
 }

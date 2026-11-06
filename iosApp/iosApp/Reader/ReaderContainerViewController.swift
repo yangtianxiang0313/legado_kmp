@@ -191,8 +191,8 @@ final class ReaderContainerViewController: UIViewController, NavigationContentCh
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = themeController.backgroundColor
-        navigationController?.setNavigationBarHidden(true, animated: false)
+        prepareInitialReaderAppearance()
+        view.backgroundColor = themeController.visibleBackgroundColor
         configureViews()
         bindScreen()
         installHardwarePagingHandlers()

@@ -349,10 +349,7 @@ final class ConfigurationManagementViewController: UITableViewController {
     }
 
     private func showMessage(_ message: String) {
-        guard isVisible, presentedViewController == nil else { return }
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.view.accessibilityIdentifier = "configuration.management.message"
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
-        present(alert, animated: true)
+        guard isVisible else { return }
+        showTransientMessage(message)
     }
 }

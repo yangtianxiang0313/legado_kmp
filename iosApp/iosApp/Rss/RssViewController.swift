@@ -485,13 +485,7 @@ final class RssViewController: UIViewController, UITableViewDataSource, UITableV
 
     private func handleExportSources() {
         guard !sources.isEmpty else {
-            let alert = UIAlertController(
-                title: L10n.RSS.exportSources,
-                message: L10n.RSS.exportSourcesEmpty,
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-            present(alert, animated: true)
+            showTransientMessage(L10n.RSS.exportSourcesEmpty)
             return
         }
         // 将所有 RSS 源序列化为 JSON
@@ -575,34 +569,16 @@ final class RssViewController: UIViewController, UITableViewDataSource, UITableV
     private func performImportSources(jsonText: String) {
         guard let data = jsonText.data(using: .utf8),
               let _ = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            let errorAlert = UIAlertController(
-                title: L10n.RSS.importSourcesFailed,
-                message: L10n.RSS.importSourcesInvalidJSON,
-                preferredStyle: .alert
-            )
-            errorAlert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-            present(errorAlert, animated: true)
+            showTransientMessage(L10n.RSS.importSourcesInvalidJSON)
             return
         }
 
         // seedBundledRssSourcesIfEmpty 仅在数据库为空时生效，已有源时返回 false
         do {
             _ = try BootstrapApiKt.seedBundledRssSourcesIfEmpty(payload: jsonText)
-            let resultAlert = UIAlertController(
-                title: L10n.RSS.importSources,
-                message: String(format: L10n.RSS.importSourcesSuccess, sources.count),
-                preferredStyle: .alert
-            )
-            resultAlert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-            present(resultAlert, animated: true)
+            showTransientMessage(String(format: L10n.RSS.importSourcesSuccess, sources.count))
         } catch {
-            let errorAlert = UIAlertController(
-                title: L10n.RSS.importSourcesFailed,
-                message: error.userFacingMessage,
-                preferredStyle: .alert
-            )
-            errorAlert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
-            present(errorAlert, animated: true)
+            presentError(error)
         }
     }
 

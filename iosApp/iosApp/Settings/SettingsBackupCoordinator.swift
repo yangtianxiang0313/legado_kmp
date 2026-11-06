@@ -4,7 +4,7 @@ import shared
 /// Owns file access, export, and restore presentation independently of the settings table.
 @MainActor
 final class SettingsBackupCoordinator: NSObject {
-    private enum Phase { case idle, choosing, password, transitioning, working, sharing, result }
+    private enum Phase { case idle, choosing, password, transitioning, working, sharing }
     private final class AttachmentProbe: UIView {
         var onWindowChanged: (() -> Void)?
         override func didMoveToWindow() {
@@ -49,19 +49,13 @@ final class SettingsBackupCoordinator: NSObject {
         NotificationCenter.default.removeObserver(self)
     }
 
-    private func presentSimpleAlert(title: String, message: String, id: UUID) {
+    private func showResult(title: String, message: String, id: UUID) {
         guard ready(id) else {
             finish(id)
             return
         }
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(
-            UIAlertAction(title: L10n.Common.ok, style: .default) { [weak self, weak alert] _ in
-                guard let self, let alert else { return }
-                self.afterDismissal(of: alert, id: id, from: .result) { [weak self] in self?.finish(id) }
-            })
-        phase = .result
-        present(alert, id: id)
+        finish(id)
+        owner?.showTransientMessage([title, message].filter { !$0.isEmpty }.joined(separator: "\n"), duration: 6)
     }
 
     // MARK: - F59/F60 Backup & Restore
@@ -142,7 +136,7 @@ final class SettingsBackupCoordinator: NSObject {
                     finish(id)
                     return
                 }
-                presentSimpleAlert(
+                showResult(
                     title: L10n.Settings.webDavTitle,
                     message: connected && initialized ? L10n.Settings.webDavCheckSuccess : L10n.Settings.webDavCheckFailed,
                     id: id)
@@ -305,7 +299,7 @@ final class SettingsBackupCoordinator: NSObject {
                         status = NSLocalizedString(
                             "backup.local.share.cancelled", value: "备份已保存，已取消分享。", comment: "Sharing cancelled after backup was saved")
                     }
-                    self.presentSimpleAlert(
+                    self.showResult(
                         title: NSLocalizedString("backup.local.saved.title", value: "备份已保存", comment: "Backup saved title"),
                         message: ([status] + warnings).joined(separator: "\n"), id: id)
                 }
@@ -362,7 +356,7 @@ final class SettingsBackupCoordinator: NSObject {
                     self.invalidate(id)
                     return
                 }
-                if self.phase == .choosing || self.phase == .password || self.phase == .result,
+                if self.phase == .choosing || self.phase == .password,
                     let presentation = self.presentation, presentation.presentingViewController == nil,
                     !presentation.isBeingPresented, !presentation.isBeingDismissed
                 {
