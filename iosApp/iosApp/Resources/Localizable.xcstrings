@@ -1,6 +1,329 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "consumer.local_relink.confirm_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the original file for this book, not a different edition."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择这本书的原文件，而非其他版本。"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.preparing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing the original file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.parsing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parsing the original file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在解析原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.unsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the original TXT, EPUB, UMD, MOBI, AZW, AZW3, or PDF file; archives are not supported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 TXT、EPUB、UMD、MOBI、AZW、AZW3 或 PDF 原文件，不支持压缩包"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.original_missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original book is no longer on the bookshelf"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原书已不在书架中"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.local_only": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can only re-select the original file for a local book"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只能为本地书重新选择原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.retained_original_required": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save a secure copy of the selected original file first"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先安全留存所选原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.format_mismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file format does not match the original book"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件格式与原书不一致"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.fingerprint_mismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file fingerprint does not match the retained original; choose the same original file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件与原留存文件的指纹不一致，请选择同一本原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.unreadable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected original file can no longer be read"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选原文件已不可读取"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.verification_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected original file failed verification; select it again"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选原文件校验失败，请重新选择"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.changed_during_parse": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected original file changed during parsing; select it again"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选原文件在解析期间发生变化，请重新选择"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.catalog_mismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file table of contents does not match the original; the original book, bookmarks, and edited text are unchanged"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件目录与原目录不一致；原书、书签和已编辑正文均未改动"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.book_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original book or reading position has changed; re-select the original file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原书或阅读位置已变化，请重新选择原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.unsupported_format": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This original file format is not supported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持此原文件格式"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.progress_mismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file cannot preserve the original reading position; choose the original file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件无法承接原阅读位置，请选择原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_relink.error.chapter_mismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current chapter in the selected file does not match the saved reading record; choose the original file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件的当前章节与原阅读记录不一致，请选择原文件"
+          }
+        }
+      }
+    },
+    "consumer.local_import.archive_name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩包"
+          }
+        }
+      }
+    },
+    "consumer.local_import.archive_books_header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Books in %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 中的书籍"
+          }
+        }
+      }
+    },
     "reader.exit.read_aloud_paused": {
       "extractionState": "manual",
       "localizations": {

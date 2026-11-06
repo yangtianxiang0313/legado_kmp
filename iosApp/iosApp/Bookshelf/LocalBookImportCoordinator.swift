@@ -412,7 +412,9 @@ final class LocalBookImportCoordinator {
 
     private func entryPaths(for input: PreparedLocalBookImport) async throws -> [String?] {
         guard let archive = input.archive else { return [nil] }
-        guard !archive.entries.isEmpty else { throw failure("压缩包中没有可导入的书籍") }
+        guard !archive.entries.isEmpty else {
+            throw failure(L10n.text("consumer.import_result.error.archive_empty", "压缩包中没有可导入的书籍"))
+        }
         if archive.entries.count == 1 { return [archive.entries[0].path] }
         let selected = try await selectEntries(in: archive, fileName: input.fileName)
         let selectedPaths = Set(selected.map(\.path))
@@ -422,7 +424,9 @@ final class LocalBookImportCoordinator {
             guard selectedPaths.contains(entry.path), seen.insert(entry.path).inserted else { return nil }
             return entry.path
         }
-        guard !paths.isEmpty else { throw failure("请选择压缩包内需要导入的书籍") }
+        guard !paths.isEmpty else {
+            throw failure(L10n.text("consumer.import_result.error.select_archive_books", "请选择压缩包内需要导入的书籍"))
+        }
         return paths.map { Optional($0) }
     }
 
@@ -590,7 +594,11 @@ final class LocalBookImportCoordinator {
     private func showFailures(_ failures: [LocalBookImportIssue]) {
         guard let presenter, ownership?.canPresent == true
         else { return }
-        let message = failures.map { "\($0.fileName)：\($0.message)" }.joined(separator: "\n")
+        let message = failures.map { issue in
+            L10n.format(
+                "consumer.directory_selection.issue_line", "%1$@：%2$@",
+                issue.fileName, LocalBookImportResultText.ownedIssue(issue.message) ?? issue.message)
+        }.joined(separator: "\n")
         let alert = UIAlertController(title: LocalBookImportResultText.failed, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: L10n.Common.ok, style: .default))
         presenter.present(alert, animated: true)

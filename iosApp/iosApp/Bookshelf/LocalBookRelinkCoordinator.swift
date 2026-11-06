@@ -2,6 +2,56 @@ import UIKit
 import UniformTypeIdentifiers
 import shared
 
+private enum LocalBookRelinkStrings {
+    static var title: String { L10n.text("book_detail.dialog.relink_original_file", "重新选择原文件") }
+    static var confirmMessage: String {
+        L10n.text("consumer.local_relink.confirm_message", "请选择这本书的原文件，而非其他版本。")
+    }
+    static var preparing: String { L10n.text("consumer.local_relink.preparing", "正在准备原文件") }
+    static var parsing: String { L10n.text("consumer.local_relink.parsing", "正在解析原文件") }
+    static var unsupported: String {
+        L10n.text("consumer.local_relink.unsupported", "请选择 TXT、EPUB、UMD、MOBI、AZW、AZW3 或 PDF 原文件，不支持压缩包")
+    }
+    static var cancelling: String {
+        L10n.text("consumer.local_import.cancelling", "正在取消，等待当前操作结束…")
+    }
+
+    static func errorMessage(_ error: Error) -> String {
+        let message = error.userFacingMessage
+        guard (error as NSError).domain == "LocalBook.relink" else { return message }
+        switch message {
+        case "原书已不在书架中":
+            return L10n.text("consumer.local_relink.error.original_missing", "原书已不在书架中")
+        case "只能为本地书重新选择原文件":
+            return L10n.text("consumer.local_relink.error.local_only", "只能为本地书重新选择原文件")
+        case "请先安全留存所选原文件":
+            return L10n.text("consumer.local_relink.error.retained_original_required", "请先安全留存所选原文件")
+        case "所选文件格式与原书不一致":
+            return L10n.text("consumer.local_relink.error.format_mismatch", "所选文件格式与原书不一致")
+        case "所选文件与原留存文件的指纹不一致，请选择同一本原文件":
+            return L10n.text("consumer.local_relink.error.fingerprint_mismatch", "所选文件与原留存文件的指纹不一致，请选择同一本原文件")
+        case "所选原文件已不可读取":
+            return L10n.text("consumer.local_relink.error.unreadable", "所选原文件已不可读取")
+        case "所选原文件校验失败，请重新选择":
+            return L10n.text("consumer.local_relink.error.verification_failed", "所选原文件校验失败，请重新选择")
+        case "所选原文件在解析期间发生变化，请重新选择":
+            return L10n.text("consumer.local_relink.error.changed_during_parse", "所选原文件在解析期间发生变化，请重新选择")
+        case "所选文件目录与原目录不一致；原书、书签和已编辑正文均未改动":
+            return L10n.text("consumer.local_relink.error.catalog_mismatch", "所选文件目录与原目录不一致；原书、书签和已编辑正文均未改动")
+        case "原书或阅读位置已变化，请重新选择原文件":
+            return L10n.text("consumer.local_relink.error.book_changed", "原书或阅读位置已变化，请重新选择原文件")
+        case "不支持此原文件格式":
+            return L10n.text("consumer.local_relink.error.unsupported_format", "不支持此原文件格式")
+        case "所选文件无法承接原阅读位置，请选择原文件":
+            return L10n.text("consumer.local_relink.error.progress_mismatch", "所选文件无法承接原阅读位置，请选择原文件")
+        case "所选文件的当前章节与原阅读记录不一致，请选择原文件":
+            return L10n.text("consumer.local_relink.error.chapter_mismatch", "所选文件的当前章节与原阅读记录不一致，请选择原文件")
+        default:
+            return message
+        }
+    }
+}
+
 @MainActor
 final class LocalBookRelinkCoordinator: NSObject, UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
     private final class Session {
@@ -96,7 +146,7 @@ final class LocalBookRelinkCoordinator: NSObject, UIDocumentPickerDelegate, UIAd
             guard LocalBookFormats.bookExtensions.contains(selection.lease.source.pathExtension.lowercased()) else {
                 throw NSError(
                     domain: "io.legado.local-book-relink", code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "请选择 TXT、EPUB、UMD、MOBI、AZW、AZW3 或 PDF 原文件，不支持压缩包"])
+                    userInfo: [NSLocalizedDescriptionKey: LocalBookRelinkStrings.unsupported])
             }
             await waitForDetailLoad()
             try validate(context, activity: operationActivity)
@@ -106,7 +156,7 @@ final class LocalBookRelinkCoordinator: NSObject, UIDocumentPickerDelegate, UIAd
             try validate(context, activity: operationActivity, modal: progress)
             try SharedRuntime.bootstrap().get()
             let facade = try LocalBookRelinkFacade.companion.create()
-            progress?.setStatus("正在解析原文件")
+            progress?.setStatus(LocalBookRelinkStrings.parsing)
             let updated = try await SharedLocalBookImportAsync.value { onResult in
                 facade.prepareRelinkRequest(
                     bookUrl: context.expectedBook.bookUrl, path: file.url.path, onResult: onResult)
@@ -140,14 +190,14 @@ final class LocalBookRelinkCoordinator: NSObject, UIDocumentPickerDelegate, UIAd
             context.scene?.activationState == .foregroundActive, UIApplication.shared.applicationState == .active,
             let failure
         {
-            presenter.showTransientMessage(failure.userFacingMessage)
+            presenter.showTransientMessage(LocalBookRelinkStrings.errorMessage(failure))
         }
     }
 
     private func confirm(_ context: Session, activity: UUID) async -> Bool {
         guard let presenter else { return false }
         let alert = UIAlertController(
-            title: "重新选择原文件", message: "请选择这本书的原文件，而非其他版本。", preferredStyle: .alert)
+            title: LocalBookRelinkStrings.title, message: LocalBookRelinkStrings.confirmMessage, preferredStyle: .alert)
         alert.view.accessibilityIdentifier = "bookDetail.relink.confirmation"
         alert.addAction(
             UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self, weak alert] _ in
@@ -155,7 +205,7 @@ final class LocalBookRelinkCoordinator: NSObject, UIDocumentPickerDelegate, UIAd
                 self.resolveConfirmation(false)
             })
         alert.addAction(
-            UIAlertAction(title: "重新选择原文件", style: .default) { [weak self, weak alert] _ in
+            UIAlertAction(title: LocalBookRelinkStrings.title, style: .default) { [weak self, weak alert] _ in
                 guard let self, let alert, self.confirmation === alert else { return }
                 self.resolveConfirmation(
                     self.session === context && !context.isCancelled && self.activityID == activity
@@ -316,7 +366,7 @@ private final class LocalBookRelinkProgressViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = AndroidReplicaTheme.background
         let title = UILabel()
-        title.text = "重新选择原文件"
+        title.text = LocalBookRelinkStrings.title
         title.font = .preferredFont(forTextStyle: .headline)
         title.textColor = AndroidReplicaTheme.primaryText
         let file = UILabel()
@@ -359,13 +409,13 @@ private final class LocalBookRelinkProgressViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48),
         ])
-        setStatus("正在准备原文件")
+        setStatus(LocalBookRelinkStrings.preparing)
     }
 
     func setStatus(_ text: String) { statusLabel.text = text }
 
     func setCancelling() {
-        setStatus("正在取消，请稍候")
+        setStatus(LocalBookRelinkStrings.cancelling)
         cancelButton.isEnabled = false
     }
 }

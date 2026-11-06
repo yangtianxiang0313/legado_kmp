@@ -1,5 +1,5 @@
-import shared
 import UIKit
+import shared
 
 @MainActor
 final class LocalBookArchiveSelectionViewController: UITableViewController, UIAdaptivePresentationControllerDelegate {
@@ -12,9 +12,11 @@ final class LocalBookArchiveSelectionViewController: UITableViewController, UIAd
 
     init(fileName: String, entries: [ArchiveBookEntry]) {
         self.entries = entries
-        archiveFormatName = LocalBookArchiveType(fileName: fileName)?.displayName ?? "压缩包"
+        archiveFormatName =
+            LocalBookArchiveType(fileName: fileName)?.displayName
+            ?? L10n.text("consumer.local_import.archive_name", "压缩包")
         super.init(style: .insetGrouped)
-        title = "选择书籍"
+        title = DirectorySelectionText.title
     }
 
     @available(*, unavailable)
@@ -29,7 +31,7 @@ final class LocalBookArchiveSelectionViewController: UITableViewController, UIAd
             barButtonSystemItem: .cancel, target: self, action: #selector(cancelSelection)
         )
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "确认", style: .done, target: self, action: #selector(confirmSelection)
+            title: L10n.Common.confirm, style: .done, target: self, action: #selector(confirmSelection)
         )
         navigationItem.rightBarButtonItem?.isEnabled = false
     }
@@ -59,11 +61,13 @@ final class LocalBookArchiveSelectionViewController: UITableViewController, UIAd
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        section == 1 ? "\(archiveFormatName) 中的书籍" : nil
+        section == 1
+            ? L10n.format("consumer.local_import.archive_books_header", "%@ 中的书籍", archiveFormatName) : nil
     }
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 1 && entries.isEmpty ? "压缩包中没有可导入的书籍" : nil
+        section == 1 && entries.isEmpty
+            ? L10n.text("consumer.import_result.error.archive_empty", "压缩包中没有可导入的书籍") : nil
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -85,8 +89,8 @@ final class LocalBookArchiveSelectionViewController: UITableViewController, UIAd
         cell.accessoryType = .none
         if indexPath.section == 0 {
             let allSelected = !entries.isEmpty && selectedIndices.count == entries.count
-            content.text = allSelected ? "取消选择" : "全选"
-            content.secondaryText = "已选 \(selectedIndices.count) 项，共 \(entries.count) 项"
+            content.text = allSelected ? L10n.Bookshelf.deselectAll : L10n.Bookshelf.selectAll
+            content.secondaryText = DirectorySelectionText.selectionCount(selectedIndices.count, total: entries.count)
             content.image = UIImage(systemName: allSelected ? "minus.square" : "checkmark.square")
             cell.contentConfiguration = content
             cell.selectionStyle = entries.isEmpty ? .none : .default
@@ -101,7 +105,7 @@ final class LocalBookArchiveSelectionViewController: UITableViewController, UIAd
         content.image = UIImage(systemName: isSelected ? "checkmark.square.fill" : "square")
         cell.contentConfiguration = content
         cell.accessibilityTraits = isSelected ? [.button, .selected] : [.button]
-        cell.accessibilityValue = isSelected ? "已选择" : "未选择"
+        cell.accessibilityValue = isSelected ? DirectorySelectionText.selected : DirectorySelectionText.unselected
         return cell
     }
 
