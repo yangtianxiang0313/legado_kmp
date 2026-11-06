@@ -121,7 +121,7 @@ final class WebBookFileProgress {
     func stop() { stopped = true }
 }
 
-private struct WebBookFileHTTPFailure: LocalizedError, Sendable {
+struct WebBookFileHTTPFailure: LocalizedError, Sendable {
     let statusCode: Int
 
     var errorDescription: String? { "文件下载失败：HTTP \(statusCode)" }

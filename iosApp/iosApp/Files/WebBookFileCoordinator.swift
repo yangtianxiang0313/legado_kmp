@@ -1,6 +1,6 @@
 import Foundation
-import shared
 import UIKit
+import shared
 
 @MainActor
 final class WebBookFileCoordinator {
@@ -47,7 +47,7 @@ final class WebBookFileCoordinator {
             do {
                 let facade = try WebBookFileFacade.companion.create()
                 self.facade = facade
-                try showBusy("正在读取下载文件", token: token)
+                try showBusy(WebBookFileCopy.preparingOptions, token: token)
                 let options: [WebBookFileOption] = try await SharedCancellableAsync.value { completion in
                     facade.prepareFilesRequest(bookUrl: book.bookUrl) { result in
                         if result.isCancelled {
@@ -55,7 +55,7 @@ final class WebBookFileCoordinator {
                         } else if result.errorMessage == nil {
                             completion(result.options, nil)
                         } else {
-                            completion(nil, Self.failure(result.errorMessage ?? "无法读取下载文件"))
+                            completion(nil, Self.failure(result.errorMessage ?? WebBookFileCopy.optionsFailed))
                         }
                     }
                 }
@@ -80,7 +80,7 @@ final class WebBookFileCoordinator {
         loader?.cancel()
         importer?.cancel()
         finishConfirmation(false)
-        busy?.message = "正在取消，已完成的文件会保留"
+        busy?.message = WebBookFileCopy.cancelling
         busy?.actions.forEach { $0.isEnabled = false }
         if let menu {
             self.menu = nil
@@ -91,10 +91,11 @@ final class WebBookFileCoordinator {
 
     private func showOptions(_ options: [WebBookFileOption], book: Book, openAfterImport: Bool, token: UUID) {
         guard !options.isEmpty, let owner, owner.presentedViewController == nil else {
-            owner?.showTransientMessage("书源没有可下载的文件")
+            owner?.showTransientMessage(WebBookFileCopy.noOptions)
             return
         }
-        let controller = UIAlertController(title: "下载并导入文件", message: nil, preferredStyle: .actionSheet)
+        let controller = UIAlertController(title: WebBookFileCopy.optionsTitle, message: nil, preferredStyle: .actionSheet)
+        controller.view.accessibilityIdentifier = "webBookFile.options"
         for option in options {
             controller.addAction(
                 UIAlertAction(title: option.fileName, style: .default) { [weak self, weak controller] _ in
@@ -103,7 +104,7 @@ final class WebBookFileCoordinator {
                 })
         }
         controller.addAction(
-            UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in
+            UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in
                 self?.menu = nil
                 self?.onChange()
             })
@@ -130,7 +131,7 @@ final class WebBookFileCoordinator {
                     guard await confirmDownloadOnly(option, token: token) else { throw CancellationError() }
                     try checkOwner(token)
                 }
-                try showBusy(option.isInlineData ? "正在读取内嵌书籍" : "正在下载书籍", token: token)
+                try showBusy(option.isInlineData ? WebBookFileCopy.readingInline : WebBookFileCopy.downloading, token: token)
                 let file = try await loadFile(option, book: book, facade: facade, token: token)
                 try Task.checkCancellation()
                 try checkOwner(token)
@@ -170,7 +171,7 @@ final class WebBookFileCoordinator {
                     } else if let data = result.data {
                         completion(data, nil)
                     } else {
-                        completion(nil, Self.failure(result.errorMessage ?? "内嵌文件准备失败"))
+                        completion(nil, Self.failure(result.errorMessage ?? WebBookFileCopy.inlinePreparationFailed))
                     }
                 }
             }
@@ -236,7 +237,7 @@ final class WebBookFileCoordinator {
             var merged = false
             do {
                 try checkOwner(token)
-                try showBusy("正在准备阅读", token: token)
+                try showBusy(WebBookFileCopy.preparingReading, token: token)
                 let imported = try await WebBookFileImportFacade.companion.create().mergeImportedBook(
                     expectedOnlineBook: onlineBook, expectedLocalBook: book)
                 merged = true
@@ -251,8 +252,8 @@ final class WebBookFileCoordinator {
             } catch {
                 await closeBusy()
                 if !(error is CancellationError), isCurrent(token), let owner {
-                    let message = merged ? "文件已导入，可从书架重试阅读" : "文件已导入，但在线信息合并失败，可从书架打开"
-                    owner.showTransientMessage("\(message)：\(error.userFacingMessage)")
+                    owner.showTransientMessage(
+                        WebBookFileCopy.importedFailure(merged: merged, message: WebBookFileErrorCopy.message(error)))
                 }
             }
         }
@@ -262,19 +263,21 @@ final class WebBookFileCoordinator {
     private func showBusy(_ title: String, token: UUID) throws {
         try checkOwner(token)
         guard let owner, owner.presentedViewController == nil else { throw CancellationError() }
-        let alert = UIAlertController(title: title, message: "正在准备…", preferredStyle: .alert)
+        let alert = UIAlertController(title: title, message: WebBookFileCopy.preparing, preferredStyle: .alert)
         alert.view.accessibilityIdentifier = "webBookFile.progress"
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in self?.cancel() })
+        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.cancel() })
         busy = alert
         owner.present(alert, animated: true)
     }
 
     private func showFailure(_ error: Error, book: Book, openAfterImport: Bool) {
         guard let owner, owner.canPerformNavigationAction else { return }
-        let alert = UIAlertController(title: "文件下载失败", message: error.userFacingMessage, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        let alert = UIAlertController(
+            title: WebBookFileCopy.downloadFailed, message: WebBookFileErrorCopy.message(error), preferredStyle: .alert)
+        alert.view.accessibilityIdentifier = "webBookFile.failure"
+        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
         alert.addAction(
-            UIAlertAction(title: "重试", style: .default) { [weak self, weak alert] _ in
+            UIAlertAction(title: L10n.Common.retry, style: .default) { [weak self, weak alert] _ in
                 guard let self, let alert else { return }
                 Task { @MainActor [weak self] in
                     await Self.dismiss(alert)
@@ -286,9 +289,11 @@ final class WebBookFileCoordinator {
 
     private func confirmDownloadOnly(_ option: WebBookFileOption, token: UUID) async -> Bool {
         let alert = UIAlertController(
-            title: "下载文件", message: "此格式不能直接阅读，将保留文件供其他应用打开。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in self?.finishConfirmation(false) })
-        alert.addAction(UIAlertAction(title: "下载", style: .default) { [weak self] _ in self?.finishConfirmation(true) })
+            title: WebBookFileCopy.downloadOnlyTitle,
+            message: WebBookFileCopy.unsupportedFile(option.fileName), preferredStyle: .alert)
+        alert.view.accessibilityIdentifier = "webBookFile.downloadOnly"
+        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel) { [weak self] _ in self?.finishConfirmation(false) })
+        alert.addAction(UIAlertAction(title: WebBookFileCopy.download, style: .default) { [weak self] _ in self?.finishConfirmation(true) })
         let accepted = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 guard !Task.isCancelled, isCurrent(token), let owner, owner.presentedViewController == nil else {
@@ -358,5 +363,34 @@ final class WebBookFileCoordinator {
 
     private static func failure(_ message: String) -> NSError {
         NSError(domain: "io.legado.web-book-file", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+private enum WebBookFileCopy {
+    static let preparingOptions = L10n.text("web_file.consumer.preparing_options", "正在读取下载文件")
+    static let optionsFailed = L10n.text("web_file.consumer.options_failed", "无法读取下载文件")
+    static let cancelling = L10n.text("web_file.consumer.cancelling", "正在取消，已完成的文件会保留")
+    static let noOptions = L10n.text("web_file.consumer.no_options", "书源没有可下载的文件")
+    static let optionsTitle = L10n.text("web_file.consumer.options_title", "下载并导入文件")
+    static let readingInline = L10n.text("web_file.consumer.reading_inline", "正在读取内嵌书籍")
+    static let downloading = L10n.text("web_file.consumer.downloading", "正在下载书籍")
+    static let inlinePreparationFailed = L10n.text("web_file.consumer.inline_preparation_failed", "内嵌文件准备失败")
+    static let preparingReading = L10n.text("web_file.consumer.preparing_reading", "正在准备阅读")
+    static let preparing = L10n.text("web_file.consumer.preparing", "正在准备…")
+    static let downloadFailed = L10n.text("web_file.consumer.download_failed", "文件下载失败")
+    static let downloadOnlyTitle = L10n.text("web_file.consumer.download_only_title", "下载文件")
+    static let download = L10n.text("web_file.consumer.download", "下载")
+
+    static func unsupportedFile(_ fileName: String) -> String {
+        L10n.format("web_file.consumer.unsupported_file", "此应用不支持直接阅读文件 %@，可下载后交给其他应用打开。", fileName)
+    }
+
+    static func importedFailure(merged: Bool, message: String) -> String {
+        if merged {
+            return L10n.format(
+                "web_file.consumer.imported_reading_failed", "文件已导入，可从书架重试阅读：%@", message)
+        }
+        return L10n.format(
+            "web_file.consumer.imported_merge_failed", "文件已导入，但在线信息合并失败，可从书架打开：%@", message)
     }
 }

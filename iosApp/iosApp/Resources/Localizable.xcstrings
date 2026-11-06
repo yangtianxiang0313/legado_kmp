@@ -1,6 +1,1286 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "web_file.consumer.cancelling": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelling. Completed files will be kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在取消，已完成的文件会保留"
+          }
+        }
+      }
+    },
+    "web_file.consumer.download": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载"
+          }
+        }
+      }
+    },
+    "web_file.consumer.download_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File Download Failed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载失败"
+          }
+        }
+      }
+    },
+    "web_file.consumer.download_only_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download File"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载文件"
+          }
+        }
+      }
+    },
+    "web_file.consumer.downloading": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading book"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在下载书籍"
+          }
+        }
+      }
+    },
+    "web_file.consumer.imported_merge_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file was imported, but merging online information failed. Open it from the bookshelf: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件已导入，但在线信息合并失败，可从书架打开：%@"
+          }
+        }
+      }
+    },
+    "web_file.consumer.imported_reading_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file was imported. Retry reading from the bookshelf: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件已导入，可从书架重试阅读：%@"
+          }
+        }
+      }
+    },
+    "web_file.consumer.inline_preparation_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to prepare embedded file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件准备失败"
+          }
+        }
+      }
+    },
+    "web_file.consumer.no_options": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No downloadable files are available from this book source."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书源没有可下载的文件"
+          }
+        }
+      }
+    },
+    "web_file.consumer.options_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to load downloadable files"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取下载文件"
+          }
+        }
+      }
+    },
+    "web_file.consumer.options_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download and Import File"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载并导入文件"
+          }
+        }
+      }
+    },
+    "web_file.consumer.preparing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备…"
+          }
+        }
+      }
+    },
+    "web_file.consumer.preparing_options": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading downloadable files"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取下载文件"
+          }
+        }
+      }
+    },
+    "web_file.consumer.preparing_reading": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing to read"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备阅读"
+          }
+        }
+      }
+    },
+    "web_file.consumer.reading_inline": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading embedded book"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取内嵌书籍"
+          }
+        }
+      }
+    },
+    "web_file.consumer.unsupported_file": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file %@ cannot be read here. Download it to open in another app."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此应用不支持直接阅读文件 %@，可下载后交给其他应用打开。"
+          }
+        }
+      }
+    },
+    "web_file.error.already_started": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file download has already started."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载已经开始"
+          }
+        }
+      }
+    },
+    "web_file.error.content_encoding_unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server ignored identity encoding, so the file length cannot be reliably verified."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器忽略 identity 编码，无法可靠校验文件长度"
+          }
+        }
+      }
+    },
+    "web_file.error.cookie_callback_missing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The response contains cookies, but no callback was provided to save them to the book source."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "响应包含 Cookie，但未提供书源 Cookie 回写回调"
+          }
+        }
+      }
+    },
+    "web_file.error.cross_origin_replay": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resending the original request body or POST to another site was refused."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拒绝向其他站点重发原请求正文或 POST"
+          }
+        }
+      }
+    },
+    "web_file.error.cross_origin_request": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending the source request body or POST to another site was refused."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拒绝向其他站点发送源请求正文或 POST"
+          }
+        }
+      }
+    },
+    "web_file.error.download_length_mismatch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file download is incomplete: its actual length does not match the declared length."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载不完整，实际长度与声明不符"
+          }
+        }
+      }
+    },
+    "web_file.error.download_unfinished": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file download did not finish."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载未完成"
+          }
+        }
+      }
+    },
+    "web_file.error.duration_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file download exceeded 24 hours."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载超过 24 小时"
+          }
+        }
+      }
+    },
+    "web_file.error.empty_response": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server returned an empty file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器返回了空文件"
+          }
+        }
+      }
+    },
+    "web_file.error.get_body_unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS URLSession does not support GET requests with a body. Adjust the book source request rules."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS URLSession 不支持携带正文的 GET，请调整书源请求规则"
+          }
+        }
+      }
+    },
+    "web_file.error.http_status": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File download failed: HTTP %ld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载失败：HTTP %ld"
+          }
+        }
+      }
+    },
+    "web_file.error.incomplete_response": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server did not return a complete file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器未返回完整文件"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_data_after_padding": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file contains data after Base64 padding."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件 Base64 padding 后存在数据"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_decode_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base64 decoding of the embedded file failed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件 Base64 解码失败"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_decoded_size_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file exceeds the 64 MiB decoded size limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件超过 64 MiB 解码上限"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file is empty."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件为空"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_encoded_size_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file encoding exceeds the 96 MiB limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件编码超过 96 MiB 上限"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_incomplete_padding": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file has incomplete Base64 padding."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件 Base64 padding 不完整"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_invalid_base64_character": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file contains invalid Base64 characters."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件包含非法 Base64 字符"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_invalid_base64_length": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file has an invalid Base64 length."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件 Base64 长度无效"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_invalid_length": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file is empty or its declared length is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件为空或声明长度无效"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_invalid_padding": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file has invalid Base64 padding."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件 Base64 padding 无效"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_length_exceeded": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file's actual length exceeds its declared length."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件实际长度超出声明"
+          }
+        }
+      }
+    },
+    "web_file.error.inline_length_mismatch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded file's actual length does not match its declared length."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内嵌文件实际长度与声明不符"
+          }
+        }
+      }
+    },
+    "web_file.error.invalid_request_body": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file request body is invalid or exceeds 1 MiB."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件请求正文无效或超过 1 MiB"
+          }
+        }
+      }
+    },
+    "web_file.error.invalid_request_headers": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file request contains invalid or duplicate headers."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件请求包含无效或重复请求头"
+          }
+        }
+      }
+    },
+    "web_file.error.invalid_request_url": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file request address is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件请求地址无效"
+          }
+        }
+      }
+    },
+    "web_file.error.invalid_response": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file response is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件响应无效"
+          }
+        }
+      }
+    },
+    "web_file.error.invalid_retry_count": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file request retry count cannot be negative."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件请求重试次数不能为负数"
+          }
+        }
+      }
+    },
+    "web_file.error.invalid_timeout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file request timeout setting is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件请求超时配置无效"
+          }
+        }
+      }
+    },
+    "web_file.error.method_unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File downloads support only GET or POST."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载仅支持 GET 或 POST"
+          }
+        }
+      }
+    },
+    "web_file.error.partial_response_unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partial file responses are not supported."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持分段文件响应"
+          }
+        }
+      }
+    },
+    "web_file.error.redirect_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file download exceeded 10 redirects."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件重定向超过 10 次"
+          }
+        }
+      }
+    },
+    "web_file.error.redirect_type_unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file redirect type is not supported."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持的文件重定向类型"
+          }
+        }
+      }
+    },
+    "web_file.error.request_header_count_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The number of file request headers exceeds the limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件请求头数量超过限制"
+          }
+        }
+      }
+    },
+    "web_file.error.request_header_size_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file request headers exceed the size limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件请求头超过大小限制"
+          }
+        }
+      }
+    },
+    "web_file.error.request_options_unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File downloads do not support range requests, conditional requests, or proxy options."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载不支持分段、条件请求或代理选项"
+          }
+        }
+      }
+    },
+    "web_file.error.response_cookie_count_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The number of file response cookies exceeds the limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件响应 Cookie 数量超过限制"
+          }
+        }
+      }
+    },
+    "web_file.error.response_cookie_size_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file response cookies exceed 64 KiB."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件响应 Cookie 超过 64 KiB"
+          }
+        }
+      }
+    },
+    "web_file.error.response_cookie_unreadable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server response cookies could not be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取服务器响应 Cookie"
+          }
+        }
+      }
+    },
+    "web_file.error.response_size_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file exceeds the 2 GiB download limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件超过 2 GiB 下载上限"
+          }
+        }
+      }
+    },
+    "web_file.error.session_terminated": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file download session ended prematurely."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件下载会话提前终止"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_close_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file could not be closed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件关闭失败"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_create_download_directory_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download directory could not be created."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建下载目录"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_create_staging_directory_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download staging directory could not be created."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建下载暂存目录"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_create_temporary_file_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The temporary download file could not be created."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建下载临时文件"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_download_directory_changed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download directory location has changed or contains a symbolic link."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载目录位置已变更或包含符号链接"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_file_mismatch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved file failed length or type validation."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件落盘长度或类型校验失败"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_filename_collisions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many files have the same name. Choose another filename."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同名文件过多，请更换文件名"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_invalid_temporary_file": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The temporary file is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临时文件无效"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_open_documents_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Documents directory could not be opened."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开文稿目录"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_open_staging_directory_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download staging directory could not be opened."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开下载暂存目录"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_read_staging_directory_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download staging directory could not be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取下载暂存目录"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_save_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download finished, but the file could not be saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载完成，但保存文件失败"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_staging_directory_changed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download staging directory location has changed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载暂存目录位置已变更"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_staging_file_changed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The staged download file location has changed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载暂存文件位置已变更"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_sync_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File syncing failed. Check the available storage space."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件同步失败，请检查存储空间"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_temporary_file_unfinished": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The temporary download file is not yet complete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载临时文件尚未完成"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_unsafe_download_directory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download directory is not a secure folder."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载目录不是安全文件夹"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_write_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File writing failed. Check the available storage space."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件写入失败，请检查存储空间"
+          }
+        }
+      }
+    },
+    "web_file.error.storage_write_finished": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File writing has already ended."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件写入已结束"
+          }
+        }
+      }
+    },
+    "web_file.error.stream_length_exceeded": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file stream exceeds the length declared by the server."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件流超出服务器声明长度"
+          }
+        }
+      }
+    },
+    "web_file.error.stream_size_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file stream exceeds the 2 GiB download limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件流超过 2 GiB 下载上限"
+          }
+        }
+      }
+    },
+    "web_file.error.unsafe_redirect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file redirect address is unsafe."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件重定向地址不安全"
+          }
+        }
+      }
+    },
     "consumer.local_relink.confirm_message": {
       "extractionState": "manual",
       "localizations": {
