@@ -11,8 +11,12 @@ import io.ktor.client.request.header
 import platform.Foundation.NSNumber
 
 class IosProxyRequestExecutor : ProxyRequestExecutor {
+    private val sourceClient = LegadoHttpClient()
 
     override suspend fun executeText(context: SourceExecutionContext, proxy: String): HttpResponse {
+        if (context.requestConfig.sourceNetworkKey != null) {
+            return sourceClient.execute(context.requestConfig.copy(sourceNetworkProxy = proxy))
+        }
         val parsed = parseProxy(proxy)
         val client = createIosProxyHttpClient(parsed, followRedirects = context.requestConfig.followRedirects)
         try {

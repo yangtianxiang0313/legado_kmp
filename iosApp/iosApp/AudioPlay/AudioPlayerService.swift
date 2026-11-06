@@ -149,7 +149,11 @@ final class AudioPlayerService: NSObject {
             refreshState()
         } else if runtime == nil, request != nil {
             needsMediaServicesRecovery = false
-            loadItem(generation: token)
+            if preparationTask != nil {
+                refreshState()
+            } else {
+                loadItem(generation: token)
+            }
         } else if finished {
             finished = false
             pendingPosition = 0
@@ -204,7 +208,7 @@ final class AudioPlayerService: NSObject {
         guard ownsPlayback, hasContent, time.isFinite, time >= 0 else { return }
         if !itemReady {
             pendingPosition = time
-            pendingSeekOverride = time
+            pendingSeekOverride = awaitingRequest ? time : nil
             return
         }
         let target = duration > 0 ? min(time, duration) : time
@@ -331,6 +335,7 @@ final class AudioPlayerService: NSObject {
             let itemRuntime = try AudioPlayerItemRuntime(
                 request: request, relay: relay, allowsFileCache: allowsFileCache,
                 progressiveSource: progressiveSource, progressiveURL: progressiveURL)
+            duration = 0
             runtime = itemRuntime
             itemRuntime.observe(
                 status: { [weak self, weak itemRuntime] in
@@ -353,12 +358,15 @@ final class AudioPlayerService: NSObject {
                     guard let self, let itemRuntime, self.isCurrent(itemRuntime, generation: token) else { return }
                     self.itemFailed(itemRuntime, error: error ?? self.playbackError("音频播放失败"), generation: token)
                 },
+                playlist: { [weak self, weak itemRuntime] response in
+                    guard let self, let itemRuntime, self.isCurrent(itemRuntime, generation: token) else { return }
+                    self.adoptPlaylist(response, generation: token)
+                },
                 playbackURL: { [weak self, weak itemRuntime] url in
                     guard let self, let itemRuntime, self.isCurrent(itemRuntime, generation: token),
                         let source = itemRuntime.progressiveSource
                     else { return }
-                    self.capturePosition()
-                    self.pendingPosition = max(self.pendingPosition, self.currentTime)
+                    self.preservePositionForReplacement()
                     self.clearItemRuntime()
                     self.installItem(
                         request: request, generation: token, progressiveSource: source, progressiveURL: url)
@@ -376,14 +384,48 @@ final class AudioPlayerService: NSObject {
         generation == token && runtime === itemRuntime && ownsPlayback
     }
 
+    private func preservePositionForReplacement() {
+        // A seek in flight owns pendingPosition, even when it moves behind the last media clock.
+        if initialSeekCompleted, !seeking {
+            capturePosition()
+            pendingPosition = currentTime
+        }
+    }
+
+    private func adoptPlaylist(_ response: MediaAudioPlaylistResponse, generation token: UUID) {
+        guard generation == token, ownsPlayback, let request else { return }
+        preservePositionForReplacement()
+        clearItemRuntime()
+        preparationID = UUID()
+        let preparationToken = preparationID
+        let prepared = preparedRequest
+        preparationTask = Task { [weak self] in
+            do {
+                let intent = try prepared ?? Self.directIntent(request)
+                let (relay, url) = try await HLSAudioRelay.prepare(intent, prefetchedRoot: response)
+                guard let self, self.generation == token, self.preparationID == preparationToken,
+                    self.ownsPlayback, !Task.isCancelled
+                else { await relay.cancel(); return }
+                self.preparationTask = nil
+                self.installItem(request: URLRequest(url: url), relay: relay, generation: token)
+            } catch {
+                guard let self, self.generation == token, self.preparationID == preparationToken,
+                    self.ownsPlayback, !Task.isCancelled
+                else { return }
+                self.preparationTask = nil
+                self.fail(error)
+            }
+        }
+        refreshState()
+    }
+
     private func itemFailed(_ itemRuntime: AudioPlayerItemRuntime, error: Error, generation token: UUID) {
         if itemRuntime.permitsSystemFallback, let request {
             switch itemRuntime.progressiveFailure ?? (error as? MediaAudioError) {
             case .tooLarge?, .unsupportedFormat?:
                 // Only an original plain GET may retain its pre-cache system playback path.
                 // Protected requests never retry without their headers, nor after a version mismatch.
-                capturePosition()
-                pendingPosition = max(pendingPosition, currentTime)
+                preservePositionForReplacement()
                 clearItemRuntime()
                 installItem(request: request, generation: token, allowsFileCache: false)
                 return
@@ -489,7 +531,6 @@ final class AudioPlayerService: NSObject {
         runtime?.player.pause()
         captureDuration()
         capturePosition()
-        if duration > 0 { currentTime = duration }
         wantsPlayback = false
         interruptionIntent = nil
         finished = true
@@ -693,6 +734,7 @@ final class AudioPlayerService: NSObject {
     }
 
     deinit {
+        preparationTask?.cancel()
         // Runtime cleanup bags remove only this engine's observers/targets on the main actor.
         // Destroying an old service must not erase another owner's metadata.
         AudioPlayerDeviceRuntime.onMainActor {

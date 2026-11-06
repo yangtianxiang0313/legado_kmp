@@ -260,7 +260,26 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         detailScene = scene
         isSceneActive = scene?.activationState == .foregroundActive
         renderBook()
-        DispatchQueue.main.async { [weak self] in self?.resumeAppearanceLoadIfNeeded() }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.canInteract() else { return }
+            if self.needsAppearanceLoad {
+                self.resumeAppearanceLoadIfNeeded()
+            } else if let cachedBook = self.book {
+                self.adapter.refreshAppearance { [weak self] updated in
+                    guard let self, self.canInteract(), self.book === cachedBook else { return }
+                    if updated.origin != cachedBook.origin || updated.tocUrl != cachedBook.tocUrl
+                        || updated.config.reverseToc != cachedBook.config.reverseToc
+                    {
+                        self.chapters = []
+                        self.needsChapters = true
+                        self.needsAppearanceLoad = true
+                    }
+                    self.book = updated
+                    self.renderBook()
+                    self.resumeAppearanceLoadIfNeeded()
+                }
+            }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -273,7 +292,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         overflowActions.cancelRelink()
         interactionGeneration &+= 1
         directorySessionID = nil
-        needsAppearanceLoad = true
+        needsAppearanceLoad = needsAppearanceLoad || book == nil || needsInfo || needsChapters
         sourceChangeActions.cancelPreparation()
         groupActions.cancelPreparation()
         cancelLoading()
@@ -372,7 +391,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
                 let resolved = try await adapter.resolveInitialBook(preparingForReading: openReader)
                 guard self.acceptsLoad(generation) else { return }
                 self.traceLoad("accept resolve", generation: generation)
-                self.book = resolved
+                if let resolved { self.book = resolved }
                 self.renderBook()
                 if openReader {
                     guard self.acceptsNavigation(generation, interaction: interaction),
@@ -435,6 +454,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
     }
 
     private func cancelLoading() {
+        adapter.cancelAppearanceRefresh()
         if let loadingTask, !loadingTask.isCancelled { traceLoad("cancel", generation: loadGeneration) }
         loadGeneration &+= 1
         loadingTask?.cancel()
@@ -454,6 +474,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
         chapters = result.chapters
         needsInfo = false
         needsChapters = false
+        needsAppearanceLoad = false
         catalogState = result.chapters.isEmpty ? .failed : .ready
         if isViewLoaded { renderBook() }
     }
@@ -479,6 +500,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
             updateActions()
             return
         }
+        adapter.retainPreviewSnapshot(book)
         contentView.render(
             .init(
                 name: book.name, author: book.getRealAuthor(), kind: book.kind, wordCount: book.wordCount,
@@ -636,6 +658,7 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
                 }
                 owner.needsInfo = true
                 owner.needsChapters = true
+                owner.needsAppearanceLoad = true
             }
             owner.navigationController?.pushViewController(editor, animated: true)
         }
@@ -648,8 +671,8 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
             onFailure: { [weak self] in self?.showChapterListFailure($0) },
             operation: {
                 [adapter] owner, generation, interaction in
-                let resolved = try await adapter.resolveInitialBook()
-                guard owner.acceptsLoad(generation) else { return }
+                let resolved = try await adapter.resolveInitialBook(preparingForReading: true)
+                guard owner.acceptsLoad(generation), let resolved else { return }
                 owner.book = resolved
                 var items = try await adapter.loadChapterListState()
                 if items.isEmpty {
@@ -687,15 +710,21 @@ final class AndroidReplicaBookDetailViewController: UIViewController, Navigation
                     },
                     onRefresh: nil,
                     onReverse: { [weak owner, adapter] in
+                        guard owner?.directorySessionID == sessionID, owner?.bookURL == expectedBookURL
+                        else { throw CancellationError() }
                         let result = try await adapter.reverseChapterList()
-                        if let owner, owner.bookURL == result.book.bookUrl {
+                        if let owner, owner.directorySessionID == sessionID, owner.bookURL == result.book.bookUrl {
                             owner.book = result.book
                             owner.chapters = result.chapters
                             owner.renderBook()
                         }
                         return try await adapter.loadChapterListState()
                     },
-                    onReloadTitles: { [adapter] in try await adapter.loadChapterListState() },
+                    onReloadTitles: { [weak owner, adapter] in
+                        guard owner?.directorySessionID == sessionID, owner?.bookURL == expectedBookURL
+                        else { throw CancellationError() }
+                        return try await adapter.loadChapterListState()
+                    },
                     onShowLogs: { [weak owner] presenter in
                         guard let owner, owner.directorySessionID == sessionID, owner.bookURL == expectedBookURL,
                             owner.canInteract(in: presenter)

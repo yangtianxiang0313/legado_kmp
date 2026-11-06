@@ -17,6 +17,13 @@ import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSString
 import platform.Foundation.NSThread
 import platform.Foundation.NSURL
+import platform.Foundation.NSURLAuthenticationChallenge
+import platform.Foundation.NSURLCredential
+import platform.Foundation.NSURLSessionAuthChallengeDisposition
+import platform.Foundation.NSURLSessionAuthChallengePerformDefaultHandling
+import platform.Foundation.NSURLSessionAuthChallengeUseCredential
+import platform.Foundation.serverTrust
+import platform.Foundation.credentialForTrust
 import platform.Foundation.NSURLComponents
 import platform.Foundation.NSURLErrorCancelled
 import platform.Foundation.NSURLErrorDomain
@@ -73,6 +80,7 @@ internal class IosWebViewNavigationDelegate(
         if (!alive()) return
         navigation = if (directGet) {
             val request = NSMutableURLRequest.requestWithURL(url)
+            request.setTimeoutInterval(context.requestConfig.timeout.inWholeMilliseconds / 1000.0)
             context.requestConfig.headers.withoutNullUserAgent()
                 .withoutSourceCookieJarHeader()
                 .filterKeys { !it.equals("Cookie", true) }.forEach { (name, value) ->
@@ -102,6 +110,16 @@ internal class IosWebViewNavigationDelegate(
         policyReload = null
         replacedNavigations.clear()
         policyCancelledNavigations.clear()
+    }
+
+    @ObjCSignatureOverride
+    override fun webView(
+        webView: WKWebView,
+        didReceiveAuthenticationChallenge: NSURLAuthenticationChallenge,
+        completionHandler: (NSURLSessionAuthChallengeDisposition, NSURLCredential?) -> Unit,
+    ) {
+        SourceNetworkNative.handleWebViewChallenge(webView, context.source?.bookSourceUrl,
+            alive() && context.requestConfig.allowSourceCertificateCompatibility, didReceiveAuthenticationChallenge, completionHandler)
     }
 
     @ObjCSignatureOverride

@@ -2,6 +2,31 @@ import Foundation
 import shared
 
 enum SharedCancellableAsync {
+    @MainActor
+    static func valueOnMainActor<T>(
+        awaitCancellationCompletion: Bool = false,
+        start: @MainActor (@escaping @Sendable (T?, Error?) -> Void) -> FlowSubscription
+    ) async throws -> T {
+        try Task.checkCancellation()
+        let state = SharedCancellableAsyncState<T>(awaitCancellationCompletion: awaitCancellationCompletion)
+        let value: T = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+                guard state.installContinuation(continuation) else { return }
+                let subscription = start { value, error in
+                    state.complete(value: value, error: error)
+                }
+                state.installSubscription(subscription)
+            }
+        } onCancel: {
+            // Keep Native entry and cancellation on the same actor, including cancellation from another executor.
+            state.cancel { subscription in
+                Task { @MainActor in subscription.cancel() }
+            }
+        }
+        try Task.checkCancellation()
+        return value
+    }
+
     static func value<T>(
         awaitCancellationCompletion: Bool = false,
         start: (@escaping @Sendable (T?, Error?) -> Void) -> FlowSubscription
@@ -98,7 +123,7 @@ private final class SharedCancellableAsyncState<T>: @unchecked Sendable {
         }
     }
 
-    func cancel() {
+    func cancel(cancelSubscription: (FlowSubscription) -> Void = { $0.cancel() }) {
         lock.lock()
         guard phase == .pending else {
             lock.unlock()
@@ -117,7 +142,7 @@ private final class SharedCancellableAsyncState<T>: @unchecked Sendable {
         // Kotlin cancellation can synchronously call back into this state.
         withExtendedLifetime(subscription) {
             if !waitForTerminal { continuation?.resume(throwing: CancellationError()) }
-            subscription?.cancel()
+            if let subscription { cancelSubscription(subscription) }
         }
     }
 }

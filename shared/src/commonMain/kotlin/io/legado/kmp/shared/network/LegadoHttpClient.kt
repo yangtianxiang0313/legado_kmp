@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -88,7 +89,10 @@ data class HttpRequestConfig(
     val bodyBytes: ByteArray? = null,
     val timeout: Duration = 30.seconds,
     val followRedirects: Boolean = true,
-    val cacheStrategy: CacheStrategy = CacheStrategy.Default
+    val cacheStrategy: CacheStrategy = CacheStrategy.Default,
+    val sourceNetworkKey: String? = null,
+    val sourceNetworkProxy: String? = null,
+    val allowSourceCertificateCompatibility: Boolean = false,
 )
 
 /**
@@ -120,6 +124,8 @@ class LegadoHttpClient(
     private val preferencesStore: AppPreferencesStore? = null,
 ) {
 
+    private val sourceClients = SourceHttpClientPool()
+
     private val redirectingClient: HttpClient by lazy {
         client?.withUserAgentPolicy(preferencesStore)
             ?: createDefaultHttpClient(followRedirects = true, preferencesStore = preferencesStore)
@@ -140,7 +146,13 @@ class LegadoHttpClient(
      * @return HTTP response
      */
     suspend fun execute(config: HttpRequestConfig): HttpResponse {
-        val requestConfig = config.copy(headers = requestHeaders(config.headers))
+        val requestConfig = config.copy(headers = requestHeaders(config.headers), allowSourceCertificateCompatibility =
+            config.allowSourceCertificateCompatibility && SourceNetworkPolicy.permitsCompatibilityForRequest(config.url, config.headers))
+        if (requestConfig.sourceNetworkKey != null) {
+            return sourceClients.use(requestConfig) { scoped ->
+                readResponse(scoped.request { applyConfig(requestConfig) })
+            }
+        }
         val response = if (requestConfig.followRedirects && requestConfig.method != HttpMethod.GET && requestConfig.method != HttpMethod.HEAD) {
             executeSourceHttpRedirects(requestConfig) { redirectedConfig ->
                 redirectlessClient.request { applyConfig(redirectedConfig) }
@@ -150,6 +162,10 @@ class LegadoHttpClient(
             activeClient.request { applyConfig(requestConfig) }
         }
 
+        return readResponse(response)
+    }
+
+    private suspend fun readResponse(response: KtorHttpResponse): HttpResponse {
         val rawBodyBytes = response.body<ByteArray>()
         val bodyBytes = decompressResponseBody(
             bodyBytes = rawBodyBytes,
@@ -342,8 +358,10 @@ class LegadoHttpClient(
             setBody(it)
         }
 
-        // Note: Timeout and redirect configuration would be applied via client configuration
-        // For per-request timeout, you would use HttpTimeout plugin with request scope
+        timeout {
+            requestTimeoutMillis = config.timeout.inWholeMilliseconds.coerceAtLeast(1)
+            socketTimeoutMillis = config.timeout.inWholeMilliseconds.coerceAtLeast(1)
+        }
     }
 
     companion object {

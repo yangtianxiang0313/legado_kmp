@@ -23,6 +23,7 @@ class TxtBookParser(
     init {
         require(bufferSize in 1..Int.MAX_VALUE - 12) { "TXT buffer size is out of range" }
         require(maxLengthWithNoToc > 0) { "TXT chapter length must be positive" }
+        require(maxLengthWithToc > 0) { "TXT chapter length must be positive" }
     }
 
     fun parse(
@@ -48,7 +49,8 @@ class TxtBookParser(
 
     /**
      * Read-only parsing; the caller owns [source]. Null/blank selects an enabled rule automatically,
-     * ignoring book.tocUrl. A nonblank rule is compiled strictly and never falls back to other rules.
+     * ignoring book.tocUrl. A nonblank rule never falls back to other rules; an unusable pattern
+     * falls back to length-based chapters without retaining a partial directory.
      * Call [TxtChapterIdentity.retain] with the stored directory before replacing chapter identities.
      */
     @Throws(Exception::class)
@@ -61,11 +63,11 @@ class TxtBookParser(
     ): ParsedTxtBook {
         checkActive()
         if (source.size == 0L) throw EmptyFileException("Unexpected Empty Txt File")
-        val forcedRule = selectedRegex?.takeIf { it.isNotBlank() }
-            ?.let { Regex(it, setOf(RegexOption.MULTILINE)) }
+        val requestedRule = selectedRegex?.takeIf { it.isNotBlank() }
+        val forcedRule = requestedRule?.let(::compileTxtTocPattern)
         val charsetName = book.charset?.takeIf { it.isNotBlank() } ?: detectTxtCharset(source, checkActive)
         val reader = TxtWindowReader(source, charsetName, bufferSize, checkActive)
-        val tocRegex = forcedRule ?: run {
+        var tocRegex = if (requestedRule != null) forcedRule else run {
             val previewText = if (reader.startOffset < source.size) {
                 reader.window(reader.startOffset).content
             } else {
@@ -73,11 +75,13 @@ class TxtBookParser(
             }
             selectTocRule(previewText, tocRules, checkActive)
         }
-        val (chapters, wordCount) = if (tocRegex == null) {
+        val matched = tocRegex?.let { analyzeWithRule(reader, it, book.config.splitLongChapter, checkActive) }
+        val (chapters, wordCount) = matched ?: run {
+            tocRegex = null
             analyzeWithoutRule(reader, checkActive)
-        } else {
-            analyzeWithRule(reader, tocRegex, book.config.splitLongChapter, checkActive)
         }
+        checkActive()
+        if (wordCount == 0L) throw EmptyFileException("Unexpected Empty Txt File")
 
         val normalized = chapters.mapIndexed { index, chapter ->
             checkActive()
@@ -133,15 +137,15 @@ class TxtBookParser(
             }
         }
         checkActive()
-        return content.substringAfter(chapter.title).replace(padRegex, "　　")
+        return content.removePrefix(chapter.title).replace(padRegex, "　　")
     }
 
     private fun analyzeWithRule(
         reader: TxtWindowReader,
-        pattern: Regex,
+        pattern: TxtTocPattern,
         splitLongChapter: Boolean,
         checkActive: () -> Unit
-    ): Pair<ArrayList<BookChapter>, Long> {
+    ): Pair<ArrayList<BookChapter>, Long>? {
         val toc = arrayListOf<BookChapter>()
         var bookWordCount = 0L
         var sourceOffset = reader.startOffset
@@ -165,15 +169,15 @@ class TxtBookParser(
             val matchableEnd = if (end == reader.size) blockContent.length else blockContent.lastIndexOf('\n') + 1
             var seekPos = 0
             var bodyTextStart = 0
-            pattern.findAll(blockContent).forEach { match ->
+            val complete = pattern.forEachMatch(blockContent, checkActive) { match ->
                 checkActive()
                 val titleStart = match.range.first
                 val titleEnd = match.range.last + 1
                 if (titleStart < matchableStart || titleEnd > matchableEnd ||
                     (end < reader.size && titleStart >= matchableEnd)
-                ) return@forEach
-                val chapterStart = block.byteOffset(titleStart) ?: return@forEach
-                val chapterTitleEnd = block.byteOffset(titleEnd) ?: return@forEach
+                ) return@forEachMatch
+                val chapterStart = block.byteOffset(titleStart) ?: return@forEachMatch
+                val chapterTitleEnd = block.byteOffset(titleEnd) ?: return@forEachMatch
                 val chapterContent = blockContent.substring(seekPos, titleStart)
                 lastChapterWordCount += chapterContent.length
                 if (toc.isEmpty()) {
@@ -195,8 +199,10 @@ class TxtBookParser(
                         isVolume = !lastChapterHasBody,
                         wordCount = wordCountFormat(lastChapterWordCount)
                     )
-                    if (splitLongChapter && chapterStart - (last.start ?: chapterStart) > maxLengthWithToc) {
-                        toc[toc.lastIndex] = toc.last().copy(end = last.start, tag = null)
+                    if (splitLongChapter && lastChapterHasBody &&
+                        chapterStart - (last.start ?: chapterStart) > maxLengthWithToc
+                    ) {
+                        toc[toc.lastIndex] = toc.last().copy(end = last.start, isVolume = true, tag = null)
                         val (chapters, _) = analyzeWithoutRule(reader, checkActive, lastTitleEnd, chapterStart)
                         chapters.forEachIndexed { index, chapter ->
                             toc += chapter.copy(title = "${last.title}(${index + 1})")
@@ -210,6 +216,7 @@ class TxtBookParser(
                 seekPos = titleStart
                 bodyTextStart = titleEnd
             }
+            if (!complete) return null
             lastChapterWordCount += blockContent.length - seekPos
             if (toc.isEmpty()) {
                 preambleHasText = preambleHasText || blockContent.substring(seekPos).isNotBlank()
@@ -222,11 +229,12 @@ class TxtBookParser(
             if (blockContent.isNotEmpty()) startsAtLineStart = blockContent.endsWith('\n')
             sourceOffset = end
         }
-        if (toc.isEmpty()) return analyzeWithoutRule(reader, checkActive)
+        if (toc.isEmpty()) return null
         toc.lastOrNull()?.let { last ->
+            toc[toc.lastIndex] = last.copy(isVolume = !lastChapterHasBody)
             val start = last.start ?: 0L
             val end = last.end ?: start
-            if (splitLongChapter && end - start > maxLengthWithToc) {
+            if (splitLongChapter && lastChapterHasBody && end - start > maxLengthWithToc) {
                 toc.removeAt(toc.lastIndex)
                 val (chapters, _) = analyzeWithoutRule(
                     reader = reader,
@@ -309,21 +317,22 @@ class TxtBookParser(
         return toc to bookWordCount
     }
 
-    private fun selectTocRule(content: String, tocRules: List<TxtTocRule>, checkActive: () -> Unit): Regex? {
+    private fun selectTocRule(content: String, tocRules: List<TxtTocRule>, checkActive: () -> Unit): TxtTocPattern? {
         var maxNum = 1
-        var selected: Regex? = null
+        var selected: TxtTocPattern? = null
         tocRules.asReversed().filter { it.enable }.forEach { tocRule ->
             checkActive()
-            val regex = runCatching { Regex(tocRule.rule, setOf(RegexOption.MULTILINE)) }.getOrNull() ?: return@forEach
+            val regex = compileTxtTocPattern(tocRule.rule) ?: return@forEach
             var start = 0
             var num = 0
-            regex.findAll(content).forEach { match ->
+            val complete = regex.forEachMatch(content, checkActive) { match ->
                 checkActive()
                 if (start == 0 || match.range.first - start > 1000) {
                     num += 1
                     start = match.range.last + 1
                 }
             }
+            if (!complete) return@forEach
             if (num >= maxNum) {
                 maxNum = num
                 selected = regex

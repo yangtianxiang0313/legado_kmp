@@ -19,6 +19,8 @@ window.LegadoWebReading = (() => {
   const parameter = book => '?url=' + encodeURIComponent(book.bookUrl) + (book.origin ? '&origin=' + encodeURIComponent(book.origin) : '');
   const finite = (value, fallback, [minimum, maximum]) => typeof value === 'number' && Number.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : fallback;
   const isImageBook = book => Number.isSafeInteger(book?.type) && (book.type === 2 || (book.type & 64) !== 0);
+  const isPDFBook = book => !!book && (typeof book.localBookFormat === 'string'
+    ? book.localBookFormat === 'pdf' : /\.pdf(?:$|[?#])/i.test(book.bookUrl));
   const progressPosition = (book, node) => Number(isImageBook(book) ? node.dataset.imagePosition : node.dataset.position);
   function normalize(value) {
     const config = {...defaults, ...value, spacing: {...defaults.spacing, ...(object(value?.spacing) ? value.spacing : {})}};
@@ -55,12 +57,13 @@ window.LegadoWebReading = (() => {
   function create({request, run, onChange, onShelfChanged}) {
     let book = null, preview = false, chapters = [], selected = '', generation = 0, controller = null;
     let allowsWrites = false, active = false, pending = false, pdfURL = null, pdfLoading = false, openingBook = false;
-    let pdfPageCount = 0, pdfIndex = 0, pdfRevision = 0, pdfPageURL = null, pdfPageController = null;
+    let pdfPageCount = 0, pdfIndex = 0, pdfRevision = 0, pdfPageURL = null, pdfPageController = null, pdfDisplayed = null;
     let pdfDownloadLoading = false, pdfDownloadRevision = 0, pdfDownloadController = null, pdfResizeObserver = null;
     let config = normalize({}), configLoaded = false, configLoading = false, configSaving = false, configDirty = false, configRevision = 0;
     let configGeneration = 0, configController = null;
     let loaded = [], imageCount = 0, imageBytes = 0, imageWorkers = 0, imageQueue = [], animation = 0, observer = null, appendFailed = false;
     let coverURL = null, progressSaving = false, bookSaving = false, scrollFrame = 0;
+    let imageRestore = null, restoreFrame = 0, scrollRevision = 0;
     const imageURLs = new Map();
     const content = el('content');
     const current = id => active && generation === id && !controller?.signal.aborted;
@@ -68,9 +71,13 @@ window.LegadoWebReading = (() => {
     const note = text => { el('reader-note').textContent = text; };
     const configNote = text => { el('config-status').textContent = text; };
 
+    function hasPDFProgress() {
+      return !!pdfDisplayed && current(pdfDisplayed.id) && book === pdfDisplayed.book
+        && pdfDisplayed.revision === pdfRevision && pdfDisplayed.index === pdfIndex && !pdfLoading;
+    }
     function setPermissions(value) { allowsWrites = value === true; renderControls(); }
     function renderControls() {
-      const isPDF = !!book && /\.pdf(?:$|[?#])/i.test(book.bookUrl);
+      const isPDF = isPDFBook(book);
       el('reading-panel').hidden = !active || !book;
       el('chapters').hidden = isPDF || !chapters.length;
       el('chapter-tools').hidden = isPDF || !chapters.length;
@@ -80,8 +87,9 @@ window.LegadoWebReading = (() => {
       el('reader-intro').hidden = !book?.intro;
       el('reader-add').hidden = !preview;
       el('reader-add').disabled = !allowsWrites || bookSaving || openingBook;
-      el('reader-progress').hidden = preview || isPDF;
-      el('reader-progress').disabled = !allowsWrites || !loaded.length || progressSaving || pending;
+      el('reader-progress').hidden = preview;
+      el('reader-progress').disabled = !active || preview || !allowsWrites || openingBook || progressSaving || pending
+        || (isPDF ? !hasPDFProgress() : !loaded.length || !!imageRestore && !imageRestore.applied);
       el('reader-retry').disabled = openingBook || pending || pdfLoading;
       const position = chapters.findIndex(chapter => String(chapter.index) === selected);
       el('chapter-previous').disabled = pending || position <= 0;
@@ -101,7 +109,7 @@ window.LegadoWebReading = (() => {
       el('pdf-page-count').textContent = '/ ' + pdfPageCount + ' 页';
       el('pdf-fetch-download').disabled = pdfDownloadLoading || !!pdfURL;
       el('reader-more').hidden = !config.infiniteLoading || !loaded.length || isPDF;
-      el('reader-more').disabled = pending || !nextLoadedChapter();
+      el('reader-more').disabled = pending || !!imageRestore || !nextLoadedChapter();
       el('reader-more').textContent = appendFailed ? '重试加载下一章' : '加载下一章';
     }
     function fillConfig() {
@@ -121,7 +129,7 @@ window.LegadoWebReading = (() => {
       content.style.setProperty('--reader-line', String(1 + config.spacing.line));
       content.style.setProperty('--reader-paragraph', config.spacing.paragraph + 'em');
       content.style.setProperty('--reader-letter', config.spacing.letter + 'em');
-      observeMore(); renderControls();
+      restoreImagePosition(); observeMore(); renderControls();
     }
     async function loadConfig(force = false) {
       if (configLoading || (!force && configLoaded)) return;
@@ -191,6 +199,7 @@ window.LegadoWebReading = (() => {
     }
     function clearPDFPage() {
       pdfRevision++;pdfPageController?.abort();pdfPageController = null;
+      pdfDisplayed = null;
       pdfResizeObserver?.disconnect();pdfResizeObserver = null;
       el('pdf-page-image').removeAttribute('src');
       el('pdf-text-layer').replaceChildren();el('pdf-page').hidden = true;
@@ -208,6 +217,7 @@ window.LegadoWebReading = (() => {
     function resetContent() {
       observer?.disconnect(); observer = null; cancelAnimationFrame(animation);
       cancelAnimationFrame(scrollFrame);scrollFrame = 0;
+      cancelImageRestore();
       controller?.abort(); controller = new AbortController();
       generation++;
       pending = false; progressSaving = false; bookSaving = false; pdfLoading = false;appendFailed = false;
@@ -226,8 +236,8 @@ window.LegadoWebReading = (() => {
       allowsWrites = false; configNote(''); fillConfig(); applyConfig();
     }
     function render(show) {
-      el('reading-panel').hidden = !show || !active || !book;
       renderControls();
+      el('reading-panel').hidden = !show || !active || !book;
     }
     function chapterOptions() {
       el('chapters').replaceChildren();
@@ -240,19 +250,21 @@ window.LegadoWebReading = (() => {
     }
     async function open(value, options = {}) {
       leave();controller = new AbortController(); active = true; book = structuredClone(value); preview = options.preview === true;openingBook = true;
-      const id = generation, signal = controller.signal;
+      const id = generation, signal = controller.signal, restoreRevision = scrollRevision;
       note('正在读取…'); renderControls(); onChange?.();
       // Config and cover failures do not prevent reading the book itself.
       void run(() => loadConfig(), () => current(id));
       try {
-        if(preview) {
-          const details = parsed(await request('/getBookInfo' + parameter(book), undefined, {signal}));
-          if(!current(id))return;
-          if(!object(details)||typeof details.bookUrl!=='string'||!details.bookUrl||typeof details.name!=='string')throw Error('服务返回的书籍详情无效');
-          book = structuredClone(details);renderControls();onChange?.();
-        }
+        const details = parsed(await request('/getBookInfo' + parameter(book), undefined, {signal}));
+        if(!current(id))return;
+        if(!object(details)||details.bookUrl!==book.bookUrl||typeof details.name!=='string'
+          || book.origin && details.origin!==book.origin)throw Error('服务返回的书籍详情与当前书籍不一致');
+        book = structuredClone(details);renderControls();onChange?.();
         void loadCover(book, id, signal);
-        if (/\.pdf(?:$|[?#])/i.test(book.bookUrl)) { await loadPDF(); return; }
+        if (isPDFBook(book)) {
+          pdfIndex = Number.isSafeInteger(book.durChapterIndex) && book.durChapterIndex >= 0 ? book.durChapterIndex : 0;
+          await loadPDF(); return;
+        }
         const value = parsed(await request('/getChapterList' + parameter(book), undefined, {signal}));
         if (!current(id)) return;
         if (!Array.isArray(value) || value.some(chapter => !object(chapter) || !Number.isSafeInteger(chapter.index) || chapter.index < 0)) throw Error('目录格式无效');
@@ -260,7 +272,7 @@ window.LegadoWebReading = (() => {
         const saved = chapters.find(chapter => chapter.index === book.durChapterIndex) || chapters[0];
         selected = saved ? String(saved.index) : '';
         chapterOptions(); renderControls();
-        if (saved) await openChapter(false, true); else note('目录为空');
+        if (saved) await openChapter(false, true, restoreRevision); else note('目录为空');
       } catch (error) {
         if (current(id) && error.name !== 'AbortError') { note('读取失败：' + error.message); throw error; }
       } finally { if(current(id)){openingBook = false;renderControls();} }
@@ -356,9 +368,11 @@ window.LegadoWebReading = (() => {
         if(!owns())return;
         buildPDFText(value.text);page.hidden = false;fitPDFText();
         pdfResizeObserver = new ResizeObserver(()=>{if(owns())fitPDFText();});pdfResizeObserver.observe(page);
+        pdfDisplayed = {id, book: target, revision, index};
         note('');
       }catch(error){
         if(owns() && error.name !== 'AbortError'){
+          pdfDisplayed = null;
           el('pdf-page-image').removeAttribute('src');el('pdf-text-layer').replaceChildren();el('pdf-page').hidden = true;
           if(pdfPageURL)URL.revokeObjectURL(pdfPageURL);pdfPageURL = null;
           note('PDF 第 ' + (index + 1) + ' 页读取失败：' + error.message);throw error;
@@ -387,11 +401,45 @@ window.LegadoWebReading = (() => {
       const position = chapters.findIndex(chapter => chapter.index === last.index);
       return chapters[position + 1] || null;
     }
+    function cancelImageRestore() {
+      if (imageRestore) content.style.overflowAnchor = imageRestore.overflowAnchor;
+      cancelAnimationFrame(restoreFrame); restoreFrame = 0; imageRestore = null;
+    }
+    function interruptImageRestore() {
+      if (!active) return;
+      scrollRevision++;
+      if (!imageRestore) return;
+      cancelImageRestore(); renderControls(); observeMore();
+    }
+    function restoreImagePosition() {
+      const state = imageRestore;
+      if (!state || restoreFrame) return;
+      restoreFrame = requestAnimationFrame(() => {
+        restoreFrame = 0;
+        if (imageRestore !== state) return;
+        if (!current(state.id) || book !== state.book || !state.section.isConnected || !state.target.isConnected
+          || state.revision !== scrollRevision || Math.abs(window.scrollY - state.scrollY) > 1) {
+          cancelImageRestore(); renderControls(); observeMore(); return;
+        }
+        const figures = [...state.section.querySelectorAll('figure[data-image-position]')];
+        const ordinal = Number(state.target.dataset.imagePosition);
+        // Earlier images must have final heights; later images can still change the scroll limit.
+        if (figures.slice(0, ordinal + 1).some(figure => figure.dataset.imagePending === 'true')) return;
+        jump(state.target, 0); state.scrollY = window.scrollY; state.applied = true;
+        if (!figures.some(figure => figure.dataset.imagePending === 'true')) {
+          cancelImageRestore(); observeMore();
+        }
+        renderControls();
+      });
+    }
+    function settleImage(figure) {
+      delete figure.dataset.imagePending; restoreImagePosition();
+    }
     function enqueueImage(src, figure, id, signal) {
       if (!src || src.length > 16384) { figure.textContent = '图片地址无效'; return; }
       if (imageCount >= 128) { figure.textContent = '当前阅读页已达到 128 张图片上限'; return; }
       imageCount++;
-      figure.dataset.queued = 'true';
+      figure.dataset.queued = 'true'; figure.dataset.imagePending = 'true';
       imageQueue.push({src, figure, id, signal, target: book});
       pumpImages(id);
     }
@@ -405,9 +453,10 @@ window.LegadoWebReading = (() => {
       }
     }
     async function loadImage({src, figure, id, signal, target}) {
+      const owns = () => current(id) && book === target && figure.isConnected;
       try {
         const value = await request('/bookImage' + parameter(target) + '&src=' + encodeURIComponent(src), undefined, {signal});
-        if (!current(id) || !figure.isConnected) return;
+        if (!owns()) return;
         const image = bitmap(value);
         if (imageBytes + image.bytes.length > 64 * 1024 * 1024) throw Error('当前阅读页图片超过 64 MiB，请切换章节');
         imageBytes += image.bytes.length;
@@ -416,23 +465,30 @@ window.LegadoWebReading = (() => {
         const img = document.createElement('img');
         img.alt = '正文图片'; img.decoding = 'async';
         img.onload = () => {
-          if (!current(id)) return;
+          if (!owns() || figure.firstElementChild !== img) return;
           if (img.naturalWidth * img.naturalHeight > 32 * 1024 * 1024) {
             img.removeAttribute('src'); figure.textContent = '图片尺寸过大'; releaseImage(url);
           }
+          settleImage(figure);
         };
         img.onerror = () => {
-          if (!current(id)) return;
+          if (!owns() || figure.firstElementChild !== img) return;
           figure.textContent = '图片解码失败'; releaseImage(url);
+          settleImage(figure);
         };
         img.src = url; figure.replaceChildren(img);
       } catch (error) {
-        if (!current(id) || error.name === 'AbortError') return;
+        if (!owns() || error.name === 'AbortError') return;
         figure.replaceChildren();
         const text = document.createElement('span'), retry = document.createElement('button');
         text.textContent = '图片读取失败：' + error.message; retry.textContent = '重试';
-        retry.onclick = () => { retry.disabled = true; figure.textContent = '正在读取图片…'; imageQueue.push({src, figure, id, signal, target}); pumpImages(id); };
+        retry.onclick = () => {
+          if (!owns()) return;
+          retry.disabled = true; figure.textContent = '正在读取图片…'; figure.dataset.imagePending = 'true';
+          imageQueue.push({src, figure, id, signal, target}); pumpImages(id);
+        };
         figure.append(text, retry);
+        settleImage(figure);
       }
     }
     function appendText(section, text, index, offset) {
@@ -455,20 +511,28 @@ window.LegadoWebReading = (() => {
       if (text.split('\n', 20002).length > 20000) throw Error('章节段落过多');
       let cursor = 0;
       const images = [];
-      // Only recognize image placeholders; all other source markup remains literal text.
-      for (const match of text.matchAll(/<img\b[^>]{0,16384}>/gi)) {
-        appendText(section, text.slice(cursor, match.index), chapter.index, cursor);
+      const appendImage = (src, position) => {
         const figure = document.createElement('figure');
-        figure.dataset.chapter = String(chapter.index); figure.dataset.position = String(match.index); figure.textContent = '正在读取图片…';
+        figure.dataset.chapter = String(chapter.index); figure.dataset.position = String(position); figure.textContent = '正在读取图片…';
         figure.dataset.imagePosition = String(images.length);
-        section.append(figure); images.push([imageSource(match[0]), figure]); cursor = match.index + match[0].length;
+        section.append(figure); images.push([src, figure]);
+      };
+      if (isImageBook(book) && data.imageSources !== undefined) {
+        if (!Array.isArray(data.imageSources) || data.imageSources.some(src => typeof src !== 'string')) throw Error('漫画图片元数据格式无效');
+        for (const src of data.imageSources) appendImage(src, 0);
+      } else {
+        // Only recognize image placeholders; all other source markup remains literal text.
+        for (const match of text.matchAll(/<img\b[^>]{0,16384}>/gi)) {
+          appendText(section, text.slice(cursor, match.index), chapter.index, cursor);
+          appendImage(imageSource(match[0]), match.index); cursor = match.index + match[0].length;
+        }
+        appendText(section, text.slice(cursor), chapter.index, cursor);
       }
-      appendText(section, text.slice(cursor), chapter.index, cursor);
       content.append(section);
       for (const [src, figure] of images) enqueueImage(src, figure, id, signal);
       return section;
     }
-    async function openChapter(append = false, restore = false) {
+    async function openChapter(append = false, restore = false, restoreRevision = scrollRevision) {
       if (!book || selected === '' || pending) return;
       const chapter = append ? nextLoadedChapter() : chapters.find(value => String(value.index) === selected);
       if (!chapter) return;
@@ -478,21 +542,30 @@ window.LegadoWebReading = (() => {
       }
       const id = generation, signal = controller.signal;
       pending = true; note('正在读取正文…'); renderControls();
+      const restoreScrollY = window.scrollY;
       try {
         const value = await request('/getBookContent' + parameter(book) + '&index=' + encodeURIComponent(chapter.index), undefined, {signal});
         if (!current(id)) return;
         const data = parsed(value);
-        if (!object(data) || typeof data.content !== 'string') throw Error('服务返回的正文格式无效');
+        if (!object(data) || typeof data.content !== 'string'
+          || data.index !== undefined && data.index !== chapter.index) throw Error('服务返回的正文格式或章节序号无效');
+        const canRestore = restoreRevision === scrollRevision && Math.abs(window.scrollY - restoreScrollY) <= 1;
         if(append)trimOldestChapter();
         const section = buildChapter(chapter, data, id, signal);
         loaded.push({index: chapter.index, section});
         appendFailed = false;
         note(''); applyConfig();
         if (!append && !restore) jump(section);
-        if (!append && restore && Number.isSafeInteger(book.durChapterPos) && book.durChapterPos > 0) {
+        if (!append && restore && Number.isSafeInteger(book.durChapterPos) && book.durChapterPos >= 0) {
           const candidates = [...section.querySelectorAll(isImageBook(book) ? 'figure[data-image-position]' : '[data-position]')];
           const target = candidates.find(node => progressPosition(book, node) >= book.durChapterPos) || candidates[candidates.length - 1];
-          if (target) jump(target, 0);
+          if (target && isImageBook(book)) {
+            if (canRestore) {
+              imageRestore = {id, book, section, target, revision: restoreRevision, scrollY: window.scrollY,
+                applied: false, overflowAnchor: content.style.overflowAnchor};
+              content.style.overflowAnchor = 'none'; restoreImagePosition();
+            }
+          } else if (target && book.durChapterPos > 0) jump(target, 0);
         }
       } catch (error) {
         if (current(id) && error.name !== 'AbortError') { if(append)appendFailed = true;note('正文读取失败：' + error.message); throw error; }
@@ -514,9 +587,9 @@ window.LegadoWebReading = (() => {
     }
     function observeMore() {
       observer?.disconnect(); observer = null;
-      if (!active || !config.infiniteLoading || pending || appendFailed || !nextLoadedChapter()) return;
+      if (!active || !config.infiniteLoading || pending || imageRestore || appendFailed || !nextLoadedChapter()) return;
       observer = new IntersectionObserver(entries => {
-        if (entries.some(entry => entry.isIntersecting) && !pending) void run(() => openChapter(true));
+        if (entries.some(entry => entry.isIntersecting) && !pending && !imageRestore) void run(() => openChapter(true));
       }, {rootMargin: '0px 0px 160px 0px'});
       observer.observe(el('reader-more'));
     }
@@ -526,19 +599,27 @@ window.LegadoWebReading = (() => {
         || markers[0];
     }
     async function saveProgress() {
-      if (!book || preview || !allowsWrites || progressSaving || !loaded.length) return;
-      const target = visiblePosition();
-      if (!target) return;
-      const index = Number(target.dataset.chapter), position = progressPosition(book, target);
-      const chapter = chapters.find(value => value.index === index), id = generation, targetBook = book;
-      const value = {bookUrl: book.bookUrl, name: book.name, author: book.author || '', durChapterIndex: index, durChapterPos: position, durChapterTitle: chapter?.title || '', durChapterTime: Date.now()};
+      if (!book || !active || preview || !allowsWrites || openingBook || progressSaving || pending) return;
+      let index, position, title;
+      if (isPDFBook(book)) {
+        if (!hasPDFProgress()) return;
+        index = pdfDisplayed.index; position = 0; title = 'Page ' + (index + 1);
+      } else {
+        if (!loaded.length || imageRestore && !imageRestore.applied) return;
+        const target = visiblePosition();
+        if (!target) return;
+        index = Number(target.dataset.chapter); position = progressPosition(book, target);
+        title = chapters.find(value => value.index === index)?.title || '';
+      }
+      const id = generation, targetBook = book;
+      const value = {bookUrl: book.bookUrl, name: book.name, author: book.author || '', durChapterIndex: index, durChapterPos: position, durChapterTitle: title, durChapterTime: Date.now()};
       progressSaving = true; renderControls(); note('正在保存进度…');
       try {
         await request('/saveBookProgress', value, {signal: controller.signal});
         if (!current(id) || book !== targetBook) return;
         Object.assign(book, value); note('已保存当前进度'); onShelfChanged?.();
-      } catch (error) { if (current(id) && error.name !== 'AbortError') { note('保存失败：' + error.message); throw error; } }
-      finally { if (current(id)) { progressSaving = false; renderControls(); } }
+      } catch (error) { if (current(id) && book === targetBook && error.name !== 'AbortError') { note('保存失败：' + error.message); throw error; } }
+      finally { if (current(id) && book === targetBook) { progressSaving = false; renderControls(); } }
     }
     async function addBook() {
       if (!book || !preview || !allowsWrites || bookSaving || openingBook) return;
@@ -546,7 +627,7 @@ window.LegadoWebReading = (() => {
       try {
         const saved = await request('/saveBook', target, {signal: controller.signal});
         if (!current(id) || book !== target) return;
-        if(object(saved)&&typeof saved.bookUrl==='string'&&saved.bookUrl===book.bookUrl)book = {...book,...saved};
+        if(object(saved)&&typeof saved.bookUrl==='string'&&saved.bookUrl===book.bookUrl)Object.assign(book,saved);
         preview = false; note('已加入书架'); onShelfChanged?.();
       } catch (error) { if (current(id) && error.name !== 'AbortError') { note('加入书架失败：' + error.message); throw error; } }
       finally { if (current(id)) { bookSaving = false; renderControls(); } }
@@ -588,7 +669,16 @@ window.LegadoWebReading = (() => {
     };
     el('pdf-fetch-download').onclick = () => run(preparePDFDownload);
     el('reader-close').onclick = leave;
+    for (const type of ['wheel', 'touchmove']) window.addEventListener(type, interruptImageRestore, {passive: true});
+    window.addEventListener('pointerdown', event => {
+      if (event.clientX >= document.documentElement.clientWidth) interruptImageRestore();
+    }, {passive: true});
+    window.addEventListener('keydown', event => {
+      if (event.defaultPrevented || event.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName)) return;
+      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) interruptImageRestore();
+    });
     window.addEventListener('scroll', () => {
+      if (imageRestore && Math.abs(window.scrollY - imageRestore.scrollY) > 1) interruptImageRestore();
       if(!active || pending || scrollFrame)return;
       scrollFrame = requestAnimationFrame(() => {
         scrollFrame = 0;

@@ -726,7 +726,8 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
     }
 
     private func loadNextPage() {
-        guard canInteractWithSearch, canContinueSearch else { return }
+        guard canInteractWithSearch, canContinueSearch, let page = session?.page, page > 0, page < Int32.max else { return }
+        automaticallyRequestedPage = page + 1
         emptyResultPrompt.beginOperation()
         cancelHistorySelection()
         isSearchStopped = false
@@ -749,20 +750,18 @@ final class AndroidReplicaSearchViewController: UIViewController, NavigationCust
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             defer { self.paginationCheckScheduled = false }
-            guard self.canInteractWithSearch, self.canContinueSearch, self.resultList.isContentSettled,
-                !self.results.isEmpty,
+            guard self.canInteractWithSearch, self.canContinueSearch, self.resultList.isReadyForPagination,
+                self.recoveryMessage == nil, !self.results.isEmpty,
                 self.tableView.bounds.height > self.tableView.adjustedContentInset.top
                     + self.tableView.adjustedContentInset.bottom
             else { return }
             self.tableView.layoutIfNeeded()
-            guard self.resultList.isContentSettled, let page = self.session?.page,
+            guard self.canInteractWithSearch, self.canContinueSearch, self.recoveryMessage == nil,
+                self.resultList.isReadyForPagination, let page = self.session?.page,
                 page < Int32.max, self.automaticallyRequestedPage != page + 1
             else { return }
             let height = self.tableView.contentSize.height
-            let bottom =
-                self.tableView.contentOffset.y + self.tableView.bounds.height - self.tableView.adjustedContentInset.bottom
-            let pixel = 1 / max(1, self.tableView.traitCollection.displayScale)
-            guard height > self.automaticContentHeight, bottom >= height - pixel else { return }
+            guard height > self.automaticContentHeight, AppUI.Pagination.shouldPreload(self.tableView) else { return }
             self.automaticContentHeight = height
             self.automaticallyRequestedPage = page + 1
             self.loadNextPage()

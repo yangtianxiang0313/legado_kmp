@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.Serializable
@@ -674,6 +675,7 @@ class BookshelfFacade(
             json.encodeToString(ListSerializer(BookshelfExchangeBook.serializer()), exchange)
         }
 
+    /** TXT follows Android LocalBook.importFile: file metadata/shelf only, then parse on first use. */
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun importLocalBook(path: String, groupId: Long = 0): Book =
         runRecoverable("BookshelfFacade.importLocalBook") {
@@ -691,6 +693,28 @@ class BookshelfFacade(
                 "pdf", "umd", "mobi", "azw", "azw3" -> BookType.LOCAL
                 else -> BookType.TEXT
             }
+            val resourceModified = if (bookType == BookType.TEXT) withContext(Dispatchers.Default) {
+                val access = requireNotNull(fileAccess) { "File access is unavailable" }
+                val source = access.openRead(normalizedPath)
+                var failure: Throwable? = null
+                try {
+                    coroutineContext.ensureActive()
+                    require(source.size > 0L) { "Local book file is empty" }
+                } catch (error: Throwable) {
+                    failure = error
+                    throw error
+                } finally {
+                    try {
+                        source.closeSource()
+                    } catch (cleanup: Throwable) {
+                        val primary = failure
+                        if (primary == null) throw cleanup
+                        primary.addSuppressed(cleanup)
+                    }
+                }
+                coroutineContext.ensureActive()
+                access.lastModified(normalizedPath) ?: 0L
+            } else 0L
             val draft = Book(
                 bookUrl = normalizedPath,
                 origin = BookType.LOCAL_TAG,
@@ -698,12 +722,13 @@ class BookshelfFacade(
                 name = nameAuthor.name,
                 author = nameAuthor.author,
                 type = bookType,
+                latestChapterTime = resourceModified,
                 group = if (groupId > 0) groupId else 0,
                 order = minOrder() - 1,
             )
             val parsed = when (bookType) {
+                BookType.TEXT -> ParsedLocalBook(draft, emptyList())
                 BookType.EPUB -> parseEpubLocalFileUseCase(draft).let { ParsedLocalBook(it.book, it.chapters) }
-                BookType.TEXT -> parseTxtLocalFileUseCase(draft).let { ParsedLocalBook(it.book, it.chapters) }
                 BookType.LOCAL -> when (extension) {
                     "pdf" -> parsePdfLocalFileUseCase(draft).let { ParsedLocalBook(it.book, it.chapters) }
                     "umd" -> parseUmdLocalFileUseCase(draft).let { ParsedLocalBook(it.book, it.chapters) }

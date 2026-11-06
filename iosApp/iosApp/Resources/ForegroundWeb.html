@@ -31,6 +31,13 @@
   <form id="auth"><input id="secret" type="password" autocomplete="off" aria-label="访问密钥" placeholder="访问密钥"><button id="connect">连接</button></form>
   <div id="status" role="status" aria-live="polite"></div>
   <p id="service-state" role="status"></p>
+  <section id="upload-panel" class="advanced-panel" hidden aria-label="传书">
+    <h2>传书</h2>
+    <label>书籍文件<input id="upload-file" type="file" accept=".txt,.epub,.pdf,.umd,.mobi,.azw,.azw3,.zip,.rar,.7z"></label>
+    <label id="upload-entry-label" hidden>待导入书籍<select id="upload-entry"></select></label>
+    <div class="toolbar"><button id="upload-preview">上传预览</button><button id="upload-confirm" hidden>确认加入书架</button><button id="upload-cancel" disabled>取消</button></div>
+    <p id="upload-status" role="status" aria-live="polite"></p>
+  </section>
   <div class="layout">
     <aside id="item-sidebar" aria-label="项目列表">
       <input id="filter" type="search" aria-label="筛选列表" placeholder="筛选名称、分组或地址">
@@ -124,6 +131,7 @@
 <script src="/ForegroundWebStream.js"></script>
 <script src="/ForegroundWebReading.js"></script>
 <script src="/ForegroundWebWorkbench.js"></script>
+<script src="/ForegroundWebUpload.js"></script>
 <script>
 'use strict';
 const el=id=>document.getElementById(id),clone=value=>structuredClone(value);
@@ -168,7 +176,7 @@ const states=Object.fromEntries(modes.map(name=>[name,{
   importOpen:false,importText:'',fileName:'',importPreview:'',importVersion:0,importDirty:false,
   testText:'',testResult:'',testGeneration:0,testing:false
 }]));
-let reader,workbench,streams,connectionController=null,connectionGeneration=0,sessionController=new AbortController();
+let reader,workbench,streams,upload,connectionController=null,connectionGeneration=0,sessionController=new AbortController();
 let token='',mode='books',pageGeneration=0,noticeGeneration=0,writing=false,activeRequests=0;
 const pendingRequests=[];
 try{token=decodeURIComponent(location.hash.slice(1))}catch{el('status').textContent='访问密钥编码无效，请重新连接'}
@@ -207,9 +215,10 @@ async function request(path,body,options={}){
 }
 async function performRequest(path,body,options){
   if(!options.bearer)throw Error('请先输入访问密钥连接');
-  const payload=body===undefined?undefined:JSON.stringify(body);
-  if(payload!==undefined&&bytes(payload)>8*1024*1024)throw Error('请求正文超过 8 MiB，请减少导入数量');
-  const response=await fetch(path,{
+  const multipart=body instanceof FormData;
+  const payload=multipart?body:body===undefined?undefined:JSON.stringify(body);
+  if(!multipart&&payload!==undefined&&bytes(payload)>8*1024*1024)throw Error('请求正文超过 8 MiB，请减少导入数量');
+  const response=multipart?await sendMultipart(path,payload,options):await fetch(path,{
     method:body===undefined?'GET':'POST',headers:{'Authorization':'Bearer '+options.bearer,'Content-Type':'application/json'},
     body:payload,cache:'no-store',redirect:'error',credentials:'omit',signal:options.signal
   });
@@ -223,17 +232,49 @@ async function performRequest(path,body,options){
     const stream=response.body.getReader();
     try{while(true){const {done,value}=await stream.read();if(done)break;size+=value.byteLength;if(size>limit){await stream.cancel();throw Error('响应超过 '+(isPDF?'16':'32')+' MiB')}chunks.push(value)}}finally{stream.releaseLock()}
   }
-  const bytes=new Uint8Array(size);let offset=0;
-  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength}chunks=[];
+  const responseBytes=new Uint8Array(size);let offset=0;
+  for(const chunk of chunks){responseBytes.set(chunk,offset);offset+=chunk.byteLength}chunks=[];
   if(isPDF&&response.ok){
     if((response.headers.get('Content-Type')||'').split(';')[0].trim()!=='application/pdf')throw Error('服务未返回 PDF');
-    if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')throw Error('PDF 文件头无效');
-    return new Blob([bytes],{type:'application/pdf'});
+    if(new TextDecoder().decode(responseBytes.subarray(0,5))!=='%PDF-')throw Error('PDF 文件头无效');
+    return new Blob([responseBytes],{type:'application/pdf'});
   }
   let data;
-  try{data=JSON.parse(new TextDecoder().decode(bytes))}catch{throw Error('服务响应不是 JSON（HTTP '+response.status+'）')}
+  try{data=JSON.parse(new TextDecoder().decode(responseBytes))}catch{throw Error('服务响应不是 JSON（HTTP '+response.status+'）')}
   if(!response.ok||!data.isSuccess)throw Error(data.errorMsg||'请求失败（HTTP '+response.status+'）');
   return data.data;
+}
+function sendMultipart(path,body,options){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    const abort=()=>xhr.abort();
+    const finish=callback=>{options.signal?.removeEventListener('abort',abort);callback()};
+    xhr.open('POST',path);xhr.responseType='arraybuffer';xhr.timeout=90000;
+    xhr.setRequestHeader('Authorization','Bearer '+options.bearer);
+    xhr.upload.onprogress=event=>options.onUploadProgress?.(event.loaded,event.lengthComputable?event.total:0);
+    xhr.onload=()=>finish(()=>{
+      if(!xhr.status){reject(Error('上传连接已关闭'));return}
+      resolve(new Response(xhr.response,{status:xhr.status,headers:{'Content-Type':xhr.getResponseHeader('Content-Type')||'application/json'}}));
+    });
+    xhr.onerror=()=>finish(()=>reject(Error('上传连接失败，请检查 App 前台服务')));
+    xhr.ontimeout=()=>finish(()=>reject(Error('上传超时，请重试')));
+    xhr.onabort=()=>finish(()=>reject(new DOMException('Aborted','AbortError')));
+    if(options.signal?.aborted){reject(new DOMException('Aborted','AbortError'));return}
+    options.signal?.addEventListener('abort',abort,{once:true});xhr.send(body);
+  });
+}
+async function discardUpload(uploadId){
+  const bearer=token;if(!bearer)return;
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+  try{
+    // This bounded cleanup survives session cancellation and pagehide, using the original credential.
+    const response=await fetch('/discardLocalBook',{
+      method:'POST',headers:{'Authorization':'Bearer '+bearer,'Content-Type':'application/json'},
+      body:JSON.stringify({uploadId}),cache:'no-store',redirect:'error',credentials:'omit',keepalive:true,signal:controller.signal
+    });
+    if(!response.ok)throw Error('清理请求失败（HTTP '+response.status+'）');
+    const value=await response.json();if(!value.isSuccess||value.data!==true)throw Error(value.errorMsg||'清理未确认');
+  }finally{clearTimeout(timer)}
 }
 async function run(block,isCurrent=()=>true){
   const page=pageGeneration,notice=++noticeGeneration;
@@ -313,7 +354,7 @@ function renderEditor(){
   if(s.editorMode==='fields')renderFields();else el('json').value=s.raw;
   el('test-text').value=s.testText;el('test-result').textContent=s.testResult;
 }
-function renderPage(){document.body.dataset.mode=mode;el('auth').hidden=!!token;el('filter').value=current().filter;renderImport();renderEditor();reader?.render(mode==='books'||mode==='search');renderControls();renderList()}
+function renderPage(){document.body.dataset.mode=mode;el('auth').hidden=!!token;el('filter').value=current().filter;renderImport();renderEditor();reader?.render(mode==='books'||mode==='search');upload?.render(mode==='books');renderControls();renderList()}
 async function reload(){
   if(mode==='search'){workbench.render();return}
   const name=mode,page=pageGeneration,s=current(),revision=++s.listGeneration;s.loading=true;renderControls();renderList();
@@ -455,7 +496,7 @@ async function testRule(){
   finally{if(revision===s.testGeneration){s.testing=false;if(visible('rules',page))renderControls()}}
 }
 async function openBook(book){await reader.open(book,{preview:false})}
-function leavePage(){pageGeneration++;reader?.leave();workbench?.leave();const s=current();s.testGeneration++;if(s.testing)s.testResult='';s.testing=false;s.opening=false}
+function leavePage(){pageGeneration++;reader?.leave();workbench?.leave();upload?.leave();const s=current();s.testGeneration++;if(s.testing)s.testResult='';s.testing=false;s.opening=false}
 async function connectService(){
   connectionController?.abort();connectionController=new AbortController();const revision=++connectionGeneration;
   el('service-state').textContent='正在连接 Web 服务…';
@@ -463,8 +504,8 @@ async function connectService(){
   if(revision===connectionGeneration)await reload();
 }
 
-el('auth').onsubmit=e=>{e.preventDefault();if(writing)return;const value=el('secret').value.trim();if(!value){status('访问密钥不能为空');return}leavePage();reader.resetSession();connectionController?.abort();sessionController.abort();sessionController=new AbortController();token=value;el('secret').value='';for(const s of Object.values(states)){s.loaded=false;s.listGeneration++}renderPage();run(connectService)};
-el('reconnect').onclick=()=>{leavePage();connectionController?.abort();sessionController.abort();sessionController=new AbortController();connectionGeneration++;reader.resetSession();token='';el('auth').hidden=false;el('secret').focus();el('service-state').textContent='未连接'};
+el('auth').onsubmit=e=>{e.preventDefault();if(writing||upload?.isCommitting())return;const value=el('secret').value.trim();if(!value){status('访问密钥不能为空');return}leavePage();reader.resetSession();upload?.resetSession();connectionController?.abort();sessionController.abort();sessionController=new AbortController();token=value;el('secret').value='';for(const s of Object.values(states)){s.loaded=false;s.listGeneration++}renderPage();run(connectService)};
+el('reconnect').onclick=()=>{if(upload?.isCommitting())return;leavePage();connectionController?.abort();sessionController.abort();sessionController=new AbortController();connectionGeneration++;reader.resetSession();upload?.resetSession();token='';el('auth').hidden=false;el('secret').focus();el('service-state').textContent='未连接'};
 for(const name of modes)el(name).onclick=()=>{if(writing||name===mode)return;leavePage();mode=name;renderPage();run(reload)};
 el('refresh').onclick=()=>{if(!writing)run(reload)};
 el('filter').oninput=()=>{current().filter=el('filter').value;renderList()};
@@ -490,11 +531,12 @@ el('preview-import').onclick=()=>run(previewImport);
 el('confirm-import').onclick=()=>run(commitImport);
 el('test-text').oninput=()=>{const s=current();s.testText=el('test-text').value;s.testGeneration++;s.testing=false;s.testResult='';el('test-result').textContent='';renderControls()};
 el('test-rule').onclick=()=>{const s=current(),version=s.version,text=s.testText;run(testRule,()=>version===s.version&&text===s.testText)};
-window.addEventListener('beforeunload',event=>{if(writing||reader?.isDirty()||Object.values(states).some(s=>s.dirty||s.importDirty)){event.preventDefault();event.returnValue=''}});
+window.addEventListener('beforeunload',event=>{if(writing||reader?.isDirty()||upload?.isDirty()||Object.values(states).some(s=>s.dirty||s.importDirty)){event.preventDefault();event.returnValue=''}});
 window.addEventListener('pagehide',()=>{connectionController?.abort();sessionController.abort();leavePage()});
 window.addEventListener('pageshow',event=>{if(event.persisted&&token){sessionController=new AbortController();run(connectService)}});
-streams=LegadoWebStream.create({request,getToken:()=>token,onInfo:info=>{reader?.setPermissions(info.allowsWrites);el('service-state').textContent=info.allowsWrites?'已连接 · 允许写入':'已连接 · 只读'}});
+streams=LegadoWebStream.create({request,getToken:()=>token,onInfo:info=>{reader?.setPermissions(info.allowsWrites);upload?.setPermissions(info.allowsWrites);el('service-state').textContent=info.allowsWrites?'已连接 · 允许写入':'已连接 · 只读'}});
 reader=LegadoWebReading.create({request,run,onChange:()=>renderList(),onShelfChanged:()=>{states.books.loaded=false}});
+upload=LegadoWebUpload.create({request,run,discardUpload,onShelfChanged:(refresh=true)=>{states.books.loaded=false;if(refresh&&mode==='books'&&!sessionController.signal.aborted)void run(reload)}});
 workbench=LegadoWebWorkbench.create({streams,run,getMode:()=>mode,isWriting:()=>writing,openPreview:book=>reader.open(book,{preview:true}),getDraft:required=>{
   if(!sourceModes.includes(mode)||!current().draft)return null;
   if(!required)return current().draft;

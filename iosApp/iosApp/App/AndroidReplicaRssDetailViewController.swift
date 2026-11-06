@@ -681,7 +681,7 @@ final class AndroidReplicaRssDetailViewController: UIViewController {
         return .init(
             title: isLoadingMore
                 ? L10n.RSS.loadingNextPage : (retryAction == .more ? L10n.Common.retry : L10n.Common.loadMore),
-            isLoading: isLoadingMore)
+            isLoading: isLoadingMore, allowsAutomaticLoading: retryAction == nil)
     }
 
     private func loadMore() {

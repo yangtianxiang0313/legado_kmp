@@ -10,6 +10,7 @@ import io.legado.kmp.shared.analyze.LEGACY_JSON_INPUT_DESCRIPTORS_BINDING
 import io.legado.kmp.shared.model.BookSource
 import io.legado.kmp.shared.network.SharedCapabilityException
 import io.legado.kmp.shared.network.SourceResponse
+import io.legado.kmp.shared.network.SourceNetworkOrigin
 import io.legado.kmp.shared.network.toLegacyJsoupResponseJson
 import io.legado.kmp.shared.source.SourceStateStore
 import io.legado.kmp.shared.util.md5Hex
@@ -99,7 +100,7 @@ class LegacySourceJsRuntime(
         webViewGetOverrideUrl: suspend (html: String?, url: String?, js: String?, overrideUrlRegex: String) -> String?,
         readLocalScript: suspend (path: String) -> String?,
         host: LegacyJsHostSurface,
-    ): JsResult = withContext(Dispatchers.IO) {
+    ): JsResult = withContext(Dispatchers.IO + SourceNetworkOrigin(source?.bookSourceUrl)) {
         // QuickJS schedules jobs, not synchronous evaluation; keep hostCall off caller callback queues.
         try {
             withTimeout(executionTimeoutMs) {

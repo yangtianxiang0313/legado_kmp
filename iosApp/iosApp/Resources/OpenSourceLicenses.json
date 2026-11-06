@@ -110,6 +110,21 @@
       ]
     },
     {
+      "id": "multipart-kit",
+      "title": "MultipartKit 4.7.1",
+      "license": "MIT",
+      "category": "library",
+      "homepage": "https://github.com/vapor/multipart-kit",
+      "documents": [
+        {
+          "title": "License",
+          "resource": "MultipartKit-LICENSE",
+          "fileExtension": "txt",
+          "subdirectory": "OpenSourceLicenses"
+        }
+      ]
+    },
+    {
       "id": "swift-nio",
       "title": "SwiftNIO",
       "license": "Apache-2.0; third-party notices",

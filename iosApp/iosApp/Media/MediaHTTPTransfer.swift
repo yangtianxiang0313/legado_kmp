@@ -2,6 +2,7 @@ import Foundation
 
 enum MediaAudioError: LocalizedError {
     case invalidRequest, unsupportedRedirect, unsupportedFormat, network, empty, cancelled, storage, tooLarge
+    case playlist
     case http(Int)
 
     var errorDescription: String? {
@@ -14,8 +15,36 @@ enum MediaAudioError: LocalizedError {
         case .cancelled: return "音频加载已取消"
         case .storage: return "音频临时存储不可用"
         case .tooLarge: return "音频超过本次加载的大小上限"
+        case .playlist: return "音频响应已切换为播放列表"
         case let .http(status): return "音频请求失败：HTTP \(status)"
         }
+    }
+}
+
+struct MediaAudioPlaylistResponse: @unchecked Sendable {
+    let response: HTTPURLResponse
+    let effectiveRequest: URLRequest
+    let body: Data
+}
+
+private enum MediaAudioPlaylistPrefix {
+    static let maximumBytes = 12
+    private static let header = Data("#EXTM3U".utf8)
+    private static let bom = Data([0xEF, 0xBB, 0xBF])
+    private static let signatures = [Data("#EXTM3U\n".utf8), Data("#EXTM3U\r\n".utf8)].flatMap { [$0, bom + $0] }
+
+    /// nil means that another byte is needed to finish the first line, including its optional BOM.
+    static func matches(_ bytes: Data, atEOF: Bool = false) -> Bool? {
+        if atEOF, bytes == header || bytes == bom + header { return true }
+        var incomplete = false
+        for signature in signatures {
+            let count = min(bytes.count, signature.count)
+            if bytes.prefix(count).elementsEqual(signature.prefix(count)) {
+                if bytes.count >= signature.count { return true }
+                incomplete = true
+            }
+        }
+        return incomplete && !atEOF ? nil : false
     }
 }
 
@@ -40,6 +69,7 @@ final class MediaAudioFailureSnapshot: @unchecked Sendable {
 protocol MediaHTTPTransferDelegate: AnyObject {
     func mediaTransfer(received response: HTTPURLResponse, contentLength: Int64?)
     func mediaTransfer(received data: Data)
+    func mediaTransfer(received playlist: MediaAudioPlaylistResponse)
     func mediaTransfer(completed error: MediaAudioError?)
 }
 
@@ -47,6 +77,7 @@ protocol MediaHTTPTransferDelegate: AnyObject {
 /// No ambient cookies/credentials, cache, TLS overrides, or URL-bearing errors escape this layer.
 final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private static let maximumTransferDuration: TimeInterval = 900
+    private static let maximumPlaylistBytes: Int64 = 16 * 1024 * 1024
 
     weak var receiver: MediaHTTPTransferDelegate?
 
@@ -56,7 +87,11 @@ final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
     private let queue: DispatchQueue
     private let maximumBytes: Int64
     private let byteRange: MediaHTTPByteRange?
-    private var expectedRangeBytes: Int64?
+    private let allowsPlaylistDiscovery: Bool
+    private var expectedBytes: Int64?
+    private var heldResponse: (response: HTTPURLResponse, length: Int64?)?
+    private var prefix = Data()
+    private var playlistBody: Data?
     private var currentRequest: URLRequest
     private var session: URLSession?
     private var task: URLSessionDataTask?
@@ -91,7 +126,11 @@ final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         return result
     }
 
-    init(request: URLRequest, maximumBytes: Int64, queue: DispatchQueue, byteRange: MediaHTTPByteRange? = nil) throws {
+    init(
+        request: URLRequest, maximumBytes: Int64, queue: DispatchQueue, byteRange: MediaHTTPByteRange? = nil,
+        allowsPlaylistDiscovery: Bool = false
+    ) throws {
+        guard maximumBytes > 0 else { throw MediaAudioError.invalidRequest }
         currentRequest = try Self.validated(request)
         if let byteRange {
             guard currentRequest.httpMethod == "GET", currentRequest.httpBody == nil,
@@ -102,6 +141,7 @@ final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
             currentRequest.setValue(byteRange.validator, forHTTPHeaderField: "If-Range")
         }
         self.byteRange = byteRange
+        self.allowsPlaylistDiscovery = allowsPlaylistDiscovery
         self.maximumBytes = maximumBytes
         self.queue = queue
         super.init()
@@ -135,7 +175,7 @@ final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
 
     func cancel() { finish(.cancelled) }
 
-    private func finish(_ error: MediaAudioError?) {
+    private func finish(_ error: MediaAudioError?, playlist: MediaAudioPlaylistResponse? = nil) {
         guard !ended else { return }
         ended = true
         deadline?.cancel()
@@ -144,7 +184,54 @@ final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         task = nil
         session?.invalidateAndCancel()
         session = nil
+        heldResponse = nil
+        prefix.removeAll()
+        playlistBody = nil
+        if let playlist { receiver?.mediaTransfer(received: playlist) }
         receiver?.mediaTransfer(completed: error)
+    }
+
+    private static func permitsSingleFile(_ response: HTTPURLResponse) -> Bool {
+        let mime = response.mimeType?.lowercased() ?? "application/octet-stream"
+        return !mime.contains("mpegurl") && !mime.contains("dash")
+            && (mime.hasPrefix("audio/")
+                || ["application/octet-stream", "binary/octet-stream", "application/mp4", "video/mp4"].contains(mime))
+    }
+
+    private static func contentLength(_ response: HTTPURLResponse) throws -> Int64? {
+        var length = response.expectedContentLength >= 0 ? response.expectedContentLength : nil
+        if let raw = response.value(forHTTPHeaderField: "Content-Length") {
+            let value = raw.trimmingCharacters(in: .whitespaces)
+            guard !value.isEmpty, value.utf8.allSatisfy({ (48...57).contains($0) }), let declared = Int64(value),
+                response.value(forHTTPHeaderField: "Transfer-Encoding") == nil,
+                length == nil || length == declared
+            else { throw MediaAudioError.network }
+            length = declared
+        }
+        // URLSession may decode the body; a compressed wire length is not the media length.
+        let encoding = response.value(forHTTPHeaderField: "Content-Encoding")?
+            .trimmingCharacters(in: .whitespaces).lowercased()
+        return encoding == nil || encoding == "identity" ? length : nil
+    }
+
+    private func releaseAudioResponse() {
+        guard let heldResponse else { return }
+        self.heldResponse = nil
+        guard Self.permitsSingleFile(heldResponse.response) else { finish(.unsupportedFormat); return }
+        receiver?.mediaTransfer(received: heldResponse.response, contentLength: heldResponse.length)
+    }
+
+    private func beginPlaylist(buffered: Data, incoming: Data) {
+        guard byteRange == nil || heldResponse?.response.statusCode == 200 else { finish(.playlist); return }
+        guard receivedBytes <= playlistLimit else { finish(.tooLarge); return }
+        if let length = heldResponse?.length, length > playlistLimit { finish(.tooLarge); return }
+        playlistBody = buffered
+        playlistBody?.append(incoming)
+        prefix.removeAll()
+    }
+
+    private var playlistLimit: Int64 {
+        byteRange == nil ? min(maximumBytes, Self.maximumPlaylistBytes) : Self.maximumPlaylistBytes
     }
 
     func urlSession(
@@ -158,27 +245,38 @@ final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         guard response.statusCode == 200 || response.statusCode == 206 && byteRange != nil else {
             completionHandler(.cancel); finish(.http(response.statusCode)); return
         }
-        if response.statusCode == 206, let byteRange {
-            do {
+        let length: Int64?
+        do {
+            length = try Self.contentLength(response)
+            if response.statusCode == 206, let byteRange {
                 let range = try byteRange.responseRange(response)
-                expectedRangeBytes = range.end - byteRange.start + 1
-            } catch {
-                completionHandler(.cancel); finish(.network); return
+                expectedBytes = range.end - byteRange.start + 1
+            } else {
+                guard response.value(forHTTPHeaderField: "Content-Range") == nil else { throw MediaAudioError.network }
+                expectedBytes = length
             }
+        } catch {
+            completionHandler(.cancel); finish(.network); return
         }
-        let mime = response.mimeType?.lowercased() ?? "application/octet-stream"
-        let permitted =
-            mime.hasPrefix("audio/")
-            || ["application/octet-stream", "binary/octet-stream", "application/mp4", "video/mp4"].contains(mime)
-        guard permitted, !mime.contains("mpegurl"), !mime.contains("dash") else {
+        if !allowsPlaylistDiscovery, !Self.permitsSingleFile(response) {
             completionHandler(.cancel); finish(.unsupportedFormat); return
         }
-        // URLSession may transparently decode an encoded body; its wire length is then not the asset length.
-        let encoding = response.value(forHTTPHeaderField: "Content-Encoding")?.lowercased()
-        let length =
-            response.expectedContentLength >= 0 && (encoding == nil || encoding == "identity")
-            ? response.expectedContentLength : nil
+        if allowsPlaylistDiscovery, response.mimeType?.lowercased().contains("mpegurl") == true {
+            guard byteRange == nil || response.statusCode == 200 else {
+                completionHandler(.cancel); finish(.playlist); return
+            }
+            heldResponse = (response, length)
+            beginPlaylist(buffered: Data(), incoming: Data())
+            completionHandler(ended ? .cancel : .allow)
+            return
+        }
         if response.statusCode == 200, byteRange != nil {
+            if allowsPlaylistDiscovery {
+                // An ignored range can already contain the complete root; classify before replaying its GET.
+                heldResponse = (response, length)
+                completionHandler(.allow)
+                return
+            }
             // The range loader must discard the probe and start one sequential response, never mix representations.
             receiver?.mediaTransfer(received: response, contentLength: length)
             completionHandler(.cancel)
@@ -186,22 +284,76 @@ final class MediaHTTPTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
             return
         }
         if let length, length > maximumBytes { completionHandler(.cancel); finish(.tooLarge); return }
+        if allowsPlaylistDiscovery, response.statusCode == 200 || byteRange?.start == 0 {
+            // Even octet-stream ranges must not expose metadata before their prefix is classified.
+            heldResponse = (response, length)
+            completionHandler(.allow)
+            return
+        }
+        guard Self.permitsSingleFile(response) else {
+            completionHandler(.cancel); finish(.unsupportedFormat); return
+        }
         receiver?.mediaTransfer(received: response, contentLength: length)
-        completionHandler(.allow)
+        completionHandler(ended ? .cancel : .allow)
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard !ended else { return }
-        let limit = min(maximumBytes, expectedRangeBytes ?? maximumBytes)
+        var limit = maximumBytes
+        if playlistBody != nil || byteRange != nil && heldResponse?.response.statusCode == 200 { limit = playlistLimit }
         guard Int64(data.count) <= limit - receivedBytes else { finish(.tooLarge); return }
+        if let expectedBytes, Int64(data.count) > expectedBytes - receivedBytes { finish(.network); return }
         receivedBytes += Int64(data.count)
+        if playlistBody != nil {
+            playlistBody?.append(data)
+            return
+        }
+        if heldResponse != nil {
+            let buffered = prefix
+            prefix.append(data.prefix(MediaAudioPlaylistPrefix.maximumBytes - prefix.count))
+            guard let isPlaylist = MediaAudioPlaylistPrefix.matches(prefix) else { return }
+            if isPlaylist {
+                beginPlaylist(buffered: buffered, incoming: data)
+                return
+            }
+            prefix.removeAll()
+            releaseAudioResponse()
+            guard !ended else { return }
+            if !buffered.isEmpty { receiver?.mediaTransfer(received: buffered) }
+            guard !ended else { return }
+        }
         receiver?.mediaTransfer(received: data)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard !ended else { return }
-        let incompleteRange = expectedRangeBytes.map { $0 != receivedBytes } ?? false
-        finish(error == nil ? (receivedBytes == 0 ? .empty : incompleteRange ? .network : nil) : .network)
+        let incomplete = expectedBytes.map { $0 != receivedBytes } ?? false
+        guard error == nil, receivedBytes > 0, !incomplete else {
+            finish(error == nil ? (receivedBytes == 0 ? .empty : .network) : .network)
+            return
+        }
+        if heldResponse != nil, playlistBody == nil, MediaAudioPlaylistPrefix.matches(prefix, atEOF: true) == true {
+            beginPlaylist(buffered: prefix, incoming: Data())
+            guard !ended else { return }
+        }
+        if let body = playlistBody, let heldResponse {
+            guard Int64(body.count) == receivedBytes else { finish(.network); return }
+            var effectiveRequest = currentRequest
+            // Only a complete 200 may shed the probe's Range/If-Range provenance.
+            for header in ["Range", "If-Range"] { effectiveRequest.setValue(nil, forHTTPHeaderField: header) }
+            let playlist = MediaAudioPlaylistResponse(
+                response: heldResponse.response, effectiveRequest: effectiveRequest, body: body)
+            finish(nil, playlist: playlist)
+            return
+        }
+        if heldResponse != nil {
+            let buffered = prefix
+            prefix.removeAll()
+            releaseAudioResponse()
+            guard !ended else { return }
+            if !buffered.isEmpty { receiver?.mediaTransfer(received: buffered) }
+        }
+        finish(nil)
     }
 
     func urlSession(

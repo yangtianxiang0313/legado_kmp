@@ -21,6 +21,13 @@ import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSString
 import platform.Foundation.NSThread
 import platform.Foundation.NSURL
+import platform.Foundation.NSURLAuthenticationChallenge
+import platform.Foundation.NSURLCredential
+import platform.Foundation.NSURLSessionAuthChallengeDisposition
+import platform.Foundation.NSURLSessionAuthChallengePerformDefaultHandling
+import platform.Foundation.NSURLSessionAuthChallengeUseCredential
+import platform.Foundation.serverTrust
+import platform.Foundation.credentialForTrust
 import platform.Foundation.NSURLErrorCancelled
 import platform.Foundation.NSURLErrorDomain
 import platform.Foundation.NSUUID
@@ -81,7 +88,7 @@ internal class InteractiveWebViewRunner(
         state = State.PREPARING
         trace("preparing")
         scope.launch {
-            delay(WEB_VIEW_TIMEOUT_MILLIS)
+            delay(request.timeoutMillis.coerceIn(5_000, 300_000))
             if (state != State.FINISHED) fail(IllegalStateException(timeoutMessage()))
         }
         scope.launch {
@@ -115,6 +122,16 @@ internal class InteractiveWebViewRunner(
         }
     }
 
+    @ObjCSignatureOverride
+    override fun webView(
+        webView: WKWebView,
+        didReceiveAuthenticationChallenge: NSURLAuthenticationChallenge,
+        completionHandler: (NSURLSessionAuthChallengeDisposition, NSURLCredential?) -> Unit,
+    ) {
+        SourceNetworkNative.handleWebViewChallenge(webView, request.source?.bookSourceUrl,
+            lifetime.isActive && request.allowCertificateCompatibility, didReceiveAuthenticationChallenge, completionHandler)
+    }
+
     @ObjCAction
     fun close() {
         if (!terminal.compareAndSet(false, true)) return
@@ -131,6 +148,7 @@ internal class InteractiveWebViewRunner(
         val configuration = WKWebViewConfiguration().apply {
             websiteDataStore = WKWebsiteDataStore.nonPersistentDataStore()
         }
+        SourceNetworkNative.configureWebView(configuration, request.proxy)
         if (sourcePattern != null) {
             val script = IosSourceWebViewScript(NSUUID().UUIDString)
             instrumentation = script
@@ -162,6 +180,7 @@ internal class InteractiveWebViewRunner(
             navigation = view.loadHTMLString(request.html, baseURL = url)
         } else {
             val nativeRequest = NSMutableURLRequest.requestWithURL(checkNotNull(url))
+            nativeRequest.setTimeoutInterval(request.timeoutMillis.coerceIn(5_000, 300_000) / 1000.0)
             // Cookie headers have been scoped into WKHTTPCookieStore, not broadcast to redirects.
             headers.withoutSourceCookieJarHeader()
                 .filterKeys { !it.equals("Cookie", ignoreCase = true) }.forEach { (name, value) ->

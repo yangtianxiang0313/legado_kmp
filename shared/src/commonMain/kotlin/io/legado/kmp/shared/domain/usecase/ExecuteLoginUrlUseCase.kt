@@ -14,6 +14,8 @@ import io.legado.kmp.shared.source.SourceStateStore
 import io.ktor.http.Url
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import io.legado.kmp.shared.network.StrictSourceNetwork
 import kotlin.coroutines.cancellation.CancellationException
 
 sealed interface LoginAction {
@@ -95,7 +97,7 @@ class ExecuteLoginUrlUseCase(
         variables: Map<String, Any?> = emptyMap(),
         headers: suspend (Boolean) -> Map<String, String> = { emptyMap() },
         allowLogin: Boolean = false,
-    ): JsResult {
+    ): JsResult = withContext(StrictSourceNetwork) {
         val requestContext = currentCoroutineContext()
         requestContext.ensureActive()
         suspend fun <T> inRequest(block: suspend () -> T): T {
@@ -169,13 +171,13 @@ class ExecuteLoginUrlUseCase(
             // A script exception can include passwords, response bodies or tokens. Never retain its cause.
             throw IllegalStateException("Source login script failed")
         }
-        return result
+        result
     }
 
     private suspend fun <T> loginResult(block: suspend () -> T): Result<T> {
         return try {
             currentCoroutineContext().ensureActive()
-            val result = block()
+            val result = withContext(StrictSourceNetwork) { block() }
             currentCoroutineContext().ensureActive()
             Result.success(result)
         } catch (error: CancellationException) {

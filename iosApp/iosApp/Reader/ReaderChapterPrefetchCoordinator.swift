@@ -22,6 +22,7 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
     private var visible = false
     private var sceneActive = false
     private var protectedDataAvailable = UIApplication.shared.isProtectedDataAvailable
+    private var activationResumed = false
     private var displayedChapter: DisplayedChapter?
     private var catalogSignature = ""
     private var selectedKey: RequestKey?
@@ -58,15 +59,12 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
 
     func resume() {
         visible = true
-        sceneActive = reader?.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive
-        protectedDataAvailable = UIApplication.shared.isProtectedDataAvailable
-        completedKey = nil
-        failedKey = nil
-        refresh()
+        updateActivation()
     }
 
     func suspend() {
         visible = false
+        activationResumed = false
         cancel()
     }
 
@@ -150,14 +148,17 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
             failedKey = nil
             cancel()
         }
-        if activeKey != nil && (activeKey != key || !canUseReader) { cancel() }
+        if activeKey != nil && (activeKey != key || !canStart) { cancel() }
         guard canStart, let key, key != activeKey, key != completedKey, key != failedKey,
             let reader
         else { return }
         let id = UUID()
+        let previous = task
         requestID = id
         activeKey = key
         task = Task(priority: .background) { @MainActor [weak self, screen = reader.screen] in
+            // A new window cannot overtake the cancelled Native request's terminal callback.
+            await previous?.value
             do {
                 // Let the accepted page reach the screen and coalesce rapid chapter turns.
                 try await Task.sleep(nanoseconds: 150_000_000)
@@ -187,6 +188,7 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
         requestID = nil
         activeKey = nil
         task = nil
+        guard currentKey == key, canStart, !Task.isCancelled else { return }
         if completed == true {
             completedKey = key
             failedKey = nil
@@ -199,7 +201,6 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
         requestID = nil
         activeKey = nil
         task?.cancel()
-        task = nil
     }
 
     private func matchesScene(_ notification: Notification) -> Bool {
@@ -210,6 +211,7 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
 
     @objc private func interrupted(_ notification: Notification) {
         guard matchesScene(notification) else { return }
+        activationResumed = false
         if notification.name == UIApplication.protectedDataWillBecomeUnavailableNotification {
             protectedDataAvailable = false
         } else {
@@ -220,19 +222,35 @@ final class ReaderChapterPrefetchCoordinator: NSObject {
 
     @objc private func activated(_ notification: Notification) {
         guard matchesScene(notification) else { return }
+        updateActivation()
+    }
+
+    private func updateActivation() {
         sceneActive = reader?.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive
         protectedDataAvailable = UIApplication.shared.isProtectedDataAvailable
-        completedKey = nil
-        failedKey = nil
+        if canUseReader {
+            if !activationResumed {
+                activationResumed = true
+                completedKey = nil
+                failedKey = nil
+            }
+        } else {
+            activationResumed = false
+        }
         refresh()
     }
 }
 
+@MainActor
 enum ReaderChapterPrefetchRequest {
     static func run(facade: ReaderFacade, bookURL: String, index: Int) async throws -> Bool {
+        try Task.checkCancellation()
+        guard !bookURL.isEmpty, index >= 0, let chapterIndex = Int32(exactly: index) else { return false }
         let request = ReaderPreloadRequest(facade: facade)
-        let result: ReaderPreloadResult = try await SharedCancellableAsync.value { completion in
-            request.preloadDisplayedChapter(bookUrl: bookURL, chapterIndex: Int32(index)) { result in
+        let result: ReaderPreloadResult = try await SharedCancellableAsync.valueOnMainActor(
+            awaitCancellationCompletion: true
+        ) { completion in
+            request.preloadDisplayedChapter(bookUrl: bookURL, chapterIndex: chapterIndex) { result in
                 if result.isCancelled {
                     completion(nil, CancellationError())
                 } else {

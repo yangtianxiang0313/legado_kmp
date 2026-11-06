@@ -128,7 +128,7 @@ class ReaderFacade(
     )
 
     private val chapterListSupport = ReaderChapterListSupport(
-        requireBook = { requireBook(it) },
+        requireBook = { chapterLoader.ensureLocalCatalog(it) },
         observeBookChaptersUseCase = observeBookChaptersUseCase,
         applyReplaceRulesUseCase = applyReplaceRulesUseCase,
         preferencesStore = preferencesStore,
@@ -228,9 +228,9 @@ class ReaderFacade(
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun upData(bookUrl: String): UpDataResult = runRecoverable("ReaderFacade.upData") {
         cancelPreDownloadTask()
-        val book = getBookUseCase.get(bookUrl) ?: error("Book not found: $bookUrl")
+        val oldChapterSize = observeBookChaptersUseCase(bookUrl).firstValue().size
+        val book = chapterLoader.ensureLocalCatalog(bookUrl)
         val chapters = observeBookChaptersUseCase(bookUrl).firstValue()
-        val oldChapterSize = chapters.size
         val newChapterSize = chapters.size
         val simSize = computeSimulatedChapterSize(book.readConfig, newChapterSize)
         // Clear loading/download tracking as legado does
@@ -375,7 +375,7 @@ class ReaderFacade(
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun refreshChapterContentFromIndex(bookUrl: String, fromIndex: Int): ReaderChapterPayload {
         return runRecoverable("ReaderFacade.refreshChapterContentFromIndex") {
-            val resolvedBook = requireBook(bookUrl)
+            val resolvedBook = chapterLoader.ensureLocalCatalog(bookUrl)
             val chapters = observeBookChaptersUseCase(bookUrl).firstValue()
             require(chapters.isNotEmpty()) { "No chapters found for $bookUrl" }
             val normalizedFrom = fromIndex.coerceIn(0, chapters.lastIndex)
@@ -394,7 +394,7 @@ class ReaderFacade(
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun refreshAllChapterContent(bookUrl: String, currentIndex: Int): ReaderChapterPayload {
         return runRecoverable("ReaderFacade.refreshAllChapterContent") {
-            val resolvedBook = requireBook(bookUrl)
+            val resolvedBook = chapterLoader.ensureLocalCatalog(bookUrl)
             val chapters = observeBookChaptersUseCase(bookUrl).firstValue()
             require(chapters.isNotEmpty()) { "No chapters found for $bookUrl" }
             for (chapter in chapters) {
@@ -498,7 +498,7 @@ class ReaderFacade(
         runRecoverable("ReaderFacade.updateReadingProgress") {
             progressPersistence.updateReadingProgress(
                 bookUrl = bookUrl,
-                current = requireBook(bookUrl),
+                current = chapterLoader.ensureLocalCatalog(bookUrl),
                 chapterIndex = chapterIndex,
                 chapterTitle = chapterTitle,
                 chapterPosition = chapterPosition,
@@ -514,6 +514,7 @@ class ReaderFacade(
     suspend fun reverseChapterList(bookUrl: String): BookDetailRefreshResult {
         return runRecoverable("ReaderFacade.reverseChapterList") {
             cancelPreDownloadTask()
+            chapterLoader.ensureLocalCatalog(bookUrl)
             chapterListSupport.reverseChapterList(bookUrl)
         }
     }
@@ -855,7 +856,7 @@ class ReaderFacade(
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun setProgress(bookUrl: String, progress: BookProgress): ReaderChapterPayload? {
         return runRecoverable("ReaderFacade.setProgress") {
-            val book = requireBook(bookUrl)
+            val book = chapterLoader.ensureLocalCatalog(bookUrl)
             val written = progressPersistence.setProgress(bookUrl, book, progress) ?: return@runRecoverable null
             // An explicit jump owns its display anchor; preparation must not persist it again.
             loadPreparedChapter(bookUrl, written.book.durChapterIndex, refreshContent = false, requestedProgress = written)
@@ -874,7 +875,7 @@ class ReaderFacade(
     }
 
     private suspend fun requireBook(bookUrl: String): Book {
-        return chapterLoader.requireBook(bookUrl)
+        return chapterLoader.requireBook(bookUrl, prepareCatalog = false)
     }
 
     private suspend fun requireSource(book: Book): BookSource {
@@ -963,7 +964,7 @@ class ReaderFacade(
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun moveToNextChapter(bookUrl: String): ChapterNavigationResult {
         return runRecoverable("ReaderFacade.moveToNextChapter") {
-            var book = requireBook(bookUrl)
+            var book = chapterLoader.ensureLocalCatalog(bookUrl)
             var chapters = observeBookChaptersUseCase(bookUrl).firstValue()
             if (chapters.isEmpty()) return@runRecoverable ChapterNavigationResult(success = false)
             var simSize = computeSimulatedChapterSize(book.readConfig, chapters.size)
@@ -1013,7 +1014,7 @@ class ReaderFacade(
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun moveToPrevChapter(bookUrl: String, toLast: Boolean = true): ChapterNavigationResult {
         return runRecoverable("ReaderFacade.moveToPrevChapter") {
-            val book = requireBook(bookUrl)
+            val book = chapterLoader.ensureLocalCatalog(bookUrl)
             if (book.durChapterIndex <= 0) {
                 return@runRecoverable ChapterNavigationResult(success = false)
             }

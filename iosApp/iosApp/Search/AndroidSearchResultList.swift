@@ -60,8 +60,12 @@ final class AndroidSearchResultList {
     var onBookSelected: ((SearchBook) -> Void)?
     var onContentSettled: (() -> Void)?
 
+    var isReadyForPagination: Bool {
+        isContentInteractive && !table.hasUncommittedUpdates && scrollRestoration == nil
+    }
+
     var isContentSettled: Bool {
-        isContentInteractive && scrollRestoration == nil
+        isReadyForPagination
             && !table.isDragging && !table.isDecelerating && !table.isTracking
     }
 

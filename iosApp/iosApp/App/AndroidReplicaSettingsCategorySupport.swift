@@ -81,6 +81,7 @@ struct AndroidReplicaSettingsRowPresentation {
         case .textBottomJustify: return L10n.Settings.textBottomJustifyTitle
         case .autoRefreshOnStart: return L10n.Settings.autoRefreshOnStartTitle
         case .userAgent: return L10n.Settings.userAgentTitle
+        case .sourceNetwork: return SourceNetworkCopy.text("title", "书源网络设置")
         case .autoChangeSource: return L10n.Settings.autoChangeSourceTitle
         case .showAddToShelfAlert:
             return NSLocalizedString(
@@ -189,6 +190,8 @@ struct AndroidReplicaSettingsRowPresentation {
         case .userAgent:
             let value = runtimeConfig?.userAgent
             return value?.nilIfEmpty ?? L10n.Settings.userAgentPlaceholder
+        case .sourceNetwork:
+            return SourceNetworkCopy.text("settings_summary", "全局默认、书源覆盖与证书授权")
         case .autoChangeSource:
             return boolText(ReaderAutoChangeSourcePreference.isEnabled())
         case .showAddToShelfAlert:

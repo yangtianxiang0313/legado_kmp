@@ -1,14 +1,14 @@
 import Foundation
-import Network
+import NIOCore
+import NIOHTTP1
+import NIOPosix
 import UIKit
 import shared
 
 @MainActor
 final class ForegroundWebServer {
     static let shared = ForegroundWebServer()
-    private var listener: NWListener?
-    private var clients: [UUID: NWConnection] = [:]
-    private var tasks: [UUID: Task<Void, Never>] = [:]
+    private var http: ForegroundWebHTTPRuntime?
     private var generation = UUID()
     private var token = ""
     private var allowsWrites = false
@@ -18,6 +18,7 @@ final class ForegroundWebServer {
     var onChange: (() -> Void)?
     private var privacyObserver: NSObjectProtocol?
     private let sockets = ForegroundWebSocketServer()
+    private let uploads = ForegroundWebUpload()
 
     private init() {
         privacyObserver = NotificationCenter.default.addObserver(forName: .appLockWillCover, object: nil, queue: .main) {
@@ -36,124 +37,102 @@ final class ForegroundWebServer {
         self.allowsWrites = allowsWrites
         token =
             UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-        let parameters = NWParameters.tcp
-        parameters.allowLocalEndpointReuse = true
-        parameters.requiredLocalEndpoint = .hostPort(
-            host: .ipv4(localNetwork ? .any : .loopback), port: NWEndpoint.Port(rawValue: port)!)
-        let listener = try NWListener(using: parameters)
         let revision = generation
-        self.listener = listener
-        listener.stateUpdateHandler = { [weak self, weak listener] state in
+        let host = localNetwork ? (ForegroundWebAddress.localIPv4() ?? "127.0.0.1") : "127.0.0.1"
+        let policy = ForegroundHTTPPolicy(token: token, allowsWrites: allowsWrites, hosts: ["127.0.0.1", "localhost", host])
+        let runtime = ForegroundWebHTTPRuntime(policy: policy) { [weak self] request in
+            guard let self else { return ForegroundHTTPResponse(status: 403, body: Data()) }
+            return await self.respond(request, revision: revision)
+        }
+        http = runtime
+        runtime.start(host: localNetwork ? "0.0.0.0" : "127.0.0.1", port: port) { [weak self] result in
             Task { @MainActor in
-                guard let self, let listener, self.generation == revision else { return }
-                if case .ready = state {
-                    self.port = listener.port?.rawValue
-                    if let port = self.port {
-                        let host = localNetwork ? (ForegroundWebAddress.localIPv4() ?? "127.0.0.1") : "127.0.0.1"
-                        do {
-                            try self.sockets.start(localNetwork: localNetwork, httpPort: port, token: self.token) { [weak self] in
-                                guard let self, self.generation == revision else { return }
-                                self.isRunning = true
-                                self.accessURL = URL(string: "http://\(host):\(port)/#\(self.token)")
-                                self.onChange?()
-                            } onFailure: { [weak self] in
-                                self?.stop()
-                            }
-                        } catch { self.stop() }
+                guard let self, self.generation == revision else { return }
+                guard case .success(let port) = result else { self.stop(); return }
+                self.port = port
+                do {
+                    try self.sockets.start(localNetwork: localNetwork, httpPort: port, token: self.token) { [weak self] in
+                        guard let self, self.generation == revision else { return }
+                        self.isRunning = true
+                        self.accessURL = URL(string: "http://\(host):\(port)/#\(self.token)")
+                        self.onChange?()
+                    } onFailure: { [weak self] in
+                        guard let self, self.generation == revision else { return }
+                        self.stop()
                     }
-                    self.onChange?()
-                } else if case .failed = state {
-                    self.stop()
-                }
+                } catch { self.stop() }
+                self.onChange?()
             }
         }
-        listener.newConnectionHandler = { [weak self] connection in
-            Task { @MainActor in
-                guard let self, self.generation == revision, self.clients.count < 4 else { connection.cancel(); return }
-                self.accept(connection, revision: revision)
-            }
-        }
-        listener.start(queue: .main)
     }
 
     func stop() {
         generation = UUID()
-        listener?.cancel(); listener = nil
-        clients.values.forEach { $0.cancel() }; clients.removeAll()
-        tasks.values.forEach { $0.cancel() }; tasks.removeAll()
+        http?.cancel(); http = nil
         sockets.stop()
-        token = ""; port = nil; accessURL = nil; isRunning = false
+        uploads.stop()
+        token = ""; port = nil; accessURL = nil; isRunning = false; allowsWrites = false
         onChange?()
     }
 
-    private func accept(_ connection: NWConnection, revision: UUID) {
-        let id = UUID()
-        clients[id] = connection
-        connection.start(queue: .main)
-        let parser = ForegroundHTTPParser()
-        receive(connection, id: id, revision: revision, parser: parser)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self, weak connection] in
-            guard let self, self.clients[id] === connection else { return }
-            self.finish(id)
-        }
-    }
-
-    private func receive(_ connection: NWConnection, id: UUID, revision: UUID, parser: ForegroundHTTPParser) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 32 * 1024) { [weak self] data, _, complete, error in
-            Task { @MainActor in
-                guard let self, self.generation == revision, self.clients[id] === connection else { return }
-                do {
-                    if let data, !data.isEmpty, let request = try parser.append(data) {
-                        self.tasks[id] = Task { [weak self] in await self?.respond(request, id: id, revision: revision) }
-                    } else if complete || error != nil {
-                        self.finish(id)
-                    } else {
-                        self.receive(connection, id: id, revision: revision, parser: parser)
-                    }
-                } catch { self.send(id: id, status: 400, body: Data("Bad Request".utf8)) }
-            }
-        }
-    }
-
-    private func respond(_ request: ForegroundHTTPRequest, id: UUID, revision: UUID) async {
-        guard generation == revision, validHost(request.host),
-            request.origin == nil || request.origin == "http://\(request.host)"
-        else { send(id: id, status: 403, body: Data("Forbidden".utf8)); return }
-        let assets: [String: (String, String, String)] = [
-            "/": ("ForegroundWeb", "html", "text/html; charset=utf-8"),
-            "/ForegroundWebReading.js": ("ForegroundWebReading", "js", "text/javascript; charset=utf-8"),
-            "/ForegroundWebStream.js": ("ForegroundWebStream", "js", "text/javascript; charset=utf-8"),
-            "/ForegroundWebWorkbench.js": ("ForegroundWebWorkbench", "js", "text/javascript; charset=utf-8"),
-        ]
-        if request.method == "GET", let asset = assets[request.path] {
-            guard let url = Bundle.main.url(forResource: asset.0, withExtension: asset.1),
+    private func respond(_ request: ForegroundHTTPRequest, revision: UUID) async -> ForegroundHTTPResponse {
+        guard generation == revision, !Task.isCancelled else { return response(status: 403, body: Data()) }
+        if request.method == "GET", let asset = ForegroundHTTPRequest.assets[request.path] {
+            guard let url = Bundle.main.url(forResource: asset.name, withExtension: asset.suffix),
                 let page = try? Data(contentsOf: url)
-            else { send(id: id, status: 500, body: Data()); return }
-            send(id: id, status: 200, body: page, type: asset.2)
-            return
+            else { return response(status: 500, body: Data()) }
+            return response(body: page, type: asset.type)
         }
         guard request.token == "Bearer \(token)", !token.isEmpty else {
-            send(id: id, status: 401, body: Data("Unauthorized".utf8)); return
+            return response(status: 401, body: Data())
         }
         let isRead = request.method == "GET" && request.path != "/refreshToc"
-        guard isRead || ((request.method == "POST" || request.path == "/refreshToc") && allowsWrites) else {
-            send(id: id, status: 403, body: Data("Read Only".utf8)); return
+        guard isRead || (allowsWrites && (request.method == "POST" || request.method == "GET" && request.path == "/refreshToc")) else {
+            return response(status: 403, body: Data())
         }
         do {
+            if request.method == "POST", ["/prepareLocalBook", "/addLocalBook"].contains(request.path) {
+                let file = try await ForegroundWebMultipart.decode(body: request.body, contentType: request.contentType)
+                try Task.checkCancellation()
+                guard generation == revision else { throw CancellationError() }
+                let data: Data
+                if request.path == "/prepareLocalBook" {
+                    data = try await uploads.prepare(
+                        fileName: file.fileName, data: file.data, uploadID: request.parameters["uploadId"])
+                } else {
+                    data = try await uploads.importDirect(fileName: file.fileName, data: file.data)
+                }
+                try Task.checkCancellation()
+                guard generation == revision else { throw CancellationError() }
+                return response(body: data)
+            }
+            if request.method == "POST", ["/commitLocalBook", "/discardLocalBook"].contains(request.path) {
+                guard let payload = try JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                    let uploadID = payload["uploadId"] as? String,
+                    payload["entryPath"] == nil || payload["entryPath"] is String
+                else { throw failure("缺少待导入文件编号") }
+                let data: Data
+                if request.path == "/commitLocalBook" {
+                    data = try await uploads.commit(uploadID: uploadID, entryPath: payload["entryPath"] as? String)
+                } else {
+                    data = try await uploads.discard(uploadID: uploadID)
+                }
+                guard generation == revision else { throw CancellationError() }
+                return response(body: data)
+            }
             if request.method == "GET", request.path == "/getWebServiceInfo" {
                 guard let socketPort = sockets.port else { throw failure("持续连接服务尚未就绪，请重试") }
                 let value: [String: Any] = [
                     "isSuccess": true, "errorMsg": "", "data": ["socketPort": Int(socketPort), "allowsWrites": allowsWrites],
                 ]
-                send(id: id, status: 200, body: try JSONSerialization.data(withJSONObject: value))
-                return
+                return response(body: try JSONSerialization.data(withJSONObject: value))
             }
             if request.method == "GET", request.path == "/bookPDF" {
                 guard let url = request.parameters["url"], !url.isEmpty else { throw failure("缺少书籍地址") }
                 let data = try await ForegroundWebPDF.load(bookUrl: url)
-                guard !Task.isCancelled, generation == revision else { return }
-                send(id: id, status: 200, body: data, type: "application/pdf")
-                return
+                try Task.checkCancellation()
+                guard generation == revision else { throw CancellationError() }
+                return response(body: data, type: "application/pdf")
             }
             if request.method == "GET", request.path == "/getPDFInfo" || request.path == "/bookPDFPage" {
                 guard let url = request.parameters["url"], !url.isEmpty else { throw failure("缺少书籍地址") }
@@ -166,9 +145,9 @@ final class ForegroundWebServer {
                     }
                     data = try await ForegroundWebPDF.page(bookUrl: url, index: index)
                 }
-                guard !Task.isCancelled, generation == revision else { return }
-                send(id: id, status: 200, body: data)
-                return
+                try Task.checkCancellation()
+                guard generation == revision else { throw CancellationError() }
+                return response(body: data)
             }
             let facade = try ForegroundWebFacade.companion.create()
             let query = String(decoding: try JSONSerialization.data(withJSONObject: request.parameters), as: UTF8.self)
@@ -184,49 +163,153 @@ final class ForegroundWebServer {
                     }
                 }
             }
-            guard !Task.isCancelled, generation == revision else { return }
-            send(id: id, status: 200, body: Data(value.utf8))
+            try Task.checkCancellation()
+            guard generation == revision else { throw CancellationError() }
+            return response(body: Data(value.utf8))
         } catch {
-            guard generation == revision else { return }
             let payload: [String: Any] = ["isSuccess": false, "errorMsg": error.userFacingMessage, "data": NSNull()]
-            send(id: id, status: 400, body: (try? JSONSerialization.data(withJSONObject: payload)) ?? Data())
+            return response(status: 400, body: (try? JSONSerialization.data(withJSONObject: payload)) ?? Data())
         }
     }
 
-    private func validHost(_ host: String) -> Bool {
-        guard let port, let components = URLComponents(string: "http://\(host)"), components.port == Int(port),
-            components.user == nil, components.password == nil, components.path.isEmpty,
-            components.query == nil, components.fragment == nil, let address = components.host
-        else { return false }
-        if address == "127.0.0.1" || address == "localhost" { return true }
-        let bytes = address.split(separator: ".").compactMap { UInt8($0) }
-        return bytes.count == 4
-            && (bytes[0] == 10 || (bytes[0] == 192 && bytes[1] == 168)
-                || (bytes[0] == 172 && (16...31).contains(bytes[1])) || (bytes[0] == 169 && bytes[1] == 254))
-    }
-
-    private func send(id: UUID, status: Int, body: Data, type: String = "application/json; charset=utf-8") {
-        guard let connection = clients[id] else { return }
+    private func response(
+        status: Int = 200, body: Data, type: String = "application/json; charset=utf-8"
+    ) -> ForegroundHTTPResponse {
         var socketOrigins = ""
         if let socketPort = sockets.port {
             let hosts = Set(["127.0.0.1", "localhost", ForegroundWebAddress.localIPv4() ?? "127.0.0.1"])
             socketOrigins = hosts.sorted().map { " ws://\($0):\(socketPort)" }.joined()
         }
-        let header =
-            "HTTP/1.1 \(status) Response\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'self'; connect-src 'self'\(socketOrigins); img-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; frame-src blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'\r\n\r\n"
-        connection.send(
-            content: Data(header.utf8) + body,
-            completion: .contentProcessed { [weak self] _ in
-                Task { @MainActor in self?.finish(id) }
-            })
-    }
-
-    private func finish(_ id: UUID) {
-        clients.removeValue(forKey: id)?.cancel()
-        tasks.removeValue(forKey: id)?.cancel()
+        return ForegroundHTTPResponse(
+            status: status, body: body,
+            headers: [
+                "Content-Type": type, "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy":
+                    "default-src 'self'; connect-src 'self'\(socketOrigins); img-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; frame-src blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+            ])
     }
 
     private func failure(_ message: String) -> NSError {
         NSError(domain: "io.legado.web", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+/// Owns only this HTTP listener, its bounded connections and their cancellable request tasks.
+final class ForegroundWebHTTPRuntime: @unchecked Sendable {
+    typealias Handler = @Sendable (ForegroundHTTPRequest) async -> ForegroundHTTPResponse
+    let policy: ForegroundHTTPPolicy
+    private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+    private let lock = NSLock()
+    private var handler: Handler?
+    private var listener: Channel?
+    private var children: [UUID: Channel] = [:]
+    private var tasks: [UUID: Task<Void, Never>] = [:]
+    private var binding = true
+    private var cancelled = false
+    private var shutdownStarted = false
+
+    init(policy: ForegroundHTTPPolicy, handler: @escaping Handler) {
+        self.policy = policy
+        self.handler = handler
+    }
+
+    func start(host: String, port: UInt16, completion: @escaping @Sendable (Result<UInt16, Error>) -> Void) {
+        ServerBootstrap(group: group)
+            .serverChannelOption(ChannelOptions.backlog, value: 4)
+            .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
+            .serverChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
+            .childChannelOption(ChannelOptions.autoRead, value: false)
+            .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
+            .childChannelOption(ChannelOptions.recvAllocator, value: FixedSizeRecvByteBufferAllocator(capacity: 32 * 1024))
+            .childChannelOption(ChannelOptions.writeBufferWaterMark, value: .init(low: 32 * 1024, high: 64 * 1024))
+            .childChannelInitializer { [self] channel in configure(channel) }
+            .bind(host: host, port: Int(port)).whenComplete { [self] result in
+                let channel = try? result.get()
+                lock.lock()
+                binding = false
+                listener = channel
+                let accepted = !cancelled && channel != nil
+                lock.unlock()
+                guard accepted, let channel, let number = channel.localAddress?.port,
+                    let boundPort = UInt16(exactly: number), boundPort > 0
+                else {
+                    cancel()
+                    completion(.failure(ForegroundHTTPFailure.request(503)))
+                    return
+                }
+                channel.closeFuture.whenComplete { _ in completion(.failure(ForegroundHTTPFailure.request(503))) }
+                completion(.success(boundPort))
+            }
+    }
+
+    private func configure(_ channel: Channel) -> EventLoopFuture<Void> {
+        let id = UUID()
+        lock.lock()
+        let accepted = !cancelled && children.count < 4
+        if accepted { children[id] = channel }
+        lock.unlock()
+        guard accepted else { return channel.eventLoop.makeFailedFuture(ForegroundHTTPFailure.request(429)) }
+        channel.closeFuture.whenComplete { [weak self] _ in self?.remove(id) }
+        var limits = NIOHTTPDecoderLimitConfiguration()
+        limits.maxHeaderFieldSize = 16 * 1024
+        limits.maxHeaderListSize = 16 * 1024
+        limits.maxHeaderFieldCount = 64
+        return channel.pipeline.addHandler(ForegroundHTTPIngressLimit()).flatMap {
+            channel.pipeline.configureHTTPServerPipeline(
+                withPipeliningAssistance: false, withErrorHandling: false, withDecoderLimitConfiguration: limits)
+        }.flatMap {
+            channel.pipeline.addHandler(ForegroundHTTPConnection(runtime: self, id: id))
+        }
+    }
+
+    func requestHandler(for id: UUID) -> Handler? {
+        lock.lock()
+        defer { lock.unlock() }
+        return !cancelled && children[id] != nil ? handler : nil
+    }
+
+    func store(_ task: Task<Void, Never>, for id: UUID) {
+        lock.lock()
+        let accepted = !cancelled && children[id] != nil
+        if accepted { tasks[id] = task }
+        lock.unlock()
+        if !accepted { task.cancel() }
+    }
+
+    func cancelTask(for id: UUID) {
+        lock.lock()
+        let task = tasks.removeValue(forKey: id)
+        lock.unlock()
+        task?.cancel()
+    }
+
+    private func remove(_ id: UUID) {
+        lock.lock()
+        children.removeValue(forKey: id)
+        let task = tasks.removeValue(forKey: id)
+        lock.unlock()
+        task?.cancel()
+    }
+
+    func cancel() {
+        lock.lock()
+        guard !cancelled || (!binding && !shutdownStarted) else { lock.unlock(); return }
+        cancelled = true
+        handler = nil
+        let channels = Array(children.values) + (listener.map { [$0] } ?? [])
+        let tasks = Array(self.tasks.values)
+        self.tasks.removeAll()
+        listener = nil
+        let shutdown = !binding && !shutdownStarted
+        if shutdown { shutdownStarted = true }
+        lock.unlock()
+        tasks.forEach { $0.cancel() }
+        let closes = channels.map { $0.close() }
+        if shutdown {
+            let group = self.group
+            EventLoopFuture.andAllComplete(closes, on: group.next()).whenComplete { _ in
+                group.shutdownGracefully(queue: .global(qos: .utility)) { _ in }
+            }
+        }
     }
 }

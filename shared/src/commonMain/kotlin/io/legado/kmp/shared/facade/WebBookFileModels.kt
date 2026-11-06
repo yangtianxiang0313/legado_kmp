@@ -45,6 +45,7 @@ data class WebBookFileRequest(
     val explicitCookie: String?,
     val enabledCookieJar: Boolean,
     val retryCount: Int = 0,
+    val networkProxy: String? = null,
 ) {
     override fun toString(): String = "WebBookFileRequest(redacted)"
 }

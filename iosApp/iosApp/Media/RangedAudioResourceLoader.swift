@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unchecked Sendable {
     let queue = DispatchQueue(label: "io.legado.media.ranges")
     private let request: URLRequest
+    private let allowsPlaylistDiscovery: Bool
     private var pinnedRequest: URLRequest?
     private var pending: [AVAssetResourceLoadingRequest] = []
     private var active: Fetch?
@@ -31,6 +32,9 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
     private var draining = false
     private var failureHandler: (@Sendable (MediaAudioError) -> Void)?
     private var playbackURLHandler: (@Sendable (URL) -> Void)?
+    private var playlistHandler: (@Sendable (MediaAudioPlaylistResponse) -> Void)?
+    private var playlistResponse: MediaAudioPlaylistResponse?
+    private var reportedPlaylist = false
     private var reportedFailure = false
 
     private struct Window {
@@ -49,19 +53,26 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
         var expected: Int64?
         var response: HTTPURLResponse?
 
-        init(range: MediaHTTPByteRange, purpose: FetchPurpose, request: URLRequest, queue: DispatchQueue) throws {
+        init(
+            range: MediaHTTPByteRange, purpose: FetchPurpose, request: URLRequest, queue: DispatchQueue,
+            allowsPlaylistDiscovery: Bool
+        ) throws {
             self.range = range
             self.purpose = purpose
-            transfer = try MediaHTTPTransfer(request: request, maximumBytes: 256 * 1024, queue: queue, byteRange: range)
+            transfer = try MediaHTTPTransfer(
+                request: request, maximumBytes: 256 * 1024, queue: queue, byteRange: range,
+                allowsPlaylistDiscovery: allowsPlaylistDiscovery)
         }
 
         func mediaTransfer(received response: HTTPURLResponse, contentLength: Int64?) { owner?.received(response, from: self) }
         func mediaTransfer(received bytes: Data) { data.append(bytes) }
+        func mediaTransfer(received playlist: MediaAudioPlaylistResponse) { owner?.received(playlist, from: self) }
         func mediaTransfer(completed error: MediaAudioError?) { owner?.completed(self, error: error) }
     }
 
-    init(request: URLRequest) throws {
+    init(request: URLRequest, allowsPlaylistDiscovery: Bool = false) throws {
         self.request = try MediaHTTPTransfer.validated(request)
+        self.allowsPlaylistDiscovery = allowsPlaylistDiscovery
         super.init()
         if let suffix = request.url?.pathExtension, let type = UTType(filenameExtension: suffix),
             type.conforms(to: .audio) || type.conforms(to: .movie)
@@ -70,12 +81,15 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
         }
     }
 
-    deinit { cacheLease?.close() }
+    deinit {
+        let source = active?.transfer
+        queue.async { source?.cancel() }
+        fallback?.cancel()
+        cacheLease?.close()
+    }
 
     func cancel() {
-        queue.async { [self] in
-            fail(.cancelled); fallback?.cancel(); fallback = nil
-        }
+        queue.async { [self] in fail(.cancelled) }
     }
 
     func observeFailure(_ handler: @escaping @Sendable (MediaAudioError) -> Void) {
@@ -91,6 +105,19 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
             playbackURLHandler = handler
             fallback?.observePlaybackURL(handler)
         }
+    }
+
+    func observePlaylist(_ handler: @escaping @Sendable (MediaAudioPlaylistResponse) -> Void) {
+        queue.async { [self] in
+            playlistHandler = handler
+            reportPlaylist()
+        }
+    }
+
+    private func reportPlaylist() {
+        guard !reportedPlaylist, terminalError == nil, let playlistResponse, let playlistHandler else { return }
+        reportedPlaylist = true
+        playlistHandler(playlistResponse)
     }
 
     private func reportFailure() {
@@ -130,34 +157,20 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
         guard active === fetch, terminalError == nil else { return }
         let isPreflight: Bool
         if case .preflight = fetch.purpose { isPreflight = !representationExposed } else { isPreflight = false }
-        guard response.statusCode == 206 else {
-            if length == nil || isPreflight {
-                if isPreflight { discardCachedRepresentation() }
-                useSequentialFallback()
-            } else {
-                cacheLease?.invalidate()
-                fail(.network)
-            }
-            return
-        }
         do {
-            let range = try fetch.range.responseRange(response)
-            guard let version = MediaHTTPByteRange.strongValidator(response) else {
-                if length == nil || isPreflight {
-                    if isPreflight { discardCachedRepresentation() }
-                    useSequentialFallback()
-                } else {
+            let effectiveRequest = try Self.unrangedRequest(fetch.transfer.effectiveRequest)
+            guard let url = response.url, effectiveRequest.url == url else { fail(.network); return }
+            guard response.statusCode == 206, let version = MediaHTTPByteRange.strongValidator(response) else {
+                guard !representationExposed else {
                     cacheLease?.invalidate()
                     fail(.network)
+                    return
                 }
+                discardCachedRepresentation()
+                useSequentialFallback(request: effectiveRequest)
                 return
             }
-            var effectiveRequest = fetch.transfer.effectiveRequest
-            guard let url = response.url, effectiveRequest.url == url else { fail(.network); return }
-            for header in ["Range", "If-Range", "Content-Range"] {
-                effectiveRequest.setValue(nil, forHTTPHeaderField: header)
-            }
-            effectiveRequest = try MediaHTTPTransfer.validated(effectiveRequest)
+            let range = try fetch.range.responseRange(response)
             if let length {
                 let sameResource =
                     response.url.map { url in
@@ -182,30 +195,67 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
                     contentType = type.identifier
                 }
             }
-            if pinnedRequest == nil {
-                // A disk hit must not restore source credentials on a redirected cache miss.
-                pinnedRequest = effectiveRequest
-                resourceURL = url
-                cachedResourceKey = MediaAudioDiskCache.resourceKey(url)
-            }
+            // A disk hit or later redirect must not restore credentials from an earlier hop.
+            pinnedRequest = effectiveRequest
+            resourceURL = url
+            cachedResourceKey = MediaAudioDiskCache.resourceKey(url)
             fetch.response = response
             fetch.expected = range.end - fetch.range.start + 1
             drain()
         } catch { fail(.network) }
     }
 
+    private static func unrangedRequest(_ request: URLRequest) throws -> URLRequest {
+        var request = request
+        for header in ["Range", "If-Range", "Content-Range"] {
+            request.setValue(nil, forHTTPHeaderField: header)
+        }
+        return try MediaHTTPTransfer.validated(request)
+    }
+
+    private func received(_ playlist: MediaAudioPlaylistResponse, from fetch: Fetch) {
+        guard active === fetch, terminalError == nil else { return }
+        guard allowsPlaylistDiscovery, playlist.response.statusCode == 200 else { fail(.unsupportedFormat); return }
+        guard !representationExposed else {
+            cacheLease?.invalidate()
+            fail(.network)
+            return
+        }
+        active = nil
+        discardCachedRepresentation()
+        playlistResponse = playlist
+        // Keep AVFoundation's requests pending until the owner installs the HLS item.
+        reportPlaylist()
+    }
+
     private func completed(_ fetch: Fetch, error: MediaAudioError?) {
         guard active === fetch, terminalError == nil else { return }
         active = nil
         if let error {
-            if case .http(416) = error, case .preflight = fetch.purpose,
+            if case .playlist = error {
+                guard allowsPlaylistDiscovery else { fail(.unsupportedFormat); return }
+                guard !representationExposed else {
+                    cacheLease?.invalidate()
+                    fail(.network)
+                    return
+                }
+                do {
+                    let effectiveRequest = try Self.unrangedRequest(fetch.transfer.effectiveRequest)
+                    discardCachedRepresentation()
+                    useSequentialFallback(request: effectiveRequest, bypassesCache: true)
+                } catch { fail((error as? MediaAudioError) ?? .network) }
+            } else if case .http(416) = error, case .preflight = fetch.purpose,
                 !representationExposed, !retriedPreflight416, fetch.range.start > 0
             {
                 // A cached hole can lie beyond a shortened representation. Rebootstrap only once.
                 retriedPreflight416 = true
-                discardCachedRepresentation()
-                cachePreparation = .prefix
-                drain()
+                do {
+                    let effectiveRequest = try Self.unrangedRequest(fetch.transfer.effectiveRequest)
+                    discardCachedRepresentation()
+                    pinnedRequest = effectiveRequest
+                    cachePreparation = .prefix
+                    drain()
+                } catch { fail((error as? MediaAudioError) ?? .network) }
             } else {
                 fail(error)
             }
@@ -214,7 +264,13 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
         guard let expected = fetch.expected, expected == Int64(fetch.data.count), !fetch.data.isEmpty else {
             fail(.network); return
         }
-        if let response = fetch.response, let length {
+        let awaitingPrefix: Bool
+        if allowsPlaylistDiscovery, case .some(.prefix) = cachePreparation {
+            awaitingPrefix = true
+        } else {
+            awaitingPrefix = false
+        }
+        if let response = fetch.response, let length, !awaitingPrefix || fetch.range.start == 0 {
             let lease = MediaAudioDiskCache.shared.store(
                 request: request, response: response, contentType: contentType, length: length, validator: validator,
                 generation: cacheGeneration)
@@ -223,6 +279,17 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
             if lease?.write(offset: fetch.range.start, data: fetch.data) == false {
                 lease?.close()
                 cacheLease = nil
+            }
+            // A changed preflight stays in memory until this representation's prefix excludes HLS.
+            if awaitingPrefix {
+                for window in windows {
+                    guard let cacheLease else { break }
+                    if !cacheLease.write(offset: window.start, data: window.data) {
+                        cacheLease.close()
+                        self.cacheLease = nil
+                        break
+                    }
+                }
             }
         }
         revision &+= 1
@@ -265,14 +332,28 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
         // Keep the original cacheGeneration: clearing the cache must fence all later writes.
     }
 
-    private func useSequentialFallback() {
+    private func useSequentialFallback(request sourceRequest: URLRequest, bypassesCache: Bool = false) {
+        guard !representationExposed, fallback == nil else { fail(.network); return }
         let old = active
         active = nil
         old?.transfer.cancel()
         do {
+            guard sourceRequest.httpMethod == "GET", sourceRequest.httpBody == nil else {
+                throw MediaAudioError.invalidRequest
+            }
             let loader = try ProgressiveAudioResourceLoader(
-                request: request, failureSnapshot: failureSnapshot, cacheGeneration: cacheGeneration)
+                request: sourceRequest, failureSnapshot: failureSnapshot, cacheGeneration: cacheGeneration,
+                allowsPlaylistDiscovery: allowsPlaylistDiscovery, bypassesCache: bypassesCache,
+                bypassesCacheLookup: true)
             if let playbackURLHandler { loader.observePlaybackURL(playbackURLHandler) }
+            loader.observePlaylist { [weak self] playlist in
+                guard let self else { return }
+                self.queue.async { [weak self] in
+                    guard let self, self.terminalError == nil else { return }
+                    self.playlistResponse = playlist
+                    self.reportPlaylist()
+                }
+            }
             loader.observeFailure { [weak self] error in
                 guard let self else { return }
                 self.queue.async { [weak self] in self?.fail(error) }
@@ -289,7 +370,7 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
     }
 
     private func drain() {
-        guard !draining, terminalError == nil, fallback == nil else { return }
+        guard !draining, terminalError == nil, fallback == nil, playlistResponse == nil else { return }
         draining = true
         defer { draining = false }
         pending.removeAll { $0.isCancelled || $0.isFinished }
@@ -382,7 +463,8 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
         do {
             let fetch = try Fetch(
                 range: MediaHTTPByteRange(start: start, end: last, validator: validator),
-                purpose: purpose, request: pinnedRequest ?? request, queue: queue)
+                purpose: purpose, request: pinnedRequest ?? request, queue: queue,
+                allowsPlaylistDiscovery: allowsPlaylistDiscovery)
             fetch.owner = self
             fetch.transfer.receiver = fetch
             active = fetch
@@ -393,9 +475,13 @@ final class RangedAudioResourceLoader: NSObject, MediaAudioResourceLoading, @unc
     private func fail(_ error: MediaAudioError) {
         guard terminalError == nil else { return }
         terminalError = error
+        playlistResponse = nil
         let old = active
         active = nil
         old?.transfer.cancel()
+        let sequential = fallback
+        fallback = nil
+        sequential?.cancel()
         cachePreparation = nil
         windows.removeAll()
         cacheLease?.close()

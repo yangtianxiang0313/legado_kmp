@@ -46,6 +46,8 @@ data class LegacyWebViewRequest(
     val sourceRegex: String? = null,
     val overrideUrlRegex: String? = null,
     val source: BookSource? = null,
+    val timeoutMillis: Long = 30_000,
+    val allowCertificateCompatibility: Boolean = false,
 )
 
 interface InteractiveSourceCapability {

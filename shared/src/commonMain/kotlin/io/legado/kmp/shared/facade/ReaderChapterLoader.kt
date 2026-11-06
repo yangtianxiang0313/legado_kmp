@@ -80,9 +80,16 @@ internal class ReaderChapterLoader(
     private val preferencesStore: AppPreferencesStore,
     private val chapterImages: CacheChapterImages? = null,
 ) {
+    private companion object {
+        // ReaderFacade is a factory; independent scenes must not build the same lazy catalog twice.
+        val localCatalogMutex = Mutex()
+    }
+
     private val loadingStates = mutableMapOf<String, ChapterLoadingState>()
     private val loadingMutex = Mutex()
     private val downloadSemaphore = Semaphore(1)
+
+    suspend fun ensureLocalCatalog(bookUrl: String): Book = requireBook(bookUrl)
 
     suspend fun prepareChapter(
         bookUrl: String,
@@ -250,7 +257,7 @@ internal class ReaderChapterLoader(
             ?: loadTxtLocalChapterContentUseCase(prepared.book, chapter)
         coroutineContext.ensureActive()
         if (rawContent.isEmpty() && !chapter.isVolume) {
-            prepared = reparseTxtLocalBook(prepared.book, expected = book)
+            prepared = ensureTxtLocalChapters(prepared.book, forceReparse = true)
             chapters = prepared.chapters
             require(chapters.isNotEmpty()) { "TXT chapter list is empty for ${prepared.book.bookUrl}" }
             normalizedIndex = chapterIndex.coerceIn(0, chapters.lastIndex)
@@ -265,7 +272,7 @@ internal class ReaderChapterLoader(
             coroutineContext.ensureActive()
         }
         return ReaderChapterPreparation(
-            currentBook = book,
+            currentBook = prepared.book,
             payload = createPayload(prepared.book, chapters, chapter, normalizedIndex, rawContent),
         )
     }
@@ -299,26 +306,34 @@ internal class ReaderChapterLoader(
         )
     }
 
-    private suspend fun ensureTxtLocalChapters(book: Book): PreparedBook {
+    private suspend fun ensureTxtLocalChapters(book: Book, forceReparse: Boolean = false): PreparedBook = localCatalogMutex.withLock {
         coroutineContext.ensureActive()
-        val storedChapters = observeBookChaptersUseCase(book.bookUrl).first()
+        val current = getBookUseCase.get(book.bookUrl)
+            ?: throw CancellationException("TXT book was removed while preparing its chapter list")
         coroutineContext.ensureActive()
-        if (hasUsableTxtOffsets(storedChapters)) {
-            return PreparedBook(book, storedChapters)
+        if (!current.isTxtLocalBook || current.origin != book.origin || current.type != book.type ||
+            LocalBookFileBinding.path(current) != LocalBookFileBinding.path(book) ||
+            (forceReparse && (current.tocUrl != book.tocUrl || current.charset != book.charset ||
+                current.config.reverseToc != book.config.reverseToc))
+        ) {
+            throw CancellationException("TXT book changed while preparing its chapter list")
         }
-        return reparseTxtLocalBook(book, expected = book)
+        val storedChapters = observeBookChaptersUseCase(current.bookUrl).first()
+        coroutineContext.ensureActive()
+        if (!forceReparse && hasUsableTxtOffsets(current, storedChapters)) {
+            return@withLock PreparedBook(current, storedChapters)
+        }
+        reparseTxtLocalBook(current, expected = current)
     }
 
-    private suspend fun hasUsableTxtOffsets(chapters: List<BookChapter>): Boolean {
-        return chapters.isNotEmpty() && chapters.all { chapter ->
+    private suspend fun hasUsableTxtOffsets(book: Book, chapters: List<BookChapter>): Boolean {
+        return chapters.isNotEmpty() && chapters.withIndex().all { (index, chapter) ->
             coroutineContext.ensureActive()
-            if (chapter.isVolume) {
-                true
-            } else {
-                val start = chapter.start
-                val end = chapter.end
-                start != null && end != null && end > start
-            }
+            val start = chapter.start
+            val end = chapter.end
+            chapter.bookUrl == book.bookUrl && chapter.index == index &&
+                start != null && end != null && start >= 0L &&
+                (end > start || chapter.isVolume && end == start)
         }
     }
 
@@ -391,17 +406,19 @@ internal class ReaderChapterLoader(
         return payload
     }
 
-    suspend fun requireBook(bookUrl: String): Book {
+    suspend fun requireBook(bookUrl: String, prepareCatalog: Boolean = true): Book {
         coroutineContext.ensureActive()
         val stored = getBookUseCase.get(bookUrl)
         coroutineContext.ensureActive()
-        if (stored != null) return stored
-        val candidate = searchUseCase.getByBookUrl(bookUrl)?.toBook()
-        coroutineContext.ensureActive()
-        val fallback = candidate ?: error("Book not found: $bookUrl")
-        val saved = saveBookUseCase.ifSourceUnchanged(expected = fallback, book = fallback, allowInsert = true)
-        coroutineContext.ensureActive()
-        return saved
+        val book = stored ?: run {
+            val candidate = searchUseCase.getByBookUrl(bookUrl)?.toBook()
+            coroutineContext.ensureActive()
+            val fallback = candidate ?: error("Book not found: $bookUrl")
+            val saved = saveBookUseCase.ifSourceUnchanged(expected = fallback, book = fallback, allowInsert = true)
+            coroutineContext.ensureActive()
+            saved
+        }
+        return if (prepareCatalog && book.isTxtLocalBook) ensureTxtLocalChapters(book).book else book
     }
 
     suspend fun requireSource(book: Book): BookSource {
@@ -445,7 +462,8 @@ internal class ReaderChapterLoader(
     }
 
     suspend fun setCharset(bookUrl: String, charset: String): Book {
-        val book = requireBook(bookUrl)
+        // A wrong stored charset must not prevent the user from correcting it before first parsing.
+        val book = requireBook(bookUrl, prepareCatalog = false)
         return saveBookUseCase.updateCharset(book.bookUrl, book.origin, charset)
     }
 

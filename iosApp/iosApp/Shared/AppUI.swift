@@ -22,6 +22,18 @@ enum AppUI {
         static let legacyTitleBarHeight: CGFloat = 54
     }
 
+    enum Pagination {
+        static func shouldPreload(_ scrollView: UIScrollView) -> Bool {
+            let insets = scrollView.adjustedContentInset
+            let viewportHeight = scrollView.bounds.height - insets.top - insets.bottom
+            guard viewportHeight > 0, scrollView.contentSize.height > 0,
+                scrollView.contentOffset.y >= -insets.top
+            else { return false }
+            let visibleBottom = scrollView.contentOffset.y + scrollView.bounds.height - insets.bottom
+            return scrollView.contentSize.height - visibleBottom <= viewportHeight
+        }
+    }
+
     enum Bookshelf {
         static func formattedLatestUpdateTime(_ timestamp: Int64, now: Date = Date()) -> String {
             let nowMilliseconds = Int64(now.timeIntervalSince1970 * 1000)

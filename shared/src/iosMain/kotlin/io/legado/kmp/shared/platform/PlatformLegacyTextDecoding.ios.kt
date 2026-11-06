@@ -32,6 +32,9 @@ internal fun decodePlatformLegacyText(bytes: ByteArray, charset: PlatformLegacyC
     require(charset == PlatformLegacyCharset.GBK || charset == PlatformLegacyCharset.GB18030 ||
         charset == PlatformLegacyCharset.BIG5 || charset == PlatformLegacyCharset.SHIFT_JIS ||
         charset == PlatformLegacyCharset.EUC_JP) { "Not a multibyte text charset: $charset" }
+    if (charset == PlatformLegacyCharset.GB18030) {
+        decodePlatformGb18030Fast(bytes)?.let { return it }
+    }
     val decoder = LegacyTextUnitDecoder(charset)
     try {
         return buildString(bytes.size) {

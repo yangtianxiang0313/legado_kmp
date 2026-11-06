@@ -3,6 +3,8 @@ package io.legado.kmp.shared.domain.localbook
 import io.legado.kmp.shared.platform.TextCodec
 
 private const val TXT_CHARSET_WINDOW_BYTES = 512000
+// Platform recognizers may repeatedly decode the sample for every candidate charset.
+private const val TXT_CHARSET_SAMPLE_BYTES = 8192
 private const val TXT_CHARSET_SAMPLE_CONTEXT = 64L
 private const val TXT_CHARSET_CHECK_INTERVAL = 4096
 
@@ -103,7 +105,7 @@ private fun detectTxtCharsetFromSource(
     checkActive: () -> Unit
 ): String {
     checkActive()
-    if (size <= TXT_CHARSET_WINDOW_BYTES) {
+    if (size <= TXT_CHARSET_SAMPLE_BYTES) {
         // Preserve the existing platform detector's input for small, non-BOM documents.
         return detectTxtCharsetSample(readTxtCharsetBytes(source, 0L, size.toInt(), checkActive), checkActive)
     }
@@ -113,14 +115,15 @@ private fun detectTxtCharsetFromSource(
     val earlier = minOf(firstEvidence, otherEvidence)
     val later = maxOf(firstEvidence, otherEvidence)
     val start = txtCharsetSampleStart(earlier)
-    val knownUtf8End = invalidUtf8Offset ?: size
-    if (later - start <= TXT_CHARSET_WINDOW_BYTES - 4L) {
-        val sample = readTxtCharsetSample(source, size, start, TXT_CHARSET_WINDOW_BYTES, knownUtf8End, checkActive)
+    // Legal UTF-8 bytes can still be BOM-less UTF-16; trimming them would break code-unit parity.
+    val knownUtf8End = if (firstNul == null) invalidUtf8Offset ?: size else 0L
+    if (later - start <= TXT_CHARSET_SAMPLE_BYTES - 4L) {
+        val sample = readTxtCharsetSample(source, size, start, TXT_CHARSET_SAMPLE_BYTES, knownUtf8End, checkActive)
         return detectTxtCharsetSample(sample, checkActive)
     }
 
     // Keep both the first non-ASCII text and the UTF-8 failure even when separated by a long preamble.
-    val halfWindow = TXT_CHARSET_WINDOW_BYTES / 2
+    val halfWindow = TXT_CHARSET_SAMPLE_BYTES / 2
     val first = readTxtCharsetSample(source, size, start, halfWindow, knownUtf8End, checkActive)
     val second = readTxtCharsetSample(
         source, size, txtCharsetSampleStart(later), halfWindow, knownUtf8End, checkActive

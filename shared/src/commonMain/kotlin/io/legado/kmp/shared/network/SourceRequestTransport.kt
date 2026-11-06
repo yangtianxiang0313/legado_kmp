@@ -36,15 +36,18 @@ internal class SourceRequestTransport(
         followRedirects: Boolean = true
     ): SourceExecutionContext {
         val cookieDomain = extractCookieDomain(request.url)
-        val proxy = extractProxy(request, defaultHeaders)
-        val requestConfig = withCookies(
+        val ruleProxy = extractProxy(request, defaultHeaders)
+        val initialConfig = withCookies(
             request = request,
             defaultHeaders = defaultHeaders,
             enableCookieJar = source?.enabledCookieJar == true,
             followRedirects = followRedirects
         )
+        val requestConfig = if (source != null) SourceNetworkPolicy.apply(initialConfig, source.bookSourceUrl, ruleProxy) else initialConfig
+        val proxy = if (source != null) requestConfig.sourceNetworkProxy else ruleProxy
+        val retry = source?.let { SourceNetworkPolicy.retryCount(it.bookSourceUrl, request.retry) } ?: request.retry
         return SourceExecutionContext(
-            request = request,
+            request = request.copy(retry = retry),
             requestConfig = requestConfig,
             source = source,
             defaultHeaders = defaultHeaders,
@@ -58,6 +61,13 @@ internal class SourceRequestTransport(
     suspend fun executeText(
         context: SourceExecutionContext,
         allowRedirectResponse: Boolean = false
+    ): HttpResponse = SourceNetworkLimiter.withPermit(context.source?.bookSourceUrl) {
+        executeTextWithPermit(context, allowRedirectResponse)
+    }
+
+    private suspend fun executeTextWithPermit(
+        context: SourceExecutionContext,
+        allowRedirectResponse: Boolean,
     ): HttpResponse {
         val request = context.request
         val proxy = context.proxy
@@ -92,7 +102,11 @@ internal class SourceRequestTransport(
                     encodeMediaBodyAsHex(binaryResponse)
                 }
             }
-            request.useWebView -> executeWebView(context, allowRedirectResponse)
+            request.useWebView -> executeExternalWithRetry(
+                retry = if (request.method == HttpMethod.GET) request.retry else 0,
+                requestUrl = context.requestConfig.url,
+                persistCookies = persistCookies,
+            ) { executeWebView(context, allowRedirectResponse) }
             !proxy.isNullOrBlank() -> {
                 executeExternalWithRetry(
                     retry = request.retry,
@@ -140,7 +154,8 @@ internal class SourceRequestTransport(
             requestUrl = context.requestConfig.url,
             persistCookies = context.source?.enabledCookieJar == true
         ) {
-            val uploadContext = context.copy(requestConfig = context.requestConfig.copy(method = HttpMethod.POST))
+            val uploadContext = context.copy(requestConfig = context.requestConfig.copy(
+                method = HttpMethod.POST, allowSourceCertificateCompatibility = false))
             executeScopedHttp(uploadContext) { config ->
                 if (config.method == HttpMethod.POST) {
                     uploadRequestExecutor?.execute(context.copy(requestConfig = config), upload.copy(url = config.url))
@@ -189,7 +204,9 @@ internal class SourceRequestTransport(
                         sourceRegex = request.sourceRegex,
                         headers = context.requestConfig.headers,
                         proxy = proxy,
-                        source = source
+                        source = source,
+                        timeoutMillis = context.requestConfig.timeout.inWholeMilliseconds,
+                        allowCertificateCompatibility = context.requestConfig.allowSourceCertificateCompatibility,
                     )
                 )?.let { body ->
                     initialResponse.copy(
@@ -208,7 +225,9 @@ internal class SourceRequestTransport(
                         sourceRegex = request.sourceRegex,
                         headers = context.requestConfig.headers,
                         proxy = proxy,
-                        source = source
+                        source = source,
+                        timeoutMillis = context.requestConfig.timeout.inWholeMilliseconds,
+                        allowCertificateCompatibility = context.requestConfig.allowSourceCertificateCompatibility,
                     )
                 )?.let { body ->
                     HttpResponse(
@@ -295,7 +314,9 @@ internal class SourceRequestTransport(
     ): HttpResponse {
         var lastResponse: HttpResponse? = null
         for (attempt in 0..retry.coerceAtLeast(0)) {
-            val response = execute()
+            val response = try { execute() } catch (error: HttpException) {
+                if (attempt < retry.coerceAtLeast(0)) continue else throw error
+            }
             lastResponse = response
             saveResponseCookies(requestUrl, response, persistCookies)
             if (response.isSuccessful) {
@@ -344,7 +365,8 @@ internal class SourceRequestTransport(
                 val headers = current.headers.filterKeys { !it.equals("Cookie", ignoreCase = true) }.toMutableMap()
                 mergeRequestCookieHeader(cookieRepository.requestCookieHeader(current.url), explicitCookie)
                     ?.let { headers["Cookie"] = it }
-                current = current.copy(headers = headers)
+                current = current.copy(headers = headers, allowSourceCertificateCompatibility =
+                    initial.allowSourceCertificateCompatibility && SourceNetworkPolicy.permitsCompatibilityForRequest(current.url, headers))
                 val response = send(current)
                 if (!initial.followRedirects || response.statusCode !in COOKIE_REDIRECT_STATUSES) return@withTimeoutOrNull response
                 val location = response.headers.entries.firstOrNull { it.key.equals("Location", ignoreCase = true) }?.value

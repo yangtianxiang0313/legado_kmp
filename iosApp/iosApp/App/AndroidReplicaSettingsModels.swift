@@ -47,7 +47,7 @@ extension AndroidReplicaSettingsCategoryViewController {
                         rows: [
                             .bookshelfLayout, .precisionSearch, .threadCount, .preDownloadNum, .replaceRuleEnabledByDefault,
                             .keepScreenOn, .showDiscovery, .showRss, .defaultHome, .autoRefreshOnStart, .defaultToRead,
-                            .userAgent,
+                            .userAgent, .sourceNetwork,
                             .sourceCheck, .showAddToShelfAlert, .appLock, .clearCache,
                         ]),
                 ]
@@ -114,6 +114,7 @@ extension AndroidReplicaSettingsCategoryViewController {
         case textBottomJustify
         case autoRefreshOnStart
         case userAgent
+        case sourceNetwork
         case autoChangeSource
         case showAddToShelfAlert
     }

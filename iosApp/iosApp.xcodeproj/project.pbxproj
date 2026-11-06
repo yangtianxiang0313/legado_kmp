@@ -89,6 +89,7 @@
 		AD0301010000000000000004 /* ProgressiveAudioHTTPRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0301020000000000000004; };
 		F028C0010000000000000004 /* RangedAudioResourceLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028C0020000000000000004; };
 		F027AC010000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F027AC020000000000000001 /* PrivacyInfo.xcprivacy */; };
+		F027FB010000000000000001 /* MultipartKit in Frameworks */ = {isa = PBXBuildFile; productRef = F027FB030000000000000001; };
 		F027F4000000000000000001 /* AudioPlaybackBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027F5000000000000000001 /* AudioPlaybackBar.swift */; };
 		F027F4000000000000000002 /* AudioPlaybackProgressWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027F5000000000000000002 /* AudioPlaybackProgressWriter.swift */; };
 		F027F4000000000000000003 /* AudioPlaybackSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027F5000000000000000003 /* AudioPlaybackSession.swift */; };
@@ -134,6 +135,9 @@
 		F027FA010000000000000003 /* ForegroundWebReading.js */ = {isa = PBXBuildFile; fileRef = F027FA020000000000000003; };
 		F027FA010000000000000004 /* ForegroundWebStream.js */ = {isa = PBXBuildFile; fileRef = F027FA020000000000000004; };
 		F027FA010000000000000005 /* ForegroundWebWorkbench.js */ = {isa = PBXBuildFile; fileRef = F027FA020000000000000005; };
+		F027FB010000000000000002 /* ForegroundWebUpload.swift */ = {isa = PBXBuildFile; fileRef = F027FB020000000000000002; };
+		F027FB010000000000000003 /* ForegroundWebMultipart.swift */ = {isa = PBXBuildFile; fileRef = F027FB020000000000000003; };
+		F027FB010000000000000004 /* ForegroundWebUpload.js */ = {isa = PBXBuildFile; fileRef = F027FB020000000000000004; };
 		F027E1000000000000000001 /* LocalBookFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027E2000000000000000001; };
 		F027E1000000000000000002 /* PdfReaderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027E2000000000000000002; };
 		F027E1000000000000000003 /* PdfReaderProgressStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F027E2000000000000000003; };
@@ -449,6 +453,11 @@
 		D81A60010000000000000005 /* ReplaceRuleEditorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A60020000000000000005 /* ReplaceRuleEditorViewController.swift */; };
 		D81A60010000000000000006 /* ReplaceRuleEditorDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A60020000000000000006 /* ReplaceRuleEditorDraft.swift */; };
 		D81A60010000000000000007 /* ReplaceRuleEditorFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A60020000000000000007 /* ReplaceRuleEditorFormView.swift */; };
+		F0A551010000000000000001 /* RuleAssistantPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A551020000000000000001; };
+		F0A551010000000000000002 /* RuleAssistantModelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A551020000000000000002; };
+		F0A551010000000000000003 /* RuleAssistantFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A551020000000000000003; };
+		F0A551010000000000000004 /* RuleAssistantWritingToolsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A551020000000000000004; };
+		F0A551010000000000000005 /* RuleAssistantViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A551020000000000000005; };
 		D81A60010000000000000008 /* ReplaceRuleEditorIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A60020000000000000008 /* ReplaceRuleEditorIcons.swift */; };
 		D81A60010000000000000009 /* ReplaceRuleEditorHelpViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A60020000000000000009 /* ReplaceRuleEditorHelpViewController.swift */; };
 		D81A70010000000000000001 /* BookDetailOverflowMenuCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A70020000000000000001 /* BookDetailOverflowMenuCoordinator.swift */; };
@@ -633,6 +642,9 @@
 		A10000000000000000000019 /* SourceImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* SourceImportViewController.swift */; };
 		E8A51DAD0000000000000001 /* SourceImportScreenAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A51DAD0000000000000002 /* SourceImportScreenAdapter.swift */; };
 		E9B200000000000000000001 /* SourceLoginEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B200000000000000000002 /* SourceLoginEntry.swift */; };
+		F06B11000000000000000001 /* SourceNetworkSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06B12000000000000000001 /* SourceNetworkSettingsViewController.swift */; };
+		F06B11000000000000000002 /* SourceNetworkCertificatePrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06B12000000000000000002 /* SourceNetworkCertificatePrompt.swift */; };
+		F06B11000000000000000003 /* SourceNetwork.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F06B12000000000000000003 /* SourceNetwork.xcstrings */; };
 		E9B200000000000000000003 /* SourceLoginFormComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B200000000000000000004 /* SourceLoginFormComponents.swift */; };
 		E9B200000000000000000005 /* SourceLoginFormViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B200000000000000000006 /* SourceLoginFormViewController.swift */; };
 		E9B200000000000000000007 /* SourceLoginScreenAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B200000000000000000008 /* SourceLoginScreenAdapter.swift */; };
@@ -916,6 +928,9 @@
 		F027FA020000000000000003 /* ForegroundWebReading.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Resources/ForegroundWebReading.js"; sourceTree = "<group>"; };
 		F027FA020000000000000004 /* ForegroundWebStream.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Resources/ForegroundWebStream.js"; sourceTree = "<group>"; };
 		F027FA020000000000000005 /* ForegroundWebWorkbench.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Resources/ForegroundWebWorkbench.js"; sourceTree = "<group>"; };
+		F027FB020000000000000002 /* ForegroundWebUpload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebService/ForegroundWebUpload.swift"; sourceTree = "<group>"; };
+		F027FB020000000000000003 /* ForegroundWebMultipart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebService/ForegroundWebMultipart.swift"; sourceTree = "<group>"; };
+		F027FB020000000000000004 /* ForegroundWebUpload.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Resources/ForegroundWebUpload.js"; sourceTree = "<group>"; };
 		F027E2000000000000000001 /* LocalBookFormats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBookFormats.swift; sourceTree = "<group>"; };
 		F027E2000000000000000002 /* PdfReaderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfReaderViewController.swift; sourceTree = "<group>"; };
 		F027E2000000000000000003 /* PdfReaderProgressStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfReaderProgressStore.swift; sourceTree = "<group>"; };
@@ -1253,6 +1268,11 @@
 		D81A60020000000000000005 /* ReplaceRuleEditorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleEditorViewController.swift; sourceTree = "<group>"; };
 		D81A60020000000000000006 /* ReplaceRuleEditorDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleEditorDraft.swift; sourceTree = "<group>"; };
 		D81A60020000000000000007 /* ReplaceRuleEditorFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleEditorFormView.swift; sourceTree = "<group>"; };
+		F0A551020000000000000001 /* RuleAssistantPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleAssistantPlan.swift; sourceTree = "<group>"; };
+		F0A551020000000000000002 /* RuleAssistantModelService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleAssistantModelService.swift; sourceTree = "<group>"; };
+		F0A551020000000000000003 /* RuleAssistantFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleAssistantFormView.swift; sourceTree = "<group>"; };
+		F0A551020000000000000004 /* RuleAssistantWritingToolsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleAssistantWritingToolsViewController.swift; sourceTree = "<group>"; };
+		F0A551020000000000000005 /* RuleAssistantViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleAssistantViewController.swift; sourceTree = "<group>"; };
 		D81A60020000000000000008 /* ReplaceRuleEditorIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleEditorIcons.swift; sourceTree = "<group>"; };
 		D81A60020000000000000009 /* ReplaceRuleEditorHelpViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleEditorHelpViewController.swift; sourceTree = "<group>"; };
 		D81A70020000000000000001 /* BookDetailOverflowMenuCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailOverflowMenuCoordinator.swift; sourceTree = "<group>"; };
@@ -1419,6 +1439,9 @@
 		A2000000000000000000001B /* SourceImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceImportViewController.swift; sourceTree = "<group>"; };
 		E8A51DAD0000000000000002 /* SourceImportScreenAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceImportScreenAdapter.swift; sourceTree = "<group>"; };
 		E9B200000000000000000002 /* SourceLoginEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceLoginEntry.swift; sourceTree = "<group>"; };
+		F06B12000000000000000001 /* SourceNetworkSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceNetworkSettingsViewController.swift; sourceTree = "<group>"; };
+		F06B12000000000000000002 /* SourceNetworkCertificatePrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceNetworkCertificatePrompt.swift; sourceTree = "<group>"; };
+		F06B12000000000000000003 /* SourceNetwork.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = SourceNetwork.xcstrings; sourceTree = "<group>"; };
 		E9B200000000000000000004 /* SourceLoginFormComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceLoginFormComponents.swift; sourceTree = "<group>"; };
 		E9B200000000000000000006 /* SourceLoginFormViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceLoginFormViewController.swift; sourceTree = "<group>"; };
 		E9B200000000000000000008 /* SourceLoginScreenAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceLoginScreenAdapter.swift; sourceTree = "<group>"; };
@@ -1589,6 +1612,7 @@
 				F02A38050000000000000002 /* NIOCore in Frameworks */,
 				F02A38050000000000000003 /* NIOPosix in Frameworks */,
 				F02A38050000000000000004 /* NIOHTTP1 in Frameworks */,
+				F027FB010000000000000001 /* MultipartKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1705,6 +1729,9 @@
 				F027FA020000000000000003,
 				F027FA020000000000000004,
 				F027FA020000000000000005,
+				F027FB020000000000000002,
+				F027FB020000000000000003,
+				F027FB020000000000000004,
 			);
 		};
 		F027E3000000000000000001 /* PDF */ = {
@@ -2085,12 +2112,19 @@
 				D81A60020000000000000005 /* ReplaceRuleEditorViewController.swift */,
 				D81A60020000000000000006 /* ReplaceRuleEditorDraft.swift */,
 				D81A60020000000000000007 /* ReplaceRuleEditorFormView.swift */,
+				F0A551020000000000000001 /* RuleAssistantPlan.swift */,
+				F0A551020000000000000002 /* RuleAssistantModelService.swift */,
+				F0A551020000000000000003 /* RuleAssistantFormView.swift */,
+				F0A551020000000000000004 /* RuleAssistantWritingToolsViewController.swift */,
+				F0A551020000000000000005 /* RuleAssistantViewController.swift */,
 				D81A60020000000000000008 /* ReplaceRuleEditorIcons.swift */,
 				D81A60020000000000000009 /* ReplaceRuleEditorHelpViewController.swift */,
 				A20000000000000000000036 /* DictRuleViewController.swift */,
 				A2000000000000000000001B /* SourceImportViewController.swift */,
 				E8A51DAD0000000000000002 /* SourceImportScreenAdapter.swift */,
 				E9B200000000000000000002 /* SourceLoginEntry.swift */,
+				F06B12000000000000000001 /* SourceNetworkSettingsViewController.swift */,
+				F06B12000000000000000002 /* SourceNetworkCertificatePrompt.swift */,
 				E9B200000000000000000004 /* SourceLoginFormComponents.swift */,
 				E9B200000000000000000006 /* SourceLoginFormViewController.swift */,
 				E9B200000000000000000008 /* SourceLoginScreenAdapter.swift */,
@@ -2452,6 +2486,7 @@
 				D81AD0020000000000000007 /* ReaderBackgrounds */,
 				A20000000000000000000024 /* defaultRssSources.json */,
 				A2000000000000000000001E /* Localizable.xcstrings */,
+				F06B12000000000000000003 /* SourceNetwork.xcstrings */,
 				A20000000000000000000027 /* Assets.xcassets */,
 				F027AC020000000000000001 /* PrivacyInfo.xcprivacy */,
 				F02B02020000000000000006 /* OpenSourceLicenses */,
@@ -2554,7 +2589,7 @@
 			dependencies = (
 			);
 			name = iosApp;
-			packageProductDependencies = (F02A38030000000000000001 /* mamba */, F02A38030000000000000002 /* NIOCore */, F02A38030000000000000003 /* NIOPosix */, F02A38030000000000000004 /* NIOHTTP1 */);
+			packageProductDependencies = (F027FB030000000000000001 /* MultipartKit */, F02A38030000000000000001 /* mamba */, F02A38030000000000000002 /* NIOCore */, F02A38030000000000000003 /* NIOPosix */, F02A38030000000000000004 /* NIOHTTP1 */);
 			productName = iosApp;
 			productReference = A20000000000000000000011 /* iosApp.app */;
 			productType = "com.apple.product-type.application";
@@ -2583,7 +2618,7 @@
 				Base,
 			);
 			mainGroup = A40000000000000000000001;
-			packageReferences = (F02A38040000000000000001 /* mamba */, F02A38040000000000000002 /* swift-nio */);
+			packageReferences = (F027FB040000000000000001 /* multipart-kit */, F02A38040000000000000001 /* mamba */, F02A38040000000000000002 /* swift-nio */);
 			productRefGroup = A40000000000000000000009 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -2610,6 +2645,7 @@
 				F027FA010000000000000003,
 				F027FA010000000000000004,
 				F027FA010000000000000005,
+				F027FB010000000000000004,
 				D81D50010000000000000001 /* ReaderAndroidNumber.ttf in Resources */,
 				E021E0010000000000000001 /* ReaderAndroidMonospace.ttf in Resources */,
 				E021E0010000000000000002 /* ReaderAndroidMonospace-LICENSE.txt in Resources */,
@@ -2623,6 +2659,7 @@
 				D81AD0010000000000000007 /* ReaderBackgrounds in Resources */,
 				A10000000000000000000024 /* defaultRssSources.json in Resources */,
 				A1000000000000000000001C /* Localizable.xcstrings in Resources */,
+				F06B11000000000000000003 /* SourceNetwork.xcstrings in Resources */,
 				A10000000000000000000025 /* Assets.xcassets in Resources */,
 				F027AC010000000000000001 /* PrivacyInfo.xcprivacy in Resources */,
 				F02B02010000000000000006 /* OpenSourceLicenses in Resources */,
@@ -2779,6 +2816,8 @@
 				F027F100000000000000001B,
 				F027FA010000000000000001,
 				F027FA010000000000000002,
+				F027FB010000000000000002,
+				F027FB010000000000000003,
 				F027E1000000000000000001 /* LocalBookFormats.swift in Sources */,
 				F027E1000000000000000002 /* PdfReaderViewController.swift in Sources */,
 				F027E1000000000000000003 /* PdfReaderProgressStore.swift in Sources */,
@@ -3148,6 +3187,11 @@
 				D81A60010000000000000005 /* ReplaceRuleEditorViewController.swift in Sources */,
 				D81A60010000000000000006 /* ReplaceRuleEditorDraft.swift in Sources */,
 				D81A60010000000000000007 /* ReplaceRuleEditorFormView.swift in Sources */,
+				F0A551010000000000000001 /* RuleAssistantPlan.swift in Sources */,
+				F0A551010000000000000002 /* RuleAssistantModelService.swift in Sources */,
+				F0A551010000000000000003 /* RuleAssistantFormView.swift in Sources */,
+				F0A551010000000000000004 /* RuleAssistantWritingToolsViewController.swift in Sources */,
+				F0A551010000000000000005 /* RuleAssistantViewController.swift in Sources */,
 				D81A60010000000000000008 /* ReplaceRuleEditorIcons.swift in Sources */,
 				D81A60010000000000000009 /* ReplaceRuleEditorHelpViewController.swift in Sources */,
 				D81A70010000000000000001 /* BookDetailOverflowMenuCoordinator.swift in Sources */,
@@ -3366,6 +3410,8 @@
 				A10000000000000000000019 /* SourceImportViewController.swift in Sources */,
 				E8A51DAD0000000000000001 /* SourceImportScreenAdapter.swift in Sources */,
 				E9B200000000000000000001 /* SourceLoginEntry.swift in Sources */,
+				F06B11000000000000000001 /* SourceNetworkSettingsViewController.swift in Sources */,
+				F06B11000000000000000002 /* SourceNetworkCertificatePrompt.swift in Sources */,
 				E9B200000000000000000003 /* SourceLoginFormComponents.swift in Sources */,
 				E9B200000000000000000005 /* SourceLoginFormViewController.swift in Sources */,
 				E9B200000000000000000007 /* SourceLoginScreenAdapter.swift in Sources */,
@@ -3444,6 +3490,11 @@
 			repositoryURL = "https://github.com/apple/swift-nio.git";
 			requirement = {kind = exactVersion; version = 2.104.0; };
 		};
+		F027FB040000000000000001 /* multipart-kit */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/vapor/multipart-kit.git";
+			requirement = {kind = exactVersion; version = 4.7.1; };
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -3451,6 +3502,11 @@
 		F02A38030000000000000002 /* NIOCore */ = {isa = XCSwiftPackageProductDependency; package = F02A38040000000000000002; productName = NIOCore; };
 		F02A38030000000000000003 /* NIOPosix */ = {isa = XCSwiftPackageProductDependency; package = F02A38040000000000000002; productName = NIOPosix; };
 		F02A38030000000000000004 /* NIOHTTP1 */ = {isa = XCSwiftPackageProductDependency; package = F02A38040000000000000002; productName = NIOHTTP1; };
+		F027FB030000000000000001 /* MultipartKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F027FB040000000000000001 /* multipart-kit */;
+			productName = MultipartKit;
+		};
 /* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */

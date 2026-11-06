@@ -7,20 +7,22 @@ protocol MediaAudioResourceLoading: AVAssetResourceLoaderDelegate {
     func cancel()
     func observeFailure(_ handler: @escaping @Sendable (MediaAudioError) -> Void)
     func observePlaybackURL(_ handler: @escaping @Sendable (URL) -> Void)
+    func observePlaylist(_ handler: @escaping @Sendable (MediaAudioPlaylistResponse) -> Void)
 }
 
 /// Retain with the item and cancel when replacing it. Book audio can opt into GET range windows;
-/// POST and full-response fallback spool up to 128 MiB. No HLS/DASH/DRM or source response scripts.
+/// POST and full-response fallback spool up to 128 MiB. Playlist discovery is opt-in for book audio.
+/// No DASH/DRM or source response scripts; playlists are handed to the owning player unchanged.
 /// Response cookies are not written to the shared repository; chapter checks remain in shared.
 final class ProgressiveAudioAsset {
     let asset: AVURLAsset
     private let loader: any MediaAudioResourceLoading
 
-    init(request: URLRequest, allowsRangeRequests: Bool = false) throws {
+    init(request: URLRequest, allowsRangeRequests: Bool = false, allowsPlaylistDiscovery: Bool = false) throws {
         if allowsRangeRequests, (request.httpMethod ?? "GET").uppercased() == "GET", request.httpBody == nil {
-            loader = try RangedAudioResourceLoader(request: request)
+            loader = try RangedAudioResourceLoader(request: request, allowsPlaylistDiscovery: allowsPlaylistDiscovery)
         } else {
-            loader = try ProgressiveAudioResourceLoader(request: request)
+            loader = try ProgressiveAudioResourceLoader(request: request, allowsPlaylistDiscovery: allowsPlaylistDiscovery)
         }
         // The resource URL is opaque: it never exposes the remote path, query, or credentials to AVFoundation.
         let url = URL(string: "legado-audio://media/\(UUID().uuidString)")!
@@ -36,6 +38,8 @@ final class ProgressiveAudioAsset {
     func observeFailure(_ handler: @escaping @Sendable (MediaAudioError) -> Void) { loader.observeFailure(handler) }
 
     func observePlaybackURL(_ handler: @escaping @Sendable (URL) -> Void) { loader.observePlaybackURL(handler) }
+
+    func observePlaylist(_ handler: @escaping @Sendable (MediaAudioPlaylistResponse) -> Void) { loader.observePlaylist(handler) }
 
     var failure: MediaAudioError? { loader.failure }
 
@@ -55,6 +59,8 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
     private var cacheLookupPerformed = false
     private var cacheGeneration: UInt64 = 0
     private let inheritedCacheGeneration: UInt64?
+    private let bypassesCache: Bool
+    private let bypassesCacheLookup: Bool
     private var deliveredCacheResponse = false
     private var requests: [AVAssetResourceLoadingRequest] = []
     private var length: Int64?
@@ -75,6 +81,9 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
     private var relayID = UUID()
     private var playbackURLHandler: (@Sendable (URL) -> Void)?
     private var reportedPlaybackURL = false
+    private var playlistResponse: MediaAudioPlaylistResponse?
+    private var playlistHandler: (@Sendable (MediaAudioPlaylistResponse) -> Void)?
+    private var reportedPlaylist = false
     private struct HTTPRead {
         let offset: Int64
         let count: Int
@@ -85,14 +94,19 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
 
     init(
         request: URLRequest, failureSnapshot: MediaAudioFailureSnapshot = MediaAudioFailureSnapshot(),
-        cacheGeneration: UInt64? = nil
+        cacheGeneration: UInt64? = nil, allowsPlaylistDiscovery: Bool = false, bypassesCache: Bool = false,
+        bypassesCacheLookup: Bool = false
     ) throws {
         let queue = DispatchQueue(label: "io.legado.media.spool")
         self.queue = queue
         self.failureSnapshot = failureSnapshot
         inheritedCacheGeneration = cacheGeneration
+        self.bypassesCache = bypassesCache
+        self.bypassesCacheLookup = bypassesCacheLookup
         initialRequest = try MediaHTTPTransfer.validated(request)
-        transfer = try MediaHTTPTransfer(request: initialRequest, maximumBytes: 128 * 1024 * 1024, queue: queue)
+        transfer = try MediaHTTPTransfer(
+            request: initialRequest, maximumBytes: 128 * 1024 * 1024, queue: queue,
+            allowsPlaylistDiscovery: allowsPlaylistDiscovery)
         spool = try MediaAudioSpool()
         super.init()
         if let suffix = request.url?.pathExtension, !suffix.isEmpty,
@@ -118,6 +132,21 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
             playbackURLHandler = handler
             reportPlaybackURL()
         }
+    }
+
+    func observePlaylist(_ handler: @escaping @Sendable (MediaAudioPlaylistResponse) -> Void) {
+        queue.async { [self] in
+            playlistHandler = handler
+            reportPlaylist()
+        }
+    }
+
+    private func reportPlaylist() {
+        guard !reportedPlaylist, !cancelled, terminalError == nil,
+            let playlistResponse, let playlistHandler
+        else { return }
+        reportedPlaylist = true
+        playlistHandler(playlistResponse)
     }
 
     private func reportPlaybackURL() {
@@ -157,7 +186,8 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
     private func cancelOnQueue() {
         guard !cancelled else { return }
         cancelled = true
-        terminalError = .cancelled
+        if terminalError == nil { terminalError = failureSnapshot.get() ?? .cancelled }
+        playlistResponse = nil
         stopHTTPRelay()
         releaseCache()
         transfer.cancel()
@@ -169,14 +199,14 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
         spool.close()
     }
 
-    private var canCache: Bool { initialRequest.httpMethod == "GET" && initialRequest.httpBody == nil }
+    private var canCache: Bool { !bypassesCache && initialRequest.httpMethod == "GET" && initialRequest.httpBody == nil }
 
     private func startLoading() {
         guard !cancelled, terminalError == nil else { return }
         if !cacheLookupPerformed {
             cacheLookupPerformed = true
             cacheGeneration = inheritedCacheGeneration ?? MediaAudioDiskCache.shared.generation
-            if canCache, let lease = MediaAudioDiskCache.shared.lookup(request: initialRequest) {
+            if canCache, !bypassesCacheLookup, let lease = MediaAudioDiskCache.shared.lookup(request: initialRequest) {
                 if lease.isComplete, lease.representation.length > 0,
                     lease.representation.length <= 128 * 1024 * 1024
                 {
@@ -278,6 +308,16 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
         }
     }
 
+    func mediaTransfer(received playlist: MediaAudioPlaylistResponse) {
+        guard !cancelled, !complete, terminalError == nil else { return }
+        playlistResponse = playlist
+        complete = true
+        releaseCache()
+        closeSpool()
+        // Leave AVFoundation's requests pending until the owner replaces the item.
+        reportPlaylist()
+    }
+
     func mediaTransfer(completed error: MediaAudioError?) {
         guard !cancelled, !complete else { return }
         complete = true
@@ -313,6 +353,11 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
         }
         let pending = requests
         requests = []
+        if playlistResponse != nil, terminalError == nil {
+            requests = pending.filter { !$0.isCancelled && !$0.isFinished }
+            reportPlaylist()
+            return
+        }
         if needsHTTPRelay, terminalError == nil {
             // AVFoundation cannot follow this custom scheme to HTTP. The owning player
             // adopts the private URL while retaining this same transfer and spool.
@@ -503,6 +548,8 @@ final class ProgressiveAudioResourceLoader: NSObject, MediaAudioResourceLoading,
     }
 
     deinit {
+        let source = transfer
+        queue.async { source.cancel() }
         relayTask?.cancel()
         relay?.cancel()
         cacheReadLease?.close()

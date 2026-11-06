@@ -58,8 +58,12 @@ final class ExploreResultsListCoordinator {
     var onFooterActivated: ((ExploreResultsFooterCell.State) -> Void)?
     var onContentSettled: (() -> Void)?
 
+    var isReadyForPagination: Bool {
+        isInteractive && !table.hasUncommittedUpdates && restoration == nil && !resetsScrollOnRestore
+    }
+
     var isContentSettled: Bool {
-        isInteractive && !isInteracting && restoration == nil && !resetsScrollOnRestore
+        isReadyForPagination && !isInteracting
     }
 
     init(tableView: UITableView) {

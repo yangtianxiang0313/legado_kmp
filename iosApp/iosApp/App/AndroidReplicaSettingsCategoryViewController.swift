@@ -617,6 +617,8 @@ final class AndroidReplicaSettingsCategoryViewController: UIViewController, Navi
             }
         case .restoreIgnore:
             showBackupIgnorePicker()
+        case .sourceNetwork:
+            navigationController?.pushViewController(SourceNetworkSettingsViewController(), animated: true)
         case .userAgent:
             showTextEditor(
                 title: L10n.Settings.userAgentTitle, value: runtimeConfig?.userAgent,

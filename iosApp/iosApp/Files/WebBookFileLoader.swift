@@ -28,6 +28,9 @@ final class WebBookFileLoader {
         guard active == nil else { throw WebBookFilePolicy.failure("文件下载已经开始") }
         try Task.checkCancellation()
         let input = try WebBookFilePolicy.Input(prepared)
+        let networkLease = try await SourceNetworkLimiter.shared.acquire(sourceUrl: prepared.sourceUrl)
+        defer { networkLease.close() }
+        try Task.checkCancellation()
         let progress = WebBookFileProgress(onProgress)
         let operation = WebBookFileHTTPOperation()
         active = operation
@@ -362,6 +365,8 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
             configuration.timeoutIntervalForResource = remainingDuration
             configuration.waitsForConnectivity = false
             configuration.httpMaximumConnectionsPerHost = 1
+            try SourceNetworkNative.shared.configureDownload(
+                configuration: configuration, sourceUrl: input.sourceURL, proxy: input.networkProxy)
             let delegateQueue = OperationQueue()
             delegateQueue.maxConcurrentOperationCount = 1
             delegateQueue.underlyingQueue = queue
@@ -619,14 +624,14 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
         _: URLSession, task _: URLSessionTask, didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        Self.authenticate(challenge, completionHandler)
+        authenticate(challenge, completionHandler)
     }
 
     func urlSession(
         _: URLSession, didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        Self.authenticate(challenge, completionHandler)
+        authenticate(challenge, completionHandler)
     }
 
     func urlSession(
@@ -636,10 +641,21 @@ private final class WebBookFileTransfer: NSObject, URLSessionDataDelegate, WebBo
         completionHandler(nil)
     }
 
-    private static func authenticate(
+    private func authenticate(
         _ challenge: URLAuthenticationChallenge,
         _ completion: (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
+        let allowsCompatibility =
+            ["GET", "HEAD"].contains(currentRequest.httpMethod ?? "GET")
+            && SourceNetworkPolicy.shared.permitsCompatibilityForRequest(
+                url: currentRequest.url?.absoluteString ?? "", headers: currentRequest.allHTTPHeaderFields ?? [:])
+        if SourceNetworkNative.shared.acceptsCertificate(
+            sourceUrl: input.sourceURL, compatibilityAllowed: allowsCompatibility, challenge: challenge),
+            let trust = challenge.protectionSpace.serverTrust
+        {
+            completion(.useCredential, URLCredential(trust: trust))
+            return
+        }
         completion(
             challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust
                 ? .performDefaultHandling : .cancelAuthenticationChallenge, nil)
@@ -722,7 +738,8 @@ enum WebBookFilePolicy {
         let bodyBase64: String?
         let explicitCookie: String?
         let retryCount: Int32
-        private let sourceURL: String
+        let sourceURL: String
+        let networkProxy: String?
         private let headerOriginURL: String
         private let enabledCookieJar: Bool
 
@@ -759,6 +776,7 @@ enum WebBookFilePolicy {
             bodyBase64 = prepared.bodyBase64
             explicitCookie = scoped ? prepared.explicitCookie : nil
             sourceURL = prepared.sourceUrl
+            networkProxy = prepared.networkProxy
             headerOriginURL = prepared.headerOriginUrl
             enabledCookieJar = prepared.enabledCookieJar
         }
@@ -769,7 +787,7 @@ enum WebBookFilePolicy {
                 headers: request.allHTTPHeaderFields ?? [:], bodyBase64: request.httpBody == nil ? nil : bodyBase64,
                 fileName: fileName, timeoutMillis: Int64(request.timeoutInterval * 1000), sourceUrl: sourceURL,
                 headerOriginUrl: headerOriginURL, explicitCookie: explicitCookie, enabledCookieJar: enabledCookieJar,
-                retryCount: retryCount)
+                retryCount: retryCount, networkProxy: networkProxy)
         }
     }
 

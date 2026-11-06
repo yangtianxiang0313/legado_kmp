@@ -259,6 +259,26 @@ class BookDetailFacade(
         }
     }
 
+    fun preparePreviewRequest(candidate: SearchBook, onResult: (BookDetailBookRequestResult) -> Unit): FlowSubscription =
+        BookDetailBookRequest.start(refresh = { preparePreview(candidate) }, onResult = onResult)
+
+    /** Restore a retained online preview only for an explicit detail-page action. */
+    @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
+    suspend fun preparePreviewSnapshot(book: Book): Book {
+        return runRecoverable("BookDetailFacade.preparePreviewSnapshot") {
+            require(book.bookUrl.isNotBlank()) { "Book URL is empty" }
+            require(book.isNotShelf && !book.isLocal) { "Only online previews can be restored" }
+            bookSaveMutex.withLock {
+                val persisted = getBookUseCase.get(book.bookUrl)
+                check(persisted == null || persisted.origin == book.origin) { "Book source changed" }
+                persisted ?: saveBookUseCase.insertPreviewIfAbsent(book)
+            }
+        }
+    }
+
+    fun preparePreviewSnapshotRequest(book: Book, onResult: (BookDetailBookRequestResult) -> Unit): FlowSubscription =
+        BookDetailBookRequest.start(refresh = { preparePreviewSnapshot(book) }, onResult = onResult)
+
     /** Explicitly read again after preview exit; only a retained search candidate can rebuild a missing row. */
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun prepareReadingPreview(bookUrl: String): Book {
@@ -270,6 +290,9 @@ class BookDetailFacade(
             }
         }
     }
+
+    fun prepareReadingPreviewRequest(bookUrl: String, onResult: (BookDetailBookRequestResult) -> Unit): FlowSubscription =
+        BookDetailBookRequest.start(refresh = { prepareReadingPreview(bookUrl) }, onResult = onResult)
 
     @Throws(RecoverableSharedException::class, kotlin.coroutines.cancellation.CancellationException::class)
     suspend fun refreshInfo(bookUrl: String): Book {

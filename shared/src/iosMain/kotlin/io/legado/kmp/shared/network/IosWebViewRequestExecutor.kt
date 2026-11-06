@@ -47,7 +47,7 @@ class IosWebViewRequestExecutor(
         }
         val requestUrl = NSURL(string = loadUrl)
             ?: throw IllegalArgumentException("Invalid WebView URL: $loadUrl")
-        return withTimeout(60_000L) {
+        return withTimeout(context.requestConfig.timeout.inWholeMilliseconds.coerceIn(5_000, 300_000)) {
             suspendCancellableCoroutine { continuation ->
                 val lifetime = SupervisorJob(continuation.context[Job])
                 val scope = CoroutineScope(lifetime + Dispatchers.Main.immediate)
@@ -91,6 +91,7 @@ class IosWebViewRequestExecutor(
                         val configuration = WKWebViewConfiguration().apply {
                             websiteDataStore = WKWebsiteDataStore.nonPersistentDataStore()
                         }
+                        SourceNetworkNative.configureWebView(configuration, context.proxy)
                         val createdView = WKWebView(
                             frame = CGRectMake(0.0, 0.0, 1.0, 1.0),
                             configuration = configuration,

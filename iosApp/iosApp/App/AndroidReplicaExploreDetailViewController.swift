@@ -319,17 +319,17 @@ final class AndroidReplicaExploreDetailViewController: UIViewController, UITable
 
     private func checkForMoreBooks() {
         guard canInteract, !isLoading, retryAction == nil, hasMore, footerState == .ready,
-            currentPage > 0, currentPage < Int32.max, resultList.isContentSettled,
+            currentPage > 0, currentPage < Int32.max, resultList.isReadyForPagination,
             tableView.bounds.height > tableView.adjustedContentInset.top + tableView.adjustedContentInset.bottom
         else { return }
         tableView.layoutIfNeeded()
-        guard resultList.isContentSettled else { return }
+        guard canInteract, !isLoading, retryAction == nil, hasMore, footerState == .ready,
+            resultList.isReadyForPagination
+        else { return }
         let height = tableView.contentSize.height
-        let visibleBottom = tableView.contentOffset.y + tableView.bounds.height - tableView.adjustedContentInset.bottom
-        let pixel = 1 / max(1, tableView.traitCollection.displayScale)
         let nextPage = currentPage + 1
         // Recheck only delivered geometry; a new page must grow the list before another automatic request.
-        guard height > automaticContentHeight, visibleBottom >= height - pixel,
+        guard height > automaticContentHeight, AppUI.Pagination.shouldPreload(tableView),
             automaticallyRequestedPage != nextPage
         else { return }
         automaticContentHeight = height

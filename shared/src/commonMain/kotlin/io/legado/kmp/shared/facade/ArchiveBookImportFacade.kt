@@ -100,7 +100,7 @@ class ArchiveBookImportFacade(
                 )
                 val (book, chapters) = withContext(Dispatchers.Default) {
                     when (extension) {
-                        "txt" -> parseTxt(draft).let { it.book to it.chapters }
+                        "txt" -> draft to emptyList()
                         "epub" -> parseEpub(draft).let { it.book to it.chapters }
                         "pdf" -> parsePdf(draft).let { it.book to it.chapters }
                         "umd" -> parseUmd(draft).let { it.book to it.chapters }
@@ -109,7 +109,7 @@ class ArchiveBookImportFacade(
                     }
                 }
                 currentCoroutineContext().ensureActive()
-                // The origin is committed with the book and chapters, never in a second progress-resetting write.
+                // TXT extraction/import does not build a catalog, matching Android LocalBook.importFile.
                 saveBook.insertLocalBookIfAbsent(
                     book.copy(origin = draft.origin, originName = name, group = draft.group, order = draft.order),
                     chapters,

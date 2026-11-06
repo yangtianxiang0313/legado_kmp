@@ -8,6 +8,15 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
     struct Pagination: Equatable {
         let title: String
         let isLoading: Bool
+        let allowsAutomaticLoading: Bool
+    }
+
+    private struct DisplayRequest {
+        let articles: [RssArticle]
+        let style: RssArticlePresentationStyle
+        let pagination: Pagination?
+        let resetOffset: Bool
+        let appendFrom: Int?
     }
 
     var isPresentationActive: () -> Bool = { false }
@@ -21,11 +30,13 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
     private var articles: [RssArticle] = []
     private var style = RssArticlePresentationStyle.compact
     private var pagination: Pagination?
+    private var pendingDisplay: DisplayRequest?
     private var bindings: [ObjectIdentifier: (article: RssArticle, id: UUID)] = [:]
     private var generation = UUID()
     private var pendingSizes: [ObjectIdentifier: () -> Bool] = [:]
     private var sizeWork: DispatchWorkItem?
     private var needsLayoutOnResume = false
+    private var paginationCheckID: UUID?
     private var lastWidth: CGFloat = 0
     private var lastCategory: UIContentSizeCategory?
     private var lastDirection: UITraitEnvironmentLayoutDirection?
@@ -45,13 +56,19 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
         articles: [RssArticle], style: RssArticlePresentationStyle, pagination: Pagination?,
         resetOffset: Bool = false, appendFrom: Int? = nil
     ) {
+        guard !isRendering else {
+            pendingDisplay = DisplayRequest(
+                articles: articles, style: style, pagination: pagination,
+                resetOffset: resetOffset || pendingDisplay?.resetOffset == true, appendFrom: appendFrom)
+            return
+        }
         let oldStyle = self.style
         let oldCount = self.articles.count
         let hadFooter = self.pagination != nil
         let anchor = captureAnchor()
         self.articles = articles
         self.pagination = pagination
-        if oldStyle == style, appendFrom == oldCount, articles.count >= oldCount, active {
+        if !resetOffset, oldStyle == style, appendFrom == oldCount, articles.count >= oldCount, active {
             appendRows(from: oldCount, hadFooter: hadFooter)
             return
         }
@@ -75,11 +92,17 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
         } else {
             restoreAnchor(anchor)
         }
-        isRendering = false
-        resume()
+        finishRendering()
     }
 
     func updatePagination(_ pagination: Pagination?) {
+        if isRendering {
+            display(
+                articles: pendingDisplay?.articles ?? articles, style: pendingDisplay?.style ?? style,
+                pagination: pagination, resetOffset: pendingDisplay?.resetOffset ?? false,
+                appendFrom: pendingDisplay?.appendFrom)
+            return
+        }
         guard self.pagination != pagination else { return }
         let wasVisible = self.pagination != nil
         self.pagination = pagination
@@ -95,10 +118,12 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
         for case let footer as RssArticleGridFooter in collectionView.visibleSupplementaryViews(
             ofKind: UICollectionView.elementKindSectionFooter)
         { configureFooter(footer) }
+        schedulePaginationCheck()
     }
 
     func suspend() {
         generation = UUID()
+        paginationCheckID = nil
         sizeWork?.cancel()
         sizeWork = nil
         needsLayoutOnResume = needsLayoutOnResume || !pendingSizes.isEmpty
@@ -112,6 +137,7 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
         for cell in visibleCells() { resume(cell) }
         if needsLayoutOnResume { scheduleLayout() }
         scheduleSizeUpdate()
+        schedulePaginationCheck()
     }
 
     func layoutDidChange() {
@@ -240,6 +266,8 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
                     let added = (oldCount..<articles.count).map { IndexPath(item: $0, section: 0) }
                     if !added.isEmpty { collectionView.insertItems(at: added) }
                     flowLayout.invalidateLayout()
+                } completion: { [weak self] _ in
+                    self?.finishRendering()
                 }
             } else {
                 tableView.performBatchUpdates {
@@ -247,11 +275,23 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
                     var added = (oldCount..<articles.count).map { IndexPath(row: $0, section: 0) }
                     if pagination != nil { added.append(IndexPath(row: articles.count, section: 0)) }
                     if !added.isEmpty { tableView.insertRows(at: added, with: .none) }
+                } completion: { [weak self] _ in
+                    self?.finishRendering()
                 }
             }
         }
+    }
+
+    private func finishRendering() {
         isRendering = false
-        resume()
+        if let pending = pendingDisplay {
+            pendingDisplay = nil
+            display(
+                articles: pending.articles, style: pending.style, pagination: pending.pagination,
+                resetOffset: pending.resetOffset, appendFrom: pending.appendFrom)
+        } else {
+            resume()
+        }
     }
 
     private func visibleCells() -> [UIView] {
@@ -359,8 +399,7 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
                 }
             }
             self.restoreAnchor(anchor)
-            self.isRendering = false
-            self.scheduleSizeUpdate()
+            self.finishRendering()
         }
         sizeWork = work
         DispatchQueue.main.async(execute: work)
@@ -500,10 +539,27 @@ final class RssArticleListController: NSObject, UITableViewDataSource, UITableVi
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard active, !isRendering, scrollView.isDragging || scrollView.isDecelerating,
-            scrollView.contentOffset.y + scrollView.bounds.height > scrollView.contentSize.height - 120
-        else { return }
-        onLoadMore?()
+        if scrollView === self.scrollView { schedulePaginationCheck() }
+    }
+
+    private func schedulePaginationCheck() {
+        guard active, paginationCheckID == nil else { return }
+        let epoch = generation
+        let id = UUID()
+        paginationCheckID = id
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.paginationCheckID == id else { return }
+            defer { if self.paginationCheckID == id { self.paginationCheckID = nil } }
+            guard self.generation == epoch, self.active, !self.isRendering, !self.articles.isEmpty,
+                let pagination = self.pagination, !pagination.isLoading, pagination.allowsAutomaticLoading,
+                self.style == .grid ? !self.collectionView.hasUncommittedUpdates : !self.tableView.hasUncommittedUpdates
+            else { return }
+            self.scrollView.layoutIfNeeded()
+            guard self.generation == epoch, self.active, !self.isRendering,
+                self.pagination == pagination, AppUI.Pagination.shouldPreload(self.scrollView)
+            else { return }
+            self.onLoadMore?()
+        }
     }
 
     func scrollViewDidEndDragging(_: UIScrollView, willDecelerate decelerate: Bool) {

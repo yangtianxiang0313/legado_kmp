@@ -21,16 +21,30 @@ internal class LegacyJsoupRequestExecutor {
         return json.encodeToString(response).also { context.ensureActive() }
     }
 
-    suspend fun execute(request: LegacyJsoupRequest): LegacyJsoupResponse {
+    suspend fun execute(request: LegacyJsoupRequest): LegacyJsoupResponse = SourceNetworkLimiter.withPermit(
+        currentCoroutineContext()[SourceNetworkOrigin]?.sourceUrl
+    ) {
         val context = currentCoroutineContext()
         context.ensureActive()
-        val prepared = request.prepare { context.ensureActive() }
-        val session = LegacyJsoupCookieSession(request.cookieStore)
-        val response = if (request.timeoutMillis == 0) execute(request, prepared, session) else {
-            withTimeout(request.timeoutMillis.toLong()) { execute(request, prepared, session) }
+        val sourceUrl = context[SourceNetworkOrigin]?.sourceUrl
+        val scoped = if (sourceUrl == null) request else request.copy(
+            timeoutMillis = SourceNetworkPolicy.timeoutMillis(sourceUrl, request.timeoutMillis))
+        val prepared = scoped.prepare { context.ensureActive() }
+        val session = LegacyJsoupCookieSession(scoped.cookieStore)
+        val retry = if (sourceUrl != null && scoped.method.uppercase() in setOf("GET", "HEAD")) SourceNetworkPolicy.retryCount(sourceUrl, 0) else 0
+        suspend fun send(): LegacyJsoupResponse {
+            var response = execute(scoped, prepared, session)
+            repeat(retry.coerceIn(0, 5)) {
+                if (response.statusCode in 200..399) return response
+                response = execute(scoped, prepared, session)
+            }
+            return response
+        }
+        val response = if (scoped.timeoutMillis == 0) send() else {
+            withTimeout(scoped.timeoutMillis.toLong()) { send() }
         }
         context.ensureActive()
-        return response
+        response
     }
 
     private suspend fun execute(

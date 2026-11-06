@@ -74,6 +74,7 @@ final class ReplaceRuleEditorViewController: UIViewController,
         form.populate(initialDraft)
         form.onChange = { [weak self] in self?.updateDismissalProtection() }
         form.onHelp = { [weak self] in self?.showRegexHelp() }
+        form.onAssistant = { [weak self] in self?.showRuleAssistant() }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -308,6 +309,27 @@ final class ReplaceRuleEditorViewController: UIViewController,
                 title: NSLocalizedString(
                     "replace_rule.editor.paste_failed", value: "粘贴失败", comment: "Paste rule failure title"))
         }
+    }
+
+    private func showRuleAssistant() {
+        guard state == .editing, presentedViewController == nil else { return }
+        overflowMenu?.dismiss()
+        view.endEditing(true)
+        let controller = RuleAssistantViewController(draft: form.draft)
+        controller.onApply = { [weak self] preview, name in
+            guard let self, self.state == .editing else { return }
+            var draft = self.form.draft
+            draft.pattern = preview.pattern
+            draft.replacement = preview.replacement
+            draft.isRegex = preview.isRegex
+            if draft.name.isEmpty { draft.name = name }
+            self.form.populate(draft)
+            self.updateDismissalProtection()
+        }
+        let navigation = UINavigationController(rootViewController: controller)
+        navigation.modalPresentationStyle = .pageSheet
+        navigation.sheetPresentationController?.detents = [.large()]
+        present(navigation, animated: true)
     }
 
     private func showRegexHelp() {

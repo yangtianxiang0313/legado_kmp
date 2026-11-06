@@ -586,19 +586,24 @@ class SourceRequestExecutor(
         sourceRegex: String? = null,
         overrideUrlRegex: String? = null
     ): String? {
-        return interactiveCapability?.executeWebView(
+        val headers = buildDefaultHeaders(source, request)
+        val config = SourceNetworkPolicy.apply(request.toHttpRequestConfig(headers), source.bookSourceUrl,
+            extractProxy(request, headers))
+        return SourceNetworkLimiter.withPermit(source.bookSourceUrl) { interactiveCapability?.executeWebView(
             LegacyWebViewRequest(
                 html = html,
                 url = url,
                 javaScript = js,
                 webViewDelayTime = request.webViewDelayTime,
-                headers = buildDefaultHeaders(source, request),
-                proxy = extractProxy(request, buildDefaultHeaders(source, request)),
+                headers = config.headers,
+                proxy = config.sourceNetworkProxy,
                 sourceRegex = sourceRegex,
                 overrideUrlRegex = overrideUrlRegex,
                 source = source,
+                timeoutMillis = config.timeout.inWholeMilliseconds,
+                allowCertificateCompatibility = config.allowSourceCertificateCompatibility,
             )
-        ) ?: throw SharedCapabilityException(
+        ) } ?: throw SharedCapabilityException(
             capabilityGapKey = "webview_request_unsupported",
             message = "Legacy JS webView requests are not implemented in shared execution yet"
         )

@@ -1,11 +1,14 @@
 import Foundation
 import shared
 
+@MainActor
 final class AndroidReplicaBookDetailAdapter {
     private var observedBookURL: String
     private var facade: BookDetailFacade?
     private var readerFacade: ReaderFacade?
     private var previewCandidate: SearchBook?
+    private var retainedPreview: Book?
+    private var appearanceTask: Task<Void, Never>?
     private var identityGeneration = UUID()
     private lazy var sourceChangeClient = ReaderSourceChangeClient(
         binding: { [weak self] in
@@ -23,6 +26,52 @@ final class AndroidReplicaBookDetailAdapter {
         self.previewCandidate = previewCandidate
     }
 
+    deinit { appearanceTask?.cancel() }
+
+    func retainPreviewSnapshot(_ book: Book) {
+        guard book.bookUrl == observedBookURL else { return }
+        retainedPreview = book.isNotShelf && !book.isLocal ? book : nil
+    }
+
+    func refreshAppearance(onUpdate: @escaping (Book) -> Void) {
+        cancelAppearanceRefresh()
+        guard let facade else { return }
+        let generation = identityGeneration
+        let bookURL = observedBookURL
+        appearanceTask = Task { @MainActor [weak self] in
+            defer { if !Task.isCancelled { self?.appearanceTask = nil } }
+            do {
+                let book: Book? = try await SharedAsync.optionalValue { completion in
+                    facade.resolvePersistedBook(bookUrl: bookURL, completionHandler: completion)
+                }
+                guard let self, !Task.isCancelled, self.identityGeneration == generation,
+                    self.observedBookURL == bookURL, let book
+                else { return }
+                // Preview exit removes its row, not the detail page's retained snapshot.
+                self.retainPreviewSnapshot(book)
+                onUpdate(book)
+            } catch {}
+        }
+    }
+
+    func cancelAppearanceRefresh() {
+        appearanceTask?.cancel()
+        appearanceTask = nil
+    }
+
+    private func prepareRetainedPreview() async throws -> Book? {
+        try Task.checkCancellation()
+        guard let retainedPreview else { return nil }
+        guard let facade else { throw runtimeNotReadyError() }
+        let generation = identityGeneration
+        let prepared = try await bookRequestValue { completion in
+            facade.preparePreviewSnapshotRequest(book: retainedPreview, onResult: completion)
+        }
+        try checkIdentity(generation)
+        retainPreviewSnapshot(prepared)
+        return prepared
+    }
+
     func bootstrap() -> Result<Void, SharedRuntimeError> {
         switch SharedRuntime.bookDetailFacade() {
         case .success(let facade):
@@ -37,27 +86,40 @@ final class AndroidReplicaBookDetailAdapter {
         try Task.checkCancellation()
         guard let facade else { throw runtimeNotReadyError() }
         let generation = identityGeneration
+        let bookURL = observedBookURL
         let resolved: Book?
         if let previewCandidate {
-            let prepared = try await facade.preparePreview(candidate: previewCandidate)
+            let prepared = try await bookRequestValue { completion in
+                facade.preparePreviewRequest(candidate: previewCandidate, onResult: completion)
+            }
             try checkIdentity(generation)
             // Preview persistence is not rolled back when its caller leaves.
             self.previewCandidate = nil
             resolved = prepared
+        } else if let retainedPreview, !preparingForReading {
+            // Passive returns retain the detail snapshot without recreating a discarded preview row.
+            let persisted: Book? = try await SharedAsync.optionalValue { completion in
+                facade.resolvePersistedBook(bookUrl: bookURL, completionHandler: completion)
+            }
+            try checkIdentity(generation)
+            resolved = persisted ?? retainedPreview
+        } else if let prepared = try await prepareRetainedPreview() {
+            resolved = prepared
         } else {
             if preparingForReading {
-                resolved = try await SharedAsync.value { completion in
-                    facade.prepareReadingPreview(bookUrl: observedBookURL, completionHandler: completion)
+                resolved = try await bookRequestValue { completion in
+                    facade.prepareReadingPreviewRequest(bookUrl: bookURL, onResult: completion)
                 }
             } else {
-                resolved = try await facade.resolveBookAsync(bookUrl: observedBookURL)
+                resolved = try await facade.resolveBookAsync(bookUrl: bookURL)
             }
             try checkIdentity(generation)
         }
-        if let resolved, resolved.bookUrl != observedBookURL {
-            observedBookURL = resolved.bookUrl
+        try checkIdentity(generation)
+        guard observedBookURL == bookURL, resolved == nil || resolved?.bookUrl == bookURL else {
+            throw CancellationError()
         }
-        try Task.checkCancellation()
+        if let resolved { retainPreviewSnapshot(resolved) }
         return resolved
     }
 
@@ -66,6 +128,8 @@ final class AndroidReplicaBookDetailAdapter {
         identityGeneration = UUID()
         observedBookURL = bookURL
         previewCandidate = nil
+        retainedPreview = nil
+        cancelAppearanceRefresh()
         return true
     }
 
@@ -76,9 +140,11 @@ final class AndroidReplicaBookDetailAdapter {
 
     func prepareSourceEditor() async throws -> (sourceURL: String, screen: SourceManagementScreenAdapter) {
         try Task.checkCancellation()
-        guard let facade else { throw runtimeNotReadyError() }
         let generation = identityGeneration
         let bookURL = observedBookURL
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
+        guard let facade else { throw runtimeNotReadyError() }
         let unavailableError = NSError(
             domain: "io.legado.kmp.ios", code: -1,
             userInfo: [NSLocalizedDescriptionKey: L10n.BookDetail.editSourceUnavailable])
@@ -114,7 +180,10 @@ final class AndroidReplicaBookDetailAdapter {
         onProgress: @escaping (SourceChangeSearchProgress) -> Void,
         onFinished: @escaping () -> Void
     ) async throws -> SourceChangeSearchSession {
-        try await sourceChangeClient.createSourceChangeSearchSession(
+        let generation = identityGeneration
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
+        return try await sourceChangeClient.createSourceChangeSearchSession(
             onCandidate: onCandidate,
             onProgress: onProgress,
             onFinished: onFinished
@@ -134,32 +203,38 @@ final class AndroidReplicaBookDetailAdapter {
 
     func refreshInfo() async throws -> Book {
         guard let facade else { throw runtimeNotReadyError() }
-        return try await requestValue { completion in
-            facade.refreshInfoRequest(bookUrl: observedBookURL) { result in
-                completion(
-                    result.book,
-                    Self.requestError(
-                        cancelled: result.isCancelled, code: result.errorCode, message: result.errorMessage))
-            }
+        let generation = identityGeneration
+        let bookURL = observedBookURL
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
+        return try await bookRequestValue { completion in
+            facade.refreshInfoRequest(bookUrl: bookURL, onResult: completion)
         }
     }
 
     func loadInitialChapters(book: Book, forceRefresh: Bool) async throws -> BookDetailRefreshResult {
         try Task.checkCancellation()
+        let generation = identityGeneration
         guard book.bookUrl == observedBookURL else { throw CancellationError() }
         if !forceRefresh {
             let items = try await loadChapterListState()
+            try checkIdentity(generation)
             if !items.isEmpty {
                 return BookDetailRefreshResult(book: book, chapters: items.map(\.chapter), epubReflowPlan: nil)
             }
         }
+        try checkIdentity(generation)
         return try await refreshChapters()
     }
 
     func refreshChapters() async throws -> BookDetailRefreshResult {
         guard let facade else { throw runtimeNotReadyError() }
+        let generation = identityGeneration
+        let bookURL = observedBookURL
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
         return try await requestValue { completion in
-            facade.refreshChaptersRequest(bookUrl: observedBookURL) { result in
+            facade.refreshChaptersRequest(bookUrl: bookURL) { result in
                 completion(
                     result.result,
                     Self.requestError(
@@ -168,29 +243,30 @@ final class AndroidReplicaBookDetailAdapter {
         }
     }
 
-    private func requestValue<T>(_ start: (@escaping @Sendable (T?, Error?) -> Void) -> FlowSubscription) async throws
-        -> T
-    {
-        var terminalTask: Task<Void, Never>?
-        do {
-            return try await SharedCancellableAsync.value { completion in
-                var terminal: AsyncStream<Void>.Continuation?
-                let stream = AsyncStream<Void> { terminal = $0 }
-                terminalTask = Task { for await _ in stream {} }
-                let finish = terminal
-                return start { value, error in
-                    finish?.finish()
-                    completion(value, error)
-                }
+    private func bookRequestValue(
+        _ start: @MainActor (@escaping (BookDetailBookRequestResult) -> Void) -> FlowSubscription
+    ) async throws -> Book {
+        try await requestValue { completion in
+            start { result in
+                completion(
+                    result.book,
+                    Self.requestError(
+                        cancelled: result.isCancelled, code: result.errorCode, message: result.errorMessage))
             }
-        } catch {
-            // Cancellation resumes Swift immediately; serialize against the shared terminal callback.
-            await terminalTask?.value
-            throw error
         }
     }
 
-    private static func requestError(cancelled: Bool, code: String?, message: String?) -> Error? {
+    private func requestValue<T>(_ start: @MainActor (@escaping @Sendable (T?, Error?) -> Void) -> FlowSubscription) async throws
+        -> T
+    {
+        let generation = identityGeneration
+        let value: T = try await SharedCancellableAsync.valueOnMainActor(
+            awaitCancellationCompletion: true, start: start)
+        try checkIdentity(generation)
+        return value
+    }
+
+    nonisolated private static func requestError(cancelled: Bool, code: String?, message: String?) -> Error? {
         if cancelled { return CancellationError() }
         guard code != nil || message != nil else { return nil }
         var userInfo: [String: Any] = [NSLocalizedDescriptionKey: message ?? code ?? L10n.Shared.emptyValue]
@@ -201,12 +277,17 @@ final class AndroidReplicaBookDetailAdapter {
 
     func addToBookshelf() async throws -> Book {
         guard let facade else { throw runtimeNotReadyError() }
-        let added = try await facade.addToBookshelfAsync(bookUrl: observedBookURL)
-        observedBookURL = added.bookUrl
+        let generation = identityGeneration
+        let bookURL = observedBookURL
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
+        let added = try await facade.addToBookshelfAsync(bookUrl: bookURL)
+        if identityGeneration == generation, observedBookURL == bookURL { retainPreviewSnapshot(added) }
         return added
     }
 
     func removeFromBookshelf() async throws {
+        try Task.checkCancellation()
         guard let facade else { throw runtimeNotReadyError() }
         try await facade.removeFromBookshelfAsync(bookUrl: observedBookURL)
     }
@@ -226,7 +307,11 @@ final class AndroidReplicaBookDetailAdapter {
         guard result.updatedCount == 1, result.failedCount == 0 else {
             throw NSError(domain: "io.legado.kmp.detail", code: 1, userInfo: [NSLocalizedDescriptionKey: "移出书架失败"])
         }
-        previewCandidate = nil
+        if identityGeneration == generation, observedBookURL == expectedBookURL {
+            previewCandidate = nil
+            retainedPreview = nil
+            cancelAppearanceRefresh()
+        }
     }
 
     func loadGroups() async throws -> [BookGroup] {
@@ -245,6 +330,8 @@ final class AndroidReplicaBookDetailAdapter {
         let bookURL = observedBookURL
         await onFlushReadingProgress?()
         try checkIdentity(generation)
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
         guard let facade else { throw runtimeNotReadyError() }
         guard let book = try await facade.resolveBookAsync(bookUrl: bookURL) else {
             throw runtimeNotReadyError()
@@ -257,6 +344,8 @@ final class AndroidReplicaBookDetailAdapter {
         let generation = identityGeneration
         try checkIdentity(generation)
         guard observedBookURL == expectedBookURL else { throw CancellationError() }
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
         guard let facade else { throw runtimeNotReadyError() }
         guard let book = try await facade.resolveBookAsync(bookUrl: expectedBookURL) else {
             throw runtimeNotReadyError()
@@ -282,6 +371,8 @@ final class AndroidReplicaBookDetailAdapter {
         let generation = identityGeneration
         try checkIdentity(generation)
         guard observedBookURL == expectedBookURL, let facade else { throw CancellationError() }
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
         let snapshot: BookDetailVariableSnapshot = try await SharedAsync.value { completion in
             facade.loadVariableEditor(
                 bookUrl: expectedBookURL, expectedSourceUrl: sourceURL, forSource: forSource,
@@ -351,6 +442,8 @@ final class AndroidReplicaBookDetailAdapter {
         let generation = identityGeneration
         try checkIdentity(generation)
         guard observedBookURL == expectedBookURL else { throw CancellationError() }
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
         guard let facade else { throw runtimeNotReadyError() }
         let session = try await facade.createCoverSearchSessionAsync(
             bookUrl: expectedBookURL, onResult: onResult, onProgress: onProgress, onFinished: onFinished)
@@ -369,6 +462,8 @@ final class AndroidReplicaBookDetailAdapter {
         let generation = identityGeneration
         try checkIdentity(generation)
         guard observedBookURL == expectedBookURL else { throw CancellationError() }
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
         guard let facade else { throw runtimeNotReadyError() }
         let updated = try await facade.updateBookInfoAsync(
             bookUrl: expectedBookURL, name: nil, author: nil, coverUrl: coverURL, intro: nil)
@@ -414,7 +509,10 @@ final class AndroidReplicaBookDetailAdapter {
 
     func updateGroup(groupID: Int64, expectedBookURL: String) async throws -> Book {
         try Task.checkCancellation()
+        let generation = identityGeneration
         guard observedBookURL == expectedBookURL else { throw CancellationError() }
+        _ = try await prepareRetainedPreview()
+        try checkIdentity(generation)
         guard let facade else { throw runtimeNotReadyError() }
         // A completed grouping write must not be discarded as if cancellation rolled it back.
         return try await facade.updateGroupAsync(bookUrl: expectedBookURL, groupId: groupID)

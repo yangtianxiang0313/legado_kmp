@@ -4,6 +4,7 @@ import UIKit
 final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
     var onChange: (() -> Void)?
     var onHelp: (() -> Void)?
+    var onAssistant: (() -> Void)?
 
     private let stack = UIStackView()
     private let nameField = ReplaceRuleEditorInput(
@@ -39,6 +40,7 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
     private let scopeRow = UIStackView()
     private let scopeSpacer = UIView()
     private let helpButton = UIButton(type: .custom)
+    private let assistantButton = UIButton(type: .system)
     private weak var activeTextView: UITextView?
     private var lastViewportSize = CGSize.zero
     private var selectionRevealScheduled = false
@@ -108,7 +110,16 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
         helpButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
         helpButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
-        let regexRow = UIStackView(arrangedSubviews: [regexCheck, helpButton])
+        assistantButton.setImage(UIImage(systemName: "wand.and.stars"), for: .normal)
+        assistantButton.tintColor = AndroidReplicaTheme.accent
+        let assistantTitle = ruleAssistantString("title", "规则助手")
+        assistantButton.accessibilityLabel = assistantTitle
+        assistantButton.accessibilityIdentifier = "replaceRule.editor.assistant"
+        assistantButton.addInteraction(UIToolTipInteraction(defaultToolTip: assistantTitle))
+        assistantButton.addAction(UIAction { [weak self] _ in self?.onAssistant?() }, for: .touchUpInside)
+        assistantButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        assistantButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        let regexRow = UIStackView(arrangedSubviews: [regexCheck, assistantButton, helpButton])
         regexRow.axis = .horizontal
         regexRow.alignment = .center
         regexCheck.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -145,7 +156,7 @@ final class ReplaceRuleEditorFormView: UIScrollView, UITextViewDelegate {
 
     func setEditable(_ editable: Bool) {
         for field in fields { field.textView.isEditable = editable }
-        for control in [regexCheck, titleCheck, contentCheck, helpButton] { control.isEnabled = editable }
+        for control in [regexCheck, titleCheck, contentCheck, helpButton, assistantButton] { control.isEnabled = editable }
     }
 
     override func layoutSubviews() {
@@ -243,6 +254,7 @@ private final class ReplaceRuleEditorInput: UIView {
         textView.smartDashesType = .no
         textView.smartInsertDeleteType = .no
         textView.dataDetectorTypes = []
+        if #available(iOS 18.0, *) { textView.writingToolsBehavior = .none }
         textView.accessibilityLabel = title
         textView.accessibilityIdentifier = "replaceRule.editor.\(identifier)"
         placeholderLabel.text = title

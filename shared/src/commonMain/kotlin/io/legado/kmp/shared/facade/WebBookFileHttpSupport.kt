@@ -28,18 +28,14 @@ internal fun prepareWebBookFileHttp(
     fun supported(value: Boolean, message: String) = requireWebBookFile(value, "unsupported", message)
     supported(!request.useWebView && request.webJs.isNullOrBlank() && request.sourceRegex.isNullOrBlank() &&
         request.webViewDelayTime == 0L, "文件下载暂不支持 WebView 请求或脚本")
-    supported(context.proxy.isNullOrBlank() && request.proxy.isNullOrBlank() &&
-        (context.defaultHeaders.entries + request.headers.entries).none { (name, value) ->
-            name.equals("proxy", ignoreCase = true) && value.isNotBlank()
-        }, "文件下载暂不支持书源代理")
     supported(request.serverId == null, "文件下载暂不支持远程服务器请求")
     requireWebBookFile(request.retry >= 0, "invalidRetry", "文件下载重试次数不能为负数")
     supported(request.method == HttpMethod.GET || request.method == HttpMethod.POST, "文件下载仅支持 GET 和 POST 请求")
     // In a FILE source, type is a file-format hint, not an audio/decryption capability.
     supported(request.type.isNullOrBlank() || webBookFileTypeSuffix(request.type) != null, "文件下载的 type 必须是文件后缀或已知文件 MIME 类型")
     webBookFileUrl(config.url)
-    requireWebBookFileHeaders(context.defaultHeaders)
-    requireWebBookFileHeaders(request.headers)
+    requireWebBookFileHeaders(context.defaultHeaders.filterKeys { !it.equals("proxy", true) })
+    requireWebBookFileHeaders(request.headers.filterKeys { !it.equals("proxy", true) })
     requireWebBookFileHeaders(config.headers)
     val headers = config.headers.filterKeys { !it.equals("CookieJar", ignoreCase = true) }
         .withoutNullUserAgent().toMutableMap()
@@ -65,12 +61,13 @@ internal fun prepareWebBookFileHttp(
         headers = headers.toMap(),
         bodyBase64 = body?.let { Base64.encode(it) },
         fileName = fileName,
-        timeoutMillis = config.timeout.inWholeMilliseconds.coerceIn(1L, 120_000L),
+        timeoutMillis = config.timeout.inWholeMilliseconds.coerceIn(1L, 300_000L),
         sourceUrl = source.bookSourceUrl,
         headerOriginUrl = config.url,
         explicitCookie = explicitCookie,
         enabledCookieJar = source.enabledCookieJar,
         retryCount = request.retry,
+        networkProxy = context.proxy,
     )
 }
 

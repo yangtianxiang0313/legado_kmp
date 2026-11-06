@@ -15,6 +15,7 @@ import okio.Buffer
 import platform.Foundation.*
 import platform.darwin.NSObject
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val LEGACY_JSOUP_COPY_SIZE = 64 * 1024
 
@@ -30,6 +31,10 @@ internal actual suspend fun legacyJsoupTransport(
         url.user == null && url.password == null && request.url.none { it < ' ' || it == '\u007f' || it == '\\' }
     ) { "Jsoup transport requires an HTTP URL without credentials" }
     require(legacyJsoupNativeToken(request.method)) { "Invalid Jsoup transport method" }
+    val sourceUrl = caller[SourceNetworkOrigin]?.sourceUrl
+    val network = sourceUrl?.let { SourceNetworkPolicy.apply(
+        HttpRequestConfig(request.url, headers = request.headers, timeout = request.timeoutMillis.milliseconds), it, null
+    ) }
     val total = if (request.timeoutMillis == 0) Double.MAX_VALUE else request.timeoutMillis / 1000.0
     val idle = if (request.timeoutMillis == 0) Double.MAX_VALUE else request.timeoutMillis / 2000.0
     val nativeRequest = NSMutableURLRequest.requestWithURL(url).apply {
@@ -37,7 +42,7 @@ internal actual suspend fun legacyJsoupTransport(
         setHTTPShouldHandleCookies(false)
         setCachePolicy(NSURLRequestReloadIgnoringLocalCacheData)
         setTimeoutInterval(idle)
-        request.headers.forEach { (name, value) ->
+        (network?.headers ?: request.headers).forEach { (name, value) ->
             caller.ensureActive()
             require(legacyJsoupNativeToken(name) && value.none { it < ' ' || it == '\u007f' }) {
                 "Invalid Jsoup transport header"
@@ -63,12 +68,13 @@ internal actual suspend fun legacyJsoupTransport(
         waitsForConnectivity = false
         timeoutIntervalForRequest = idle
         timeoutIntervalForResource = total
+        if (sourceUrl != null) SourceNetworkNative.configureDownload(this, sourceUrl, network?.sourceNetworkProxy)
     }
     val queue = NSOperationQueue().apply {
         name = "io.legado.jsoup.transport"
         maxConcurrentOperationCount = 1
     }
-    val delegate = LegacyJsoupNativeDelegate(request, acceptBody, caller)
+    val delegate = LegacyJsoupNativeDelegate(request, acceptBody, caller, network)
     // The session retains both delegate and queue until invalidation; keep our ownership through terminal cleanup.
     val session = NSURLSession.sessionWithConfiguration(config, delegate, queue)
     var task: NSURLSessionDataTask? = null
@@ -102,6 +108,7 @@ private class LegacyJsoupNativeDelegate(
     private val request: LegacyJsoupTransportRequest,
     acceptBody: (LegacyJsoupTransportHead) -> Boolean,
     private val caller: CoroutineContext,
+    private val network: HttpRequestConfig?,
 ) : NSObject(), NSURLSessionDataDelegateProtocol {
     val terminal = CompletableDeferred<Unit>()
     private val lock = NSRecursiveLock()
@@ -132,7 +139,7 @@ private class LegacyJsoupNativeDelegate(
         completionHandler: (NSURLSessionAuthChallengeDisposition, NSURLCredential?) -> Unit,
     ) {
         locked { authenticationChallenges++ }
-        completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, null)
+        authenticate(didReceiveChallenge, completionHandler)
     }
 
     override fun URLSession(
@@ -142,7 +149,15 @@ private class LegacyJsoupNativeDelegate(
         completionHandler: (NSURLSessionAuthChallengeDisposition, NSURLCredential?) -> Unit,
     ) {
         locked { authenticationChallenges++ }
-        completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, null)
+        authenticate(didReceiveChallenge, completionHandler)
+    }
+
+    private fun authenticate(challenge: NSURLAuthenticationChallenge,
+        complete: (NSURLSessionAuthChallengeDisposition, NSURLCredential?) -> Unit) {
+        if (network != null && SourceNetworkNative.acceptsCertificate(network.sourceNetworkKey,
+                network.allowSourceCertificateCompatibility && request.method.uppercase() in setOf("GET", "HEAD"), challenge)) {
+            complete(NSURLSessionAuthChallengeUseCredential, NSURLCredential.credentialForTrust(requireNotNull(challenge.protectionSpace.serverTrust)))
+        } else complete(NSURLSessionAuthChallengePerformDefaultHandling, null)
     }
 
     override fun URLSession(
